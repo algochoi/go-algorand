@@ -29,7 +29,6 @@ jobs:
           output-file-path: benchmark_output.txt
           # Where the previous data file is stored
           github-token: ${{ secrets.GITHUB_TOKEN }}
-          # auto-push: true
           # Show alert with commit comment on detecting possible performance regression
           alert-threshold: '90%' # Test -> default is 200%
           comment-on-alert: true
