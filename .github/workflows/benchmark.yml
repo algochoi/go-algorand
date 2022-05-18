@@ -3,11 +3,11 @@ on:
   # Push and update benchmarks when a commit is merged into master.
     push:
       branches:
-        - master
+        - ci-master
   # Trigger benchmark test on this PR's commit against master.
     pull_request:
       branches:
-        - master
+        - ci-master
 permissions:
   # Push benchmark performance graph to gh-pages branch.
   contents: write
