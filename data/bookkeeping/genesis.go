@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2021 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -17,15 +17,9 @@
 package bookkeeping
 
 import (
-	"fmt"
 	"io/ioutil"
-	"time"
 
-	"github.com/algorand/go-algorand/config"
-	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
-	"github.com/algorand/go-algorand/data/committee"
-	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/protocol"
 )
 
@@ -74,13 +68,6 @@ type Genesis struct {
 
 	// Arbitrary genesis comment string - will be excluded from file if empty
 	Comment string `codec:"comment"`
-
-	// DevMode defines whether this network operates in a developer mode or not. Developer mode networks
-	// are a single node network, that operates without the agreement service being active. In liue of the
-	// agreement service, a new block is generated each time a node receives a transaction group. The
-	// default value for this field is "false", which makes this field empty from it's encoding, and
-	// therefore backward compatible.
-	DevMode bool `codec:"devmode"`
 }
 
 // LoadGenesisFromFile attempts to load a Genesis structure from a (presumably) genesis.json file.
@@ -120,67 +107,4 @@ type GenesisAllocation struct {
 // ToBeHashed impements the crypto.Hashable interface.
 func (genesis Genesis) ToBeHashed() (protocol.HashID, []byte) {
 	return protocol.Genesis, protocol.Encode(&genesis)
-}
-
-// GenesisBalances contains the information needed to generate a new ledger
-type GenesisBalances struct {
-	Balances    map[basics.Address]basics.AccountData
-	FeeSink     basics.Address
-	RewardsPool basics.Address
-	Timestamp   int64
-}
-
-// MakeGenesisBalances returns the information needed to bootstrap the ledger based on the current time
-func MakeGenesisBalances(balances map[basics.Address]basics.AccountData, feeSink, rewardsPool basics.Address) GenesisBalances {
-	return MakeTimestampedGenesisBalances(balances, feeSink, rewardsPool, time.Now().Unix())
-}
-
-// MakeTimestampedGenesisBalances returns the information needed to bootstrap the ledger based on a given time
-func MakeTimestampedGenesisBalances(balances map[basics.Address]basics.AccountData, feeSink, rewardsPool basics.Address, timestamp int64) GenesisBalances {
-	return GenesisBalances{Balances: balances, FeeSink: feeSink, RewardsPool: rewardsPool, Timestamp: timestamp}
-}
-
-// MakeGenesisBlock creates a genesis block, including setup of RewardsState.
-func MakeGenesisBlock(proto protocol.ConsensusVersion, genesisBal GenesisBalances, genesisID string, genesisHash crypto.Digest) (Block, error) {
-	params, ok := config.Consensus[proto]
-	if !ok {
-		return Block{}, fmt.Errorf("unsupported protocol %s", proto)
-	}
-
-	genesisRewardsState := RewardsState{
-		FeeSink:                   genesisBal.FeeSink,
-		RewardsPool:               genesisBal.RewardsPool,
-		RewardsLevel:              0,
-		RewardsResidue:            0,
-		RewardsRecalculationRound: basics.Round(params.RewardsRateRefreshInterval),
-	}
-
-	initialRewards := genesisBal.Balances[genesisBal.RewardsPool].MicroAlgos.Raw
-	if params.InitialRewardsRateCalculation {
-		genesisRewardsState.RewardsRate = basics.SubSaturate(initialRewards, params.MinBalance) / uint64(params.RewardsRateRefreshInterval)
-	} else {
-		genesisRewardsState.RewardsRate = initialRewards / uint64(params.RewardsRateRefreshInterval)
-	}
-
-	blk := Block{
-		BlockHeader: BlockHeader{
-			Round:          0,
-			Branch:         BlockHash{},
-			Seed:           committee.Seed(genesisHash),
-			TxnCommitments: TxnCommitments{NativeSha512_256Commitment: transactions.Payset{}.CommitGenesis(), Sha256Commitment: crypto.Digest{}},
-			TimeStamp:      genesisBal.Timestamp,
-			GenesisID:      genesisID,
-			RewardsState:   genesisRewardsState,
-			UpgradeState: UpgradeState{
-				CurrentProtocol: proto,
-			},
-			UpgradeVote: UpgradeVote{},
-		},
-	}
-
-	if params.SupportGenesisHash {
-		blk.BlockHeader.GenesisHash = genesisHash
-	}
-
-	return blk, nil
 }

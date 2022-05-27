@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2021 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -21,7 +21,6 @@ import (
 	"testing"
 
 	"github.com/algorand/go-algorand/crypto"
-	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
 func BenchmarkSortition(b *testing.B) {
@@ -37,7 +36,6 @@ func BenchmarkSortition(b *testing.B) {
 }
 
 func TestSortitionBasic(t *testing.T) {
-	partitiontest.PartitionTest(t)
 	hitcount := uint64(0)
 	const N = 1000
 	const expectedSize = 20

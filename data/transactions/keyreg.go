@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2021 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -18,7 +18,6 @@ package transactions
 
 import (
 	"github.com/algorand/go-algorand/crypto"
-	"github.com/algorand/go-algorand/crypto/merklesignature"
 	"github.com/algorand/go-algorand/data/basics"
 )
 
@@ -28,7 +27,6 @@ type KeyregTxnFields struct {
 
 	VotePK           crypto.OneTimeSignatureVerifier `codec:"votekey"`
 	SelectionPK      crypto.VRFVerifier              `codec:"selkey"`
-	StateProofPK     merklesignature.Verifier        `codec:"sprfkey"`
 	VoteFirst        basics.Round                    `codec:"votefst"`
 	VoteLast         basics.Round                    `codec:"votelst"`
 	VoteKeyDilution  uint64                          `codec:"votekd"`

@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2021 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -19,22 +19,16 @@ package transactions
 import (
 	"flag"
 	"fmt"
-	"strings"
 	"testing"
-
-	"github.com/algorand/go-algorand/crypto/merklesignature"
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/protocol"
-	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/stretchr/testify/require"
 )
 
 func TestTransaction_EstimateEncodedSize(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	addr, err := basics.UnmarshalChecksumAddress("NDQCJNNY5WWWFLP4GFZ7MEF2QJSMZYK6OWIV2AQ7OMAVLEFCGGRHFPKJJA")
 	require.NoError(t, err)
 
@@ -73,20 +67,17 @@ func generateDummyGoNonparticpatingTransaction(addr basics.Address) (tx Transact
 			FirstValid: 1,
 			LastValid:  300,
 		},
-		KeyregTxnFields: KeyregTxnFields{
-			Nonparticipation: true,
-			VoteFirst:        0,
-			VoteLast:         0,
-		},
+		KeyregTxnFields: KeyregTxnFields{Nonparticipation: true},
 	}
+	tx.KeyregTxnFields.VoteFirst = 1
+	tx.KeyregTxnFields.VoteLast = 300
+	tx.KeyregTxnFields.VoteKeyDilution = 1
 
 	tx.KeyregTxnFields.Nonparticipation = true
 	return tx
 }
 
 func TestGoOnlineGoNonparticipatingContradiction(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	// addr has no significance here other than being a normal valid address
 	addr, err := basics.UnmarshalChecksumAddress("NDQCJNNY5WWWFLP4GFZ7MEF2QJSMZYK6OWIV2AQ7OMAVLEFCGGRHFPKJJA")
 	require.NoError(t, err)
@@ -109,8 +100,6 @@ func TestGoOnlineGoNonparticipatingContradiction(t *testing.T) {
 }
 
 func TestGoNonparticipatingWellFormed(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	// addr has no significance here other than being a normal valid address
 	addr, err := basics.UnmarshalChecksumAddress("NDQCJNNY5WWWFLP4GFZ7MEF2QJSMZYK6OWIV2AQ7OMAVLEFCGGRHFPKJJA")
 	require.NoError(t, err)
@@ -132,154 +121,12 @@ func TestGoNonparticipatingWellFormed(t *testing.T) {
 	require.Error(t, err)
 }
 
-func TestAppCallCreateWellFormed(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
-	feeSink := basics.Address{0x7, 0xda, 0xcb, 0x4b, 0x6d, 0x9e, 0xd1, 0x41, 0xb1, 0x75, 0x76, 0xbd, 0x45, 0x9a, 0xe6, 0x42, 0x1d, 0x48, 0x6d, 0xa3, 0xd4, 0xef, 0x22, 0x47, 0xc4, 0x9, 0xa3, 0x96, 0xb8, 0x2e, 0xa2, 0x21}
-	curProto := config.Consensus[protocol.ConsensusCurrentVersion]
-	futureProto := config.Consensus[protocol.ConsensusFuture]
-	addr1, err := basics.UnmarshalChecksumAddress("NDQCJNNY5WWWFLP4GFZ7MEF2QJSMZYK6OWIV2AQ7OMAVLEFCGGRHFPKJJA")
-	require.NoError(t, err)
-	v5 := []byte{0x05}
-	v6 := []byte{0x06}
-
-	usecases := []struct {
-		tx            Transaction
-		proto         config.ConsensusParams
-		expectedError string
-	}{
-		{
-			tx: Transaction{
-				Type: protocol.ApplicationCallTx,
-				Header: Header{
-					Sender:     addr1,
-					Fee:        basics.MicroAlgos{Raw: 1000},
-					LastValid:  105,
-					FirstValid: 100,
-				},
-				ApplicationCallTxnFields: ApplicationCallTxnFields{
-					ApplicationID:     0,
-					ApprovalProgram:   v5,
-					ClearStateProgram: v5,
-					ApplicationArgs: [][]byte{
-						[]byte("write"),
-					},
-				},
-			},
-			proto: curProto,
-		},
-		{
-			tx: Transaction{
-				Type: protocol.ApplicationCallTx,
-				Header: Header{
-					Sender:     addr1,
-					Fee:        basics.MicroAlgos{Raw: 1000},
-					LastValid:  105,
-					FirstValid: 100,
-				},
-				ApplicationCallTxnFields: ApplicationCallTxnFields{
-					ApplicationID:     0,
-					ApprovalProgram:   v5,
-					ClearStateProgram: v5,
-					ApplicationArgs: [][]byte{
-						[]byte("write"),
-					},
-					ExtraProgramPages: 0,
-				},
-			},
-			proto: curProto,
-		},
-		{
-			tx: Transaction{
-				Type: protocol.ApplicationCallTx,
-				Header: Header{
-					Sender:     addr1,
-					Fee:        basics.MicroAlgos{Raw: 1000},
-					LastValid:  105,
-					FirstValid: 100,
-				},
-				ApplicationCallTxnFields: ApplicationCallTxnFields{
-					ApplicationID:     0,
-					ApprovalProgram:   v5,
-					ClearStateProgram: v5,
-					ApplicationArgs: [][]byte{
-						[]byte("write"),
-					},
-					ExtraProgramPages: 3,
-				},
-			},
-			proto: futureProto,
-		},
-		{
-			tx: Transaction{
-				Type: protocol.ApplicationCallTx,
-				Header: Header{
-					Sender:     addr1,
-					Fee:        basics.MicroAlgos{Raw: 1000},
-					LastValid:  105,
-					FirstValid: 100,
-				},
-				ApplicationCallTxnFields: ApplicationCallTxnFields{
-					ApplicationID:     0,
-					ApprovalProgram:   v5,
-					ClearStateProgram: v5,
-					ApplicationArgs: [][]byte{
-						[]byte("write"),
-					},
-					ExtraProgramPages: 0,
-				},
-			},
-			proto: futureProto,
-		},
-		{
-			tx: Transaction{
-				Type: protocol.ApplicationCallTx,
-				Header: Header{
-					Sender:     addr1,
-					Fee:        basics.MicroAlgos{Raw: 1000},
-					LastValid:  105,
-					FirstValid: 100,
-				},
-				ApplicationCallTxnFields: ApplicationCallTxnFields{
-					ApprovalProgram:   v5,
-					ClearStateProgram: v6,
-				},
-			},
-			proto:         futureProto,
-			expectedError: "mismatch",
-		},
-	}
-	for i, usecase := range usecases {
-		t.Run(fmt.Sprintf("i=%d", i), func(t *testing.T) {
-			err := usecase.tx.WellFormed(SpecialAddresses{FeeSink: feeSink}, usecase.proto)
-			if usecase.expectedError != "" {
-				require.Error(t, err)
-				require.Contains(t, err.Error(), usecase.expectedError)
-			} else {
-				require.NoError(t, err)
-			}
-		})
-	}
-}
-
 func TestWellFormedErrors(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	feeSink := basics.Address{0x7, 0xda, 0xcb, 0x4b, 0x6d, 0x9e, 0xd1, 0x41, 0xb1, 0x75, 0x76, 0xbd, 0x45, 0x9a, 0xe6, 0x42, 0x1d, 0x48, 0x6d, 0xa3, 0xd4, 0xef, 0x22, 0x47, 0xc4, 0x9, 0xa3, 0x96, 0xb8, 0x2e, 0xa2, 0x21}
 	specialAddr := SpecialAddresses{FeeSink: feeSink}
 	curProto := config.Consensus[protocol.ConsensusCurrentVersion]
-	futureProto := config.Consensus[protocol.ConsensusFuture]
-	protoV27 := config.Consensus[protocol.ConsensusV27]
-	protoV28 := config.Consensus[protocol.ConsensusV28]
 	addr1, err := basics.UnmarshalChecksumAddress("NDQCJNNY5WWWFLP4GFZ7MEF2QJSMZYK6OWIV2AQ7OMAVLEFCGGRHFPKJJA")
 	require.NoError(t, err)
-	v5 := []byte{0x05}
-	okHeader := Header{
-		Sender:     addr1,
-		Fee:        basics.MicroAlgos{Raw: 1000},
-		LastValid:  105,
-		FirstValid: 100,
-	}
 	usecases := []struct {
 		tx            Transaction
 		spec          SpecialAddresses
@@ -295,19 +142,8 @@ func TestWellFormedErrors(t *testing.T) {
 				},
 			},
 			spec:          specialAddr,
-			proto:         protoV27,
+			proto:         curProto,
 			expectedError: makeMinFeeErrorf("transaction had fee %d, which is less than the minimum %d", 100, curProto.MinTxnFee),
-		},
-		{
-			tx: Transaction{
-				Type: protocol.PaymentTx,
-				Header: Header{
-					Sender: addr1,
-					Fee:    basics.MicroAlgos{Raw: 100},
-				},
-			},
-			spec:  specialAddr,
-			proto: curProto,
 		},
 		{
 			tx: Transaction{
@@ -323,228 +159,6 @@ func TestWellFormedErrors(t *testing.T) {
 			proto:         curProto,
 			expectedError: fmt.Errorf("transaction invalid range (%d--%d)", 105, 100),
 		},
-		{
-			tx: Transaction{
-				Type:   protocol.ApplicationCallTx,
-				Header: okHeader,
-				ApplicationCallTxnFields: ApplicationCallTxnFields{
-					ApplicationID:     0, // creation
-					ApprovalProgram:   v5,
-					ClearStateProgram: v5,
-					ApplicationArgs: [][]byte{
-						[]byte("write"),
-					},
-					ExtraProgramPages: 1,
-				},
-			},
-			spec:          specialAddr,
-			proto:         protoV27,
-			expectedError: fmt.Errorf("tx.ExtraProgramPages exceeds MaxExtraAppProgramPages = %d", protoV27.MaxExtraAppProgramPages),
-		},
-		{
-			tx: Transaction{
-				Type:   protocol.ApplicationCallTx,
-				Header: okHeader,
-				ApplicationCallTxnFields: ApplicationCallTxnFields{
-					ApplicationID:     0, // creation
-					ApprovalProgram:   []byte(strings.Repeat("X", 1025)),
-					ClearStateProgram: []byte("Xjunk"),
-				},
-			},
-			spec:          specialAddr,
-			proto:         protoV27,
-			expectedError: fmt.Errorf("approval program too long. max len 1024 bytes"),
-		},
-		{
-			tx: Transaction{
-				Type:   protocol.ApplicationCallTx,
-				Header: okHeader,
-				ApplicationCallTxnFields: ApplicationCallTxnFields{
-					ApplicationID:     0, // creation
-					ApprovalProgram:   []byte(strings.Repeat("X", 1025)),
-					ClearStateProgram: []byte("Xjunk"),
-				},
-			},
-			spec:  specialAddr,
-			proto: futureProto,
-		},
-		{
-			tx: Transaction{
-				Type:   protocol.ApplicationCallTx,
-				Header: okHeader,
-				ApplicationCallTxnFields: ApplicationCallTxnFields{
-					ApplicationID:     0, // creation
-					ApprovalProgram:   []byte(strings.Repeat("X", 1025)),
-					ClearStateProgram: []byte(strings.Repeat("X", 1025)),
-				},
-			},
-			spec:          specialAddr,
-			proto:         futureProto,
-			expectedError: fmt.Errorf("app programs too long. max total len 2048 bytes"),
-		},
-		{
-			tx: Transaction{
-				Type:   protocol.ApplicationCallTx,
-				Header: okHeader,
-				ApplicationCallTxnFields: ApplicationCallTxnFields{
-					ApplicationID:     0, // creation
-					ApprovalProgram:   []byte(strings.Repeat("X", 1025)),
-					ClearStateProgram: []byte(strings.Repeat("X", 1025)),
-					ExtraProgramPages: 1,
-				},
-			},
-			spec:  specialAddr,
-			proto: futureProto,
-		},
-		{
-			tx: Transaction{
-				Type:   protocol.ApplicationCallTx,
-				Header: okHeader,
-				ApplicationCallTxnFields: ApplicationCallTxnFields{
-					ApplicationID: 1,
-					ApplicationArgs: [][]byte{
-						[]byte("write"),
-					},
-					ExtraProgramPages: 1,
-				},
-			},
-			spec:          specialAddr,
-			proto:         futureProto,
-			expectedError: fmt.Errorf("tx.ExtraProgramPages is immutable"),
-		},
-		{
-			tx: Transaction{
-				Type:   protocol.ApplicationCallTx,
-				Header: okHeader,
-				ApplicationCallTxnFields: ApplicationCallTxnFields{
-					ApplicationID:     0,
-					ApprovalProgram:   v5,
-					ClearStateProgram: v5,
-					ApplicationArgs: [][]byte{
-						[]byte("write"),
-					},
-					ExtraProgramPages: 4,
-				},
-			},
-			spec:          specialAddr,
-			proto:         futureProto,
-			expectedError: fmt.Errorf("tx.ExtraProgramPages exceeds MaxExtraAppProgramPages = %d", futureProto.MaxExtraAppProgramPages),
-		},
-		{
-			tx: Transaction{
-				Type:   protocol.ApplicationCallTx,
-				Header: okHeader,
-				ApplicationCallTxnFields: ApplicationCallTxnFields{
-					ApplicationID: 1,
-					ForeignApps:   []basics.AppIndex{10, 11},
-				},
-			},
-			spec:  specialAddr,
-			proto: protoV27,
-		},
-		{
-			tx: Transaction{
-				Type:   protocol.ApplicationCallTx,
-				Header: okHeader,
-				ApplicationCallTxnFields: ApplicationCallTxnFields{
-					ApplicationID: 1,
-					ForeignApps:   []basics.AppIndex{10, 11, 12},
-				},
-			},
-			spec:          specialAddr,
-			proto:         protoV27,
-			expectedError: fmt.Errorf("tx.ForeignApps too long, max number of foreign apps is 2"),
-		},
-		{
-			tx: Transaction{
-				Type:   protocol.ApplicationCallTx,
-				Header: okHeader,
-				ApplicationCallTxnFields: ApplicationCallTxnFields{
-					ApplicationID: 1,
-					ForeignApps:   []basics.AppIndex{10, 11, 12, 13, 14, 15, 16, 17},
-				},
-			},
-			spec:  specialAddr,
-			proto: futureProto,
-		},
-		{
-			tx: Transaction{
-				Type:   protocol.ApplicationCallTx,
-				Header: okHeader,
-				ApplicationCallTxnFields: ApplicationCallTxnFields{
-					ApplicationID: 1,
-					ForeignAssets: []basics.AssetIndex{14, 15, 16, 17, 18, 19, 20, 21, 22},
-				},
-			},
-			spec:          specialAddr,
-			proto:         futureProto,
-			expectedError: fmt.Errorf("tx.ForeignAssets too long, max number of foreign assets is 8"),
-		},
-		{
-			tx: Transaction{
-				Type:   protocol.ApplicationCallTx,
-				Header: okHeader,
-				ApplicationCallTxnFields: ApplicationCallTxnFields{
-					ApplicationID: 1,
-					Accounts:      []basics.Address{{}, {}, {}},
-					ForeignApps:   []basics.AppIndex{14, 15, 16, 17},
-					ForeignAssets: []basics.AssetIndex{14, 15, 16, 17},
-				},
-			},
-			spec:          specialAddr,
-			proto:         futureProto,
-			expectedError: fmt.Errorf("tx references exceed MaxAppTotalTxnReferences = 8"),
-		},
-		{
-			tx: Transaction{
-				Type:   protocol.ApplicationCallTx,
-				Header: okHeader,
-				ApplicationCallTxnFields: ApplicationCallTxnFields{
-					ApplicationID:     1,
-					ApprovalProgram:   []byte(strings.Repeat("X", 1025)),
-					ClearStateProgram: []byte(strings.Repeat("X", 1025)),
-					ExtraProgramPages: 0,
-					OnCompletion:      UpdateApplicationOC,
-				},
-			},
-			spec:          specialAddr,
-			proto:         protoV28,
-			expectedError: fmt.Errorf("app programs too long. max total len %d bytes", curProto.MaxAppProgramLen),
-		},
-		{
-			tx: Transaction{
-				Type:   protocol.ApplicationCallTx,
-				Header: okHeader,
-				ApplicationCallTxnFields: ApplicationCallTxnFields{
-					ApplicationID:     1,
-					ApprovalProgram:   []byte(strings.Repeat("X", 1025)),
-					ClearStateProgram: []byte(strings.Repeat("X", 1025)),
-					ExtraProgramPages: 0,
-					OnCompletion:      UpdateApplicationOC,
-				},
-			},
-			spec:  specialAddr,
-			proto: futureProto,
-		},
-		{
-			tx: Transaction{
-				Type:   protocol.ApplicationCallTx,
-				Header: okHeader,
-				ApplicationCallTxnFields: ApplicationCallTxnFields{
-					ApplicationID:     1,
-					ApprovalProgram:   v5,
-					ClearStateProgram: v5,
-					ApplicationArgs: [][]byte{
-						[]byte("write"),
-					},
-					ExtraProgramPages: 1,
-					OnCompletion:      UpdateApplicationOC,
-				},
-			},
-			spec:          specialAddr,
-			proto:         protoV28,
-			expectedError: fmt.Errorf("tx.ExtraProgramPages is immutable"),
-		},
 	}
 	for _, usecase := range usecases {
 		err := usecase.tx.WellFormed(usecase.spec, usecase.proto)
@@ -552,30 +166,10 @@ func TestWellFormedErrors(t *testing.T) {
 	}
 }
 
-// TestTransactionHash checks that Transaction.ID() is equivalent to the old simpler crypto.HashObj() implementation.
-func TestTransactionHash(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
-	var txn Transaction
-	txn.Sender[1] = 3
-	txn.Fee.Raw = 1234
-	txid := txn.ID()
-	txid2 := Txid(crypto.HashObj(txn))
-	require.Equal(t, txid, txid2)
-
-	txn.LastValid = 4321
-	txid3 := txn.ID()
-	txid2 = Txid(crypto.HashObj(txn))
-	require.NotEqual(t, txid, txid3)
-	require.Equal(t, txid3, txid2)
-}
-
 var generateFlag = flag.Bool("generate", false, "")
 
 // running test with -generate would generate the matrix used in the test ( without the "correct" errors )
 func TestWellFormedKeyRegistrationTx(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	flag.Parse()
 
 	// addr has no significance here other than being a normal valid address
@@ -597,7 +191,6 @@ func TestWellFormedKeyRegistrationTx(t *testing.T) {
 	type keyRegTestCase struct {
 		votePK                                    crypto.OneTimeSignatureVerifier
 		selectionPK                               crypto.VRFVerifier
-		stateProofPK                              merklesignature.Verifier
 		voteFirst                                 basics.Round
 		voteLast                                  basics.Round
 		lastValid                                 basics.Round
@@ -605,17 +198,12 @@ func TestWellFormedKeyRegistrationTx(t *testing.T) {
 		nonParticipation                          bool
 		supportBecomeNonParticipatingTransactions bool
 		enableKeyregCoherencyCheck                bool
-		enableStateProofKeyregCheck               bool
 		err                                       error
 	}
 	votePKValue := crypto.OneTimeSignatureVerifier{0x7, 0xda, 0xcb, 0x4b, 0x6d, 0x9e, 0xd1, 0x41, 0xb1, 0x75, 0x76, 0xbd, 0x45, 0x9a, 0xe6, 0x42, 0x1d, 0x48, 0x6d, 0xa3, 0xd4, 0xef, 0x22, 0x47, 0xc4, 0x9, 0xa3, 0x96, 0xb8, 0x2e, 0xa2, 0x21}
 	selectionPKValue := crypto.VRFVerifier{0x7, 0xda, 0xcb, 0x4b, 0x6d, 0x9e, 0xd1, 0x41, 0xb1, 0x75, 0x76, 0xbd, 0x45, 0x9a, 0xe6, 0x42, 0x1d, 0x48, 0x6d, 0xa3, 0xd4, 0xef, 0x22, 0x47, 0xc4, 0x9, 0xa3, 0x96, 0xb8, 0x2e, 0xa2, 0x21}
 
-	stateProofPK := merklesignature.Verifier([merklesignature.MerkleSignatureSchemeRootSize]byte{1})
-	maxValidPeriod := config.Consensus[protocol.ConsensusFuture].MaxKeyregValidPeriod // TODO: change to curProto.MaxKeyregValidPeriod
-
 	runTestCase := func(testCase keyRegTestCase) error {
-
 		tx.KeyregTxnFields.VotePK = testCase.votePK
 		tx.KeyregTxnFields.SelectionPK = testCase.selectionPK
 		tx.KeyregTxnFields.VoteFirst = testCase.voteFirst
@@ -623,12 +211,9 @@ func TestWellFormedKeyRegistrationTx(t *testing.T) {
 		tx.KeyregTxnFields.VoteKeyDilution = testCase.voteKeyDilution
 		tx.KeyregTxnFields.Nonparticipation = testCase.nonParticipation
 		tx.LastValid = testCase.lastValid
-		tx.KeyregTxnFields.StateProofPK = testCase.stateProofPK
 
 		curProto.SupportBecomeNonParticipatingTransactions = testCase.supportBecomeNonParticipatingTransactions
 		curProto.EnableKeyregCoherencyCheck = testCase.enableKeyregCoherencyCheck
-		curProto.EnableStateProofKeyregCheck = testCase.enableStateProofKeyregCheck
-		curProto.MaxKeyregValidPeriod = maxValidPeriod // TODO: remove this when MaxKeyregValidPeriod is in CurrentVersion
 		return tx.WellFormed(spec, curProto)
 	}
 
@@ -644,59 +229,55 @@ func TestWellFormedKeyRegistrationTx(t *testing.T) {
 								for _, nonParticipation := range []bool{false, true} {
 									for _, supportBecomeNonParticipatingTransactions := range []bool{false, true} {
 										for _, enableKeyregCoherencyCheck := range []bool{false, true} {
-											for _, enableStateProofKeyregCheck := range []bool{false, true} {
-												outcome := runTestCase(keyRegTestCase{
-													votePK,
-													selectionPK,
-													stateProofPK,
-													voteFirst,
-													voteLast,
-													lastValid,
-													voteKeyDilution,
-													nonParticipation,
-													supportBecomeNonParticipatingTransactions,
-													enableKeyregCoherencyCheck,
-													enableStateProofKeyregCheck,
-													nil})
-												errStr := "nil"
-												switch outcome {
-												case errKeyregTxnUnsupportedSwitchToNonParticipating:
-													errStr = "errKeyregTxnUnsupportedSwitchToNonParticipating"
-												case errKeyregTxnGoingOnlineWithNonParticipating:
-													errStr = "errKeyregTxnGoingOnlineWithNonParticipating"
-												case errKeyregTxnNonCoherentVotingKeys:
-													errStr = "errKeyregTxnNonCoherentVotingKeys"
-												case errKeyregTxnOfflineTransactionHasVotingRounds:
-													errStr = "errKeyregTxnOfflineTransactionHasVotingRounds"
-												case errKeyregTxnFirstVotingRoundGreaterThanLastVotingRound:
-													errStr = "errKeyregTxnFirstVotingRoundGreaterThanLastVotingRound"
-												case errKeyregTxnGoingOnlineWithZeroVoteLast:
-													errStr = "errKeyregTxnGoingOnlineWithZeroVoteLast"
-												case errKeyregTxnGoingOnlineWithNonParticipating:
-													errStr = "errKeyregTxnGoingOnlineWithNonParticipating"
-												case errKeyregTxnGoingOnlineWithFirstVoteAfterLastValid:
-													errStr = "errKeyregTxnGoingOnlineWithFirstVoteAfterLastValid"
-												default:
-													require.Nil(t, outcome)
+											outcome := runTestCase(keyRegTestCase{
+												votePK,
+												selectionPK,
+												voteFirst,
+												voteLast,
+												lastValid,
+												voteKeyDilution,
+												nonParticipation,
+												supportBecomeNonParticipatingTransactions,
+												enableKeyregCoherencyCheck,
+												nil})
+											errStr := "nil"
+											switch outcome {
+											case errKeyregTxnUnsupportedSwitchToNonParticipating:
+												errStr = "errKeyregTxnUnsupportedSwitchToNonParticipating"
+											case errKeyregTxnGoingOnlineWithNonParticipating:
+												errStr = "errKeyregTxnGoingOnlineWithNonParticipating"
+											case errKeyregTxnNonCoherentVotingKeys:
+												errStr = "errKeyregTxnNonCoherentVotingKeys"
+											case errKeyregTxnOfflineTransactionHasVotingRounds:
+												errStr = "errKeyregTxnOfflineTransactionHasVotingRounds"
+											case errKeyregTxnFirstVotingRoundGreaterThanLastVotingRound:
+												errStr = "errKeyregTxnFirstVotingRoundGreaterThanLastVotingRound"
+											case errKeyregTxnGoingOnlineWithZeroVoteLast:
+												errStr = "errKeyregTxnGoingOnlineWithZeroVoteLast"
+											case errKeyregTxnGoingOnlineWithNonParticipating:
+												errStr = "errKeyregTxnGoingOnlineWithNonParticipating"
+											case errKeyregTxnGoingOnlineWithFirstVoteAfterLastValid:
+												errStr = "errKeyregTxnGoingOnlineWithFirstVoteAfterLastValid"
+											default:
+												require.Nil(t, outcome)
 
-												}
-												s := "/* %3d */ keyRegTestCase{votePK:"
-												if votePK == votePKValue {
-													s += "votePKValue"
-												} else {
-													s += "crypto.OneTimeSignatureVerifier{}"
-												}
-												s += ", selectionPK:"
-												if selectionPK == selectionPKValue {
-													s += "selectionPKValue"
-												} else {
-													s += "crypto.VRFVerifier{}"
-												}
-												s = fmt.Sprintf("%s, voteFirst:basics.Round(%2d), voteLast:basics.Round(%2d), lastValid:basics.Round(%2d), voteKeyDilution: %5d, nonParticipation: %v,supportBecomeNonParticipatingTransactions:%v, enableKeyregCoherencyCheck:%v, err:%s},\n",
-													s, voteFirst, voteLast, lastValid, voteKeyDilution, nonParticipation, supportBecomeNonParticipatingTransactions, enableKeyregCoherencyCheck, errStr)
-												fmt.Printf(s, idx)
-												idx++
 											}
+											s := "/* %3d */ keyRegTestCase{votePK:"
+											if votePK == votePKValue {
+												s += "votePKValue"
+											} else {
+												s += "crypto.OneTimeSignatureVerifier{}"
+											}
+											s += ", selectionPK:"
+											if selectionPK == selectionPKValue {
+												s += "selectionPKValue"
+											} else {
+												s += "crypto.VRFVerifier{}"
+											}
+											s = fmt.Sprintf("%s, voteFirst:basics.Round(%2d), voteLast:basics.Round(%2d), lastValid:basics.Round(%2d), voteKeyDilution: %5d, nonParticipation: %v,supportBecomeNonParticipatingTransactions:%v, enableKeyregCoherencyCheck:%v, err:%s},\n",
+												s, voteFirst, voteLast, lastValid, voteKeyDilution, nonParticipation, supportBecomeNonParticipatingTransactions, enableKeyregCoherencyCheck, errStr)
+											fmt.Printf(s, idx)
+											idx++
 										}
 									}
 								}
@@ -1222,22 +803,9 @@ func TestWellFormedKeyRegistrationTx(t *testing.T) {
 		/* 509 */ keyRegTestCase{votePK: votePKValue, selectionPK: selectionPKValue, voteFirst: basics.Round(5), voteLast: basics.Round(10), lastValid: basics.Round(3), voteKeyDilution: 10000, nonParticipation: true, supportBecomeNonParticipatingTransactions: false, enableKeyregCoherencyCheck: true, err: errKeyregTxnGoingOnlineWithFirstVoteAfterLastValid},
 		/* 510 */ keyRegTestCase{votePK: votePKValue, selectionPK: selectionPKValue, voteFirst: basics.Round(5), voteLast: basics.Round(10), lastValid: basics.Round(3), voteKeyDilution: 10000, nonParticipation: true, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: false, err: errKeyregTxnGoingOnlineWithNonParticipating},
 		/* 511 */ keyRegTestCase{votePK: votePKValue, selectionPK: selectionPKValue, voteFirst: basics.Round(5), voteLast: basics.Round(10), lastValid: basics.Round(3), voteKeyDilution: 10000, nonParticipation: true, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: true, err: errKeyregTxnGoingOnlineWithFirstVoteAfterLastValid},
-		/* 512 */ keyRegTestCase{votePK: votePKValue, selectionPK: selectionPKValue, stateProofPK: stateProofPK, voteFirst: basics.Round(5), voteLast: basics.Round(10), lastValid: basics.Round(3), voteKeyDilution: 10000, nonParticipation: false, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: false, enableStateProofKeyregCheck: false, err: errKeyregTxnNotEmptyStateProofPK},
-		/* 513 */ keyRegTestCase{votePK: votePKValue, selectionPK: selectionPKValue, stateProofPK: merklesignature.Verifier{}, voteFirst: basics.Round(5), voteLast: basics.Round(10), lastValid: basics.Round(3), voteKeyDilution: 10000, nonParticipation: false, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: false, enableStateProofKeyregCheck: false, err: nil},
-		/* 514 */ keyRegTestCase{votePK: votePKValue, selectionPK: selectionPKValue, stateProofPK: stateProofPK, voteFirst: basics.Round(5), voteLast: basics.Round(10), lastValid: basics.Round(3), voteKeyDilution: 10000, nonParticipation: false, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: false, enableStateProofKeyregCheck: true, err: nil},
-		/* 515 */ keyRegTestCase{votePK: votePKValue, selectionPK: selectionPKValue, stateProofPK: merklesignature.Verifier{}, voteFirst: basics.Round(5), voteLast: basics.Round(10), lastValid: basics.Round(3), voteKeyDilution: 10000, nonParticipation: false, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: false, enableStateProofKeyregCheck: true, err: errKeyRegEmptyStateProofPK},
-		/* 516 */ keyRegTestCase{votePK: crypto.OneTimeSignatureVerifier{}, selectionPK: crypto.VRFVerifier{}, stateProofPK: stateProofPK, voteFirst: basics.Round(5), voteLast: basics.Round(10), lastValid: basics.Round(3), voteKeyDilution: 10000, nonParticipation: true, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: false, enableStateProofKeyregCheck: true, err: errKeyregTxnNonParticipantShouldBeEmptyStateProofPK},
-		/* 517 */ keyRegTestCase{votePK: crypto.OneTimeSignatureVerifier{}, selectionPK: crypto.VRFVerifier{}, stateProofPK: merklesignature.Verifier{}, voteFirst: basics.Round(5), voteLast: basics.Round(10), lastValid: basics.Round(3), voteKeyDilution: 10000, nonParticipation: true, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: false, enableStateProofKeyregCheck: true, err: nil},
-		/* 518 */ keyRegTestCase{votePK: crypto.OneTimeSignatureVerifier{}, selectionPK: crypto.VRFVerifier{}, stateProofPK: stateProofPK, voteFirst: basics.Round(5), voteLast: basics.Round(10), lastValid: basics.Round(3), voteKeyDilution: 10000, nonParticipation: false, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: false, enableStateProofKeyregCheck: true, err: errKeyregTxnOfflineShouldBeEmptyStateProofPK},
-		/* 519 */ keyRegTestCase{votePK: crypto.OneTimeSignatureVerifier{}, selectionPK: crypto.VRFVerifier{}, stateProofPK: merklesignature.Verifier{}, voteFirst: basics.Round(5), voteLast: basics.Round(10), lastValid: basics.Round(3), voteKeyDilution: 10000, nonParticipation: true, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: false, enableStateProofKeyregCheck: true, err: nil},
-		/* 520 */ keyRegTestCase{votePK: crypto.OneTimeSignatureVerifier{}, selectionPK: crypto.VRFVerifier{}, stateProofPK: merklesignature.Verifier{}, voteFirst: basics.Round(5), voteLast: basics.Round(10), lastValid: basics.Round(3), voteKeyDilution: 0, nonParticipation: false, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: false, enableStateProofKeyregCheck: true, err: nil},
-		/* 521 */ keyRegTestCase{votePK: crypto.OneTimeSignatureVerifier{}, selectionPK: crypto.VRFVerifier{}, stateProofPK: merklesignature.Verifier{}, voteFirst: basics.Round(10), voteLast: basics.Round(10 + maxValidPeriod), lastValid: basics.Round(3), voteKeyDilution: 10000, nonParticipation: false, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: false, enableStateProofKeyregCheck: true, err: nil},
-		/* 522 */ keyRegTestCase{votePK: crypto.OneTimeSignatureVerifier{}, selectionPK: crypto.VRFVerifier{}, stateProofPK: merklesignature.Verifier{}, voteFirst: basics.Round(10), voteLast: basics.Round(10000 + maxValidPeriod), lastValid: basics.Round(3), voteKeyDilution: 10000, nonParticipation: false, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: false, enableStateProofKeyregCheck: true, err: errKeyRegTxnValidityPeriodTooLong},
-		/* 523 */ keyRegTestCase{votePK: crypto.OneTimeSignatureVerifier{}, selectionPK: crypto.VRFVerifier{}, stateProofPK: merklesignature.Verifier{}, voteFirst: basics.Round(10), voteLast: basics.Round(10000 + maxValidPeriod), lastValid: basics.Round(3), voteKeyDilution: 10000, nonParticipation: false, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: false, enableStateProofKeyregCheck: false, err: nil},
 	}
 	for testcaseIdx, testCase := range keyRegTestCases {
 		err := runTestCase(testCase)
-
 		require.Equalf(t, testCase.err, err, "index: %d\ntest case: %#v", testcaseIdx, testCase)
 	}
 }

@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2021 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -17,8 +17,6 @@
 package transactions
 
 import (
-	"crypto/sha256"
-	"encoding/binary"
 	"errors"
 	"fmt"
 
@@ -114,13 +112,7 @@ type ApplyData struct {
 	SenderRewards   basics.MicroAlgos `codec:"rs"`
 	ReceiverRewards basics.MicroAlgos `codec:"rr"`
 	CloseRewards    basics.MicroAlgos `codec:"rc"`
-	EvalDelta       EvalDelta         `codec:"dt"`
-
-	// If asa or app is being created, the id used. Else 0.
-	// Names chosen to match naming the corresponding txn.
-	// These are populated on when MaxInnerTransactions > 0 (TEAL 5)
-	ConfigAsset   basics.AssetIndex `codec:"caid"`
-	ApplicationID basics.AppIndex   `codec:"apid"`
+	EvalDelta       basics.EvalDelta  `codec:"dt"`
 }
 
 // Equal returns true if two ApplyDatas are equal, ignoring nilness equality on
@@ -141,12 +133,6 @@ func (ad ApplyData) Equal(o ApplyData) bool {
 	if ad.CloseRewards != o.CloseRewards {
 		return false
 	}
-	if ad.ConfigAsset != o.ConfigAsset {
-		return false
-	}
-	if ad.ApplicationID != o.ApplicationID {
-		return false
-	}
 	if !ad.EvalDelta.Equal(o.EvalDelta) {
 		return false
 	}
@@ -162,7 +148,6 @@ type TxGroup struct {
 	// together, sequentially, in a block in order for the group to be
 	// valid.  Each hash in the list is a hash of a transaction with
 	// the `Group` field omitted.
-	// These are all `Txid` which is equivalent to `crypto.Digest`
 	TxGroupHashes []crypto.Digest `codec:"txlist,allocbound=config.MaxTxGroupSize"`
 }
 
@@ -179,26 +164,6 @@ func (tx Transaction) ToBeHashed() (protocol.HashID, []byte) {
 // ID returns the Txid (i.e., hash) of the transaction.
 func (tx Transaction) ID() Txid {
 	enc := tx.MarshalMsg(append(protocol.GetEncodingBuf(), []byte(protocol.Transaction)...))
-	defer protocol.PutEncodingBuf(enc)
-	return Txid(crypto.Hash(enc))
-}
-
-// IDSha256 returns the digest (i.e., hash) of the transaction.
-func (tx Transaction) IDSha256() crypto.Digest {
-	enc := tx.MarshalMsg(append(protocol.GetEncodingBuf(), []byte(protocol.Transaction)...))
-	defer protocol.PutEncodingBuf(enc)
-	return sha256.Sum256(enc)
-}
-
-// InnerID returns something akin to Txid, but folds in the parent Txid and the
-// index of the inner call.
-func (tx Transaction) InnerID(parent Txid, index int) Txid {
-	input := append(protocol.GetEncodingBuf(), []byte(protocol.Transaction)...)
-	input = append(input, parent[:]...)
-	buf := make([]byte, 8)
-	binary.BigEndian.PutUint64(buf, uint64(index))
-	input = append(input, buf...)
-	enc := tx.MarshalMsg(input)
 	defer protocol.PutEncodingBuf(enc)
 	return Txid(crypto.Hash(enc))
 }
@@ -285,11 +250,6 @@ var errKeyregTxnUnsupportedSwitchToNonParticipating = errors.New("transaction tr
 var errKeyregTxnGoingOnlineWithNonParticipating = errors.New("transaction tries to register keys to go online, but nonparticipatory flag is set")
 var errKeyregTxnGoingOnlineWithZeroVoteLast = errors.New("transaction tries to register keys to go online, but vote last is set to zero")
 var errKeyregTxnGoingOnlineWithFirstVoteAfterLastValid = errors.New("transaction tries to register keys to go online, but first voting round is beyond the round after last valid round")
-var errKeyRegEmptyStateProofPK = errors.New("online keyreg transaction cannot have empty field StateProofPK")
-var errKeyregTxnNotEmptyStateProofPK = errors.New("transaction field StateProofPK should be empty in this consensus version")
-var errKeyregTxnNonParticipantShouldBeEmptyStateProofPK = errors.New("non participation keyreg transactions should contain empty stateProofPK")
-var errKeyregTxnOfflineShouldBeEmptyStateProofPK = errors.New("offline keyreg transactions should contain empty stateProofPK")
-var errKeyRegTxnValidityPeriodTooLong = errors.New("validity period for keyreg transaction is too long")
 
 // WellFormed checks that the transaction looks reasonable on its own (but not necessarily valid against the actual ledger). It does not check signatures.
 func (tx Transaction) WellFormed(spec SpecialAddresses, proto config.ConsensusParams) error {
@@ -346,10 +306,6 @@ func (tx Transaction) WellFormed(spec SpecialAddresses, proto config.ConsensusPa
 
 		}
 
-		if err := tx.stateProofPKWellFormed(proto); err != nil {
-			return err
-		}
-
 	case protocol.AssetConfigTx:
 		if !proto.Asset {
 			return fmt.Errorf("asset transaction not supported")
@@ -386,30 +342,14 @@ func (tx Transaction) WellFormed(spec SpecialAddresses, proto config.ConsensusPa
 			if len(tx.ApprovalProgram) != 0 || len(tx.ClearStateProgram) != 0 {
 				return fmt.Errorf("programs may only be specified during application creation or update")
 			}
-		} else {
-			// This will check version matching, but not downgrading. That
-			// depends on chain state (so we pass an empty AppParams)
-			err := CheckContractVersions(tx.ApprovalProgram, tx.ClearStateProgram, basics.AppParams{}, &proto)
-			if err != nil {
-				return err
-			}
 		}
 
-		effectiveEPP := tx.ExtraProgramPages
-		// Schemas and ExtraProgramPages may only be set during application creation
+		// Schemas may only be set during application creation
 		if tx.ApplicationID != 0 {
 			if tx.LocalStateSchema != (basics.StateSchema{}) ||
 				tx.GlobalStateSchema != (basics.StateSchema{}) {
 				return fmt.Errorf("local and global state schemas are immutable")
 			}
-			if tx.ExtraProgramPages != 0 {
-				return fmt.Errorf("tx.ExtraProgramPages is immutable")
-			}
-
-			if proto.EnableExtraPagesOnAppUpdate {
-				effectiveEPP = uint32(proto.MaxExtraAppProgramPages)
-			}
-
 		}
 
 		// Limit total number of arguments
@@ -442,26 +382,12 @@ func (tx Transaction) WellFormed(spec SpecialAddresses, proto config.ConsensusPa
 			return fmt.Errorf("tx.ForeignAssets too long, max number of foreign assets is %d", proto.MaxAppTxnForeignAssets)
 		}
 
-		// Limit the sum of all types of references that bring in account records
-		if len(tx.Accounts)+len(tx.ForeignApps)+len(tx.ForeignAssets) > proto.MaxAppTotalTxnReferences {
-			return fmt.Errorf("tx references exceed MaxAppTotalTxnReferences = %d", proto.MaxAppTotalTxnReferences)
+		if len(tx.ApprovalProgram) > proto.MaxAppProgramLen {
+			return fmt.Errorf("approval program too long. max len %d bytes", proto.MaxAppProgramLen)
 		}
 
-		if tx.ExtraProgramPages > uint32(proto.MaxExtraAppProgramPages) {
-			return fmt.Errorf("tx.ExtraProgramPages exceeds MaxExtraAppProgramPages = %d", proto.MaxExtraAppProgramPages)
-		}
-
-		lap := len(tx.ApprovalProgram)
-		lcs := len(tx.ClearStateProgram)
-		pages := int(1 + effectiveEPP)
-		if lap > pages*proto.MaxAppProgramLen {
-			return fmt.Errorf("approval program too long. max len %d bytes", pages*proto.MaxAppProgramLen)
-		}
-		if lcs > pages*proto.MaxAppProgramLen {
-			return fmt.Errorf("clear state program too long. max len %d bytes", pages*proto.MaxAppProgramLen)
-		}
-		if lap+lcs > pages*proto.MaxAppTotalProgramLen {
-			return fmt.Errorf("app programs too long. max total len %d bytes", pages*proto.MaxAppTotalProgramLen)
+		if len(tx.ClearStateProgram) > proto.MaxAppProgramLen {
+			return fmt.Errorf("clear state program too long. max len %d bytes", proto.MaxAppProgramLen)
 		}
 
 		if tx.LocalStateSchema.NumEntries() > proto.MaxLocalSchemaEntries {
@@ -539,7 +465,7 @@ func (tx Transaction) WellFormed(spec SpecialAddresses, proto config.ConsensusPa
 		}
 	}
 
-	if !proto.EnableFeePooling && tx.Fee.LessThan(basics.MicroAlgos{Raw: proto.MinTxnFee}) {
+	if tx.Fee.LessThan(basics.MicroAlgos{Raw: proto.MinTxnFee}) {
 		if tx.Type == protocol.CompactCertTx {
 			// Zero fee allowed for compact cert txn.
 		} else {
@@ -583,44 +509,6 @@ func (tx Transaction) WellFormed(spec SpecialAddresses, proto config.ConsensusPa
 	if !proto.SupportRekeying && (tx.RekeyTo != basics.Address{}) {
 		return fmt.Errorf("transaction has RekeyTo set but rekeying not yet enabled")
 	}
-	return nil
-}
-
-func (tx Transaction) stateProofPKWellFormed(proto config.ConsensusParams) error {
-	isEmpty := tx.KeyregTxnFields.StateProofPK.IsEmpty()
-	if !proto.EnableStateProofKeyregCheck {
-		// make certain empty key is stored.
-		if !isEmpty {
-			return errKeyregTxnNotEmptyStateProofPK
-		}
-		return nil
-	}
-
-	if proto.MaxKeyregValidPeriod != 0 && uint64(tx.VoteLast.SubSaturate(tx.VoteFirst)) > proto.MaxKeyregValidPeriod {
-		return errKeyRegTxnValidityPeriodTooLong
-	}
-
-	if tx.Nonparticipation {
-		// make certain that set offline request clears the stateProofPK.
-		if !isEmpty {
-			return errKeyregTxnNonParticipantShouldBeEmptyStateProofPK
-		}
-		return nil
-	}
-
-	if tx.VotePK == (crypto.OneTimeSignatureVerifier{}) || tx.SelectionPK == (crypto.VRFVerifier{}) {
-		if !isEmpty {
-			return errKeyregTxnOfflineShouldBeEmptyStateProofPK
-		}
-		return nil
-	}
-
-	// online transactions:
-	// setting online cannot set an empty stateProofPK
-	if isEmpty {
-		return errKeyRegEmptyStateProofPK
-	}
-
 	return nil
 }
 
@@ -708,63 +596,6 @@ type TxnContext interface {
 	ConsensusProtocol() config.ConsensusParams
 	GenesisID() string
 	GenesisHash() crypto.Digest
-}
-
-// ProgramVersion extracts the version of an AVM program from its bytecode
-func ProgramVersion(bytecode []byte) (version uint64, length int, err error) {
-	if len(bytecode) == 0 {
-		return 0, 0, errors.New("invalid program (empty)")
-	}
-	version, vlen := binary.Uvarint(bytecode)
-	if vlen <= 0 {
-		return 0, 0, errors.New("invalid version")
-	}
-	return version, vlen, nil
-}
-
-// syncProgramsVersion is version of AVM programs that are required to have
-// matching versions between approval and clearstate.
-const syncProgramsVersion = 6
-
-// CheckContractVersions ensures that for v6 and higher two programs are version
-// matched, and that they are not a downgrade.  If proto.AllowV4InnerAppls, then
-// no downgrades are allowed, regardless of version.
-func CheckContractVersions(approval []byte, clear []byte, previous basics.AppParams, proto *config.ConsensusParams) error {
-	av, _, err := ProgramVersion(approval)
-	if err != nil {
-		return fmt.Errorf("bad ApprovalProgram: %v", err)
-	}
-	cv, _, err := ProgramVersion(clear)
-	if err != nil {
-		return fmt.Errorf("bad ClearStateProgram: %v", err)
-	}
-	if av >= syncProgramsVersion || cv >= syncProgramsVersion {
-		if av != cv {
-			return fmt.Errorf("program version mismatch: %d != %d", av, cv)
-		}
-	}
-	// The downgrade check ensures that if app A opts its account into app B
-	// (which requires B's CSP to be a callable version), the CSP will STAY
-	// callable. That way, A can certainly ClearState its account out of B.
-	if len(previous.ApprovalProgram) != 0 { // in creation and in call from WellFormed() previous is empty
-		pav, _, err := ProgramVersion(previous.ApprovalProgram)
-		if err != nil {
-			return err
-		}
-		if pav >= proto.MinInnerApplVersion && av < pav {
-			return fmt.Errorf("approval program version downgrade: %d < %d", av, pav)
-		}
-	}
-	if len(previous.ClearStateProgram) != 0 {
-		pcv, _, err := ProgramVersion(previous.ClearStateProgram)
-		if err != nil {
-			return err
-		}
-		if pcv >= proto.MinInnerApplVersion && cv < pcv {
-			return fmt.Errorf("clearstate program version downgrade: %d < %d", cv, pcv)
-		}
-	}
-	return nil
 }
 
 // ExplicitTxnContext is a struct that implements TxnContext with

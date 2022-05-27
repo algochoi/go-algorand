@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2021 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -24,12 +24,9 @@ import (
 
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/protocol"
-	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
 func TestAddingToCache(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	icache := MakeVerifiedTransactionCache(500)
 	impl := icache.(*verifiedTransactionCache)
 	_, signedTxn, secrets, addrs := generateTestObjects(10, 5, 50)
@@ -46,11 +43,8 @@ func TestAddingToCache(t *testing.T) {
 }
 
 func TestBucketCycling(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	bucketCount := 3
-	entriesPerBucket := 100
-	icache := MakeVerifiedTransactionCache(entriesPerBucket * (bucketCount - 1))
+	icache := MakeVerifiedTransactionCache(entriesPerBucket * bucketCount)
 	impl := icache.(*verifiedTransactionCache)
 	_, signedTxn, _, _ := generateTestObjects(entriesPerBucket*bucketCount*2, bucketCount, 0)
 
@@ -59,7 +53,7 @@ func TestBucketCycling(t *testing.T) {
 	require.NoError(t, err)
 
 	// fill up the cache with entries.
-	for i := 0; i < entriesPerBucket*bucketCount; i++ {
+	for i := 0; i < entriesPerBucket*(bucketCount+1); i++ {
 		impl.Add([]transactions.SignedTxn{signedTxn[i]}, groupCtx)
 		// test to see that the base is sliding when bucket get filled up.
 		require.Equal(t, i/entriesPerBucket, impl.base)
@@ -77,8 +71,6 @@ func TestBucketCycling(t *testing.T) {
 }
 
 func TestGetUnverifiedTranscationGroups50(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	size := 300
 	icache := MakeVerifiedTransactionCache(size * 2)
 	impl := icache.(*verifiedTransactionCache)
@@ -135,15 +127,13 @@ func BenchmarkGetUnverifiedTranscationGroups50(b *testing.B) {
 }
 
 func TestUpdatePinned(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
-	size := 100
+	size := entriesPerBucket
 	icache := MakeVerifiedTransactionCache(size * 10)
 	impl := icache.(*verifiedTransactionCache)
 	_, signedTxn, secrets, addrs := generateTestObjects(size*2, 10, 0)
 	txnGroups := generateTransactionGroups(signedTxn, secrets, addrs)
 
-	// insert some entries.
+	// insert half of the entries.
 	for i := 0; i < len(txnGroups); i++ {
 		groupCtx, _ := PrepareGroupContext(txnGroups[i], blockHeader)
 		impl.Add(txnGroups[i], groupCtx)
@@ -164,9 +154,7 @@ func TestUpdatePinned(t *testing.T) {
 }
 
 func TestPinningTransactions(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
-	size := 100
+	size := entriesPerBucket
 	icache := MakeVerifiedTransactionCache(size)
 	impl := icache.(*verifiedTransactionCache)
 	_, signedTxn, secrets, addrs := generateTestObjects(size*2, 10, 0)
@@ -183,4 +171,5 @@ func TestPinningTransactions(t *testing.T) {
 
 	// try to pin an entry that was not added.
 	require.Error(t, impl.Pin(txnGroups[len(txnGroups)-1]))
+
 }

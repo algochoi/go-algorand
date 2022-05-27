@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2021 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -21,17 +21,14 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/stretchr/testify/require"
 )
 
 func TestOpSpecs(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	t.Parallel()
 
 	for _, spec := range OpSpecs {
-		require.NotEmpty(t, spec.OpDetails, spec)
+		require.NotEmpty(t, spec.Details, spec)
 	}
 }
 
@@ -42,10 +39,10 @@ func (os *OpSpec) equals(oso *OpSpec) bool {
 	if os.Name != oso.Name {
 		return false
 	}
-	if !reflect.DeepEqual(os.Arg, oso.Arg) {
+	if !reflect.DeepEqual(os.Args, oso.Args) {
 		return false
 	}
-	if !reflect.DeepEqual(os.Return, oso.Return) {
+	if !reflect.DeepEqual(os.Returns, oso.Returns) {
 		return false
 	}
 	if os.Version != oso.Version {
@@ -59,7 +56,6 @@ func (os *OpSpec) equals(oso *OpSpec) bool {
 }
 
 func TestOpcodesByVersionReordered(t *testing.T) {
-	partitiontest.PartitionTest(t)
 
 	// Make a copy to restore to the original
 	OpSpecsOrig := make([]OpSpec, len(OpSpecs))
@@ -77,15 +73,10 @@ func TestOpcodesByVersionReordered(t *testing.T) {
 	OpSpecs[1] = OpSpecs[4]
 	OpSpecs[4] = tmp
 
-	t.Run("TestOpcodesByVersion", testOpcodesByVersion)
+	t.Run("TestOpcodesByVersion", TestOpcodesByVersion)
 }
 
 func TestOpcodesByVersion(t *testing.T) {
-	partitiontest.PartitionTest(t)
-	testOpcodesByVersion(t)
-}
-
-func testOpcodesByVersion(t *testing.T) {
 	// Make a copy of the OpSpecs to check if OpcodesByVersion will change it
 	OpSpecs2 := make([]OpSpec, len(OpSpecs))
 	for idx, opspec := range OpSpecs {
@@ -124,8 +115,6 @@ func testOpcodesByVersion(t *testing.T) {
 }
 
 func TestOpcodesVersioningV2(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	t.Parallel()
 
 	require.Equal(t, LogicVersion+1, len(opsByOpcode))
@@ -167,10 +156,11 @@ func TestOpcodesVersioningV2(t *testing.T) {
 		eq = a.Opcode == b.Opcode && a.Name == b.Name &&
 			reflect.ValueOf(a.op).Pointer() == reflect.ValueOf(b.op).Pointer() &&
 			reflect.ValueOf(a.asm).Pointer() == reflect.ValueOf(b.asm).Pointer() &&
-			reflect.DeepEqual(a.Arg, b.Arg) && reflect.DeepEqual(a.Return, b.Return) &&
+			reflect.ValueOf(a.dis).Pointer() == reflect.ValueOf(b.dis).Pointer() &&
+			reflect.DeepEqual(a.Args, b.Args) && reflect.DeepEqual(a.Returns, b.Returns) &&
 			a.Modes == b.Modes &&
-			a.OpDetails.FullCost == b.OpDetails.FullCost && a.OpDetails.Size == b.OpDetails.Size &&
-			reflect.ValueOf(a.OpDetails.check).Pointer() == reflect.ValueOf(b.OpDetails.check).Pointer()
+			a.Details.Cost == b.Details.Cost && a.Details.Size == b.Details.Size &&
+			reflect.ValueOf(a.Details.checkFunc).Pointer() == reflect.ValueOf(b.Details.checkFunc).Pointer()
 		return
 	}
 	// ensure v0 and v1 are the same

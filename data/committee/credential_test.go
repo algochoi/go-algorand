@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2021 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -23,14 +23,11 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/data/basics"
-	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
 // test SelfCheckSelected (should always be true, with current testingenv parameters)
 // and then set balance to 0 and test not SelfCheckSelected
 func TestAccountSelected(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	N := 1
 	for i := 0; i < N; i++ {
 		selParams, _, round, addresses, _, vrfSecrets, _, _ := testingenv(t, 100, 2000)
@@ -89,8 +86,6 @@ func TestAccountSelected(t *testing.T) {
 }
 
 func TestRichAccountSelected(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	selParams, _, round, addresses, _, vrfSecrets, _, _ := testingenv(t, 10, 2000)
 
 	period := Period(0)
@@ -100,7 +95,7 @@ func TestRichAccountSelected(t *testing.T) {
 	}
 
 	TotalMoney := basics.MicroAlgos{Raw: 1 << 50}
-	record.MicroAlgosWithRewards.Raw = TotalMoney.Raw / 2
+	record.MicroAlgos.Raw = TotalMoney.Raw / 2
 	sel := AgreementSelector{
 		Seed:   selectionSeed,
 		Round:  round,
@@ -142,8 +137,6 @@ func TestRichAccountSelected(t *testing.T) {
 }
 
 func TestPoorAccountSelectedLeaders(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	N := 2
 	failsLeaders := 0
 	leaders := make([]uint64, N)
@@ -163,7 +156,7 @@ func TestPoorAccountSelectedLeaders(t *testing.T) {
 				Step:   Propose,
 			}
 
-			record.MicroAlgosWithRewards.Raw = uint64(1000 / len(addresses))
+			record.MicroAlgos.Raw = uint64(1000 / len(addresses))
 			m := Membership{
 				Record:     record,
 				Selector:   sel,
@@ -187,8 +180,6 @@ func TestPoorAccountSelectedLeaders(t *testing.T) {
 }
 
 func TestPoorAccountSelectedCommittee(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	N := 1
 	committee := uint64(0)
 	for i := 0; i < N; i++ {
@@ -209,7 +200,7 @@ func TestPoorAccountSelectedCommittee(t *testing.T) {
 				Step:   step,
 			}
 
-			record.MicroAlgosWithRewards.Raw = uint64(2000 / len(addresses))
+			record.MicroAlgos.Raw = uint64(2000 / len(addresses))
 			m := Membership{
 				Record:     record,
 				Selector:   sel,
@@ -227,8 +218,6 @@ func TestPoorAccountSelectedCommittee(t *testing.T) {
 }
 
 func TestNoMoneyAccountNotSelected(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	N := 1
 	for i := 0; i < N; i++ {
 		selParams, _, round, addresses, _, _, _, _ := testingenv(t, 10, 2000)
@@ -247,7 +236,7 @@ func TestNoMoneyAccountNotSelected(t *testing.T) {
 			Step:   Propose,
 		}
 
-		record.MicroAlgosWithRewards.Raw = 0
+		record.MicroAlgos.Raw = 0
 		m := Membership{
 			Record:     record,
 			Selector:   sel,
@@ -260,8 +249,6 @@ func TestNoMoneyAccountNotSelected(t *testing.T) {
 }
 
 func TestLeadersSelected(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	selParams, _, round, addresses, _, vrfSecrets, _, _ := testingenv(t, 100, 2000)
 
 	period := Period(0)
@@ -272,7 +259,7 @@ func TestLeadersSelected(t *testing.T) {
 		t.Errorf("can't read selection params")
 	}
 
-	record.MicroAlgosWithRewards.Raw = 50000
+	record.MicroAlgos.Raw = 50000
 	totalMoney := basics.MicroAlgos{Raw: 100000}
 
 	sel := AgreementSelector{
@@ -292,8 +279,6 @@ func TestLeadersSelected(t *testing.T) {
 }
 
 func TestCommitteeSelected(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	selParams, _, round, addresses, _, vrfSecrets, _, _ := testingenv(t, 100, 2000)
 
 	period := Period(0)
@@ -304,7 +289,7 @@ func TestCommitteeSelected(t *testing.T) {
 		t.Errorf("can't read selection params")
 	}
 
-	record.MicroAlgosWithRewards.Raw = 50000
+	record.MicroAlgos.Raw = 50000
 	totalMoney := basics.MicroAlgos{Raw: 100000}
 
 	sel := AgreementSelector{
@@ -324,8 +309,6 @@ func TestCommitteeSelected(t *testing.T) {
 }
 
 func TestAccountNotSelected(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	selParams, _, round, addresses, _, vrfSecrets, _, _ := testingenv(t, 100, 2000)
 	period := Period(0)
 	leaders := uint64(0)
@@ -341,7 +324,7 @@ func TestAccountNotSelected(t *testing.T) {
 			Period: period,
 			Step:   Propose,
 		}
-		record.MicroAlgosWithRewards.Raw = 0
+		record.MicroAlgos.Raw = 0
 		m := Membership{
 			Record:     record,
 			Selector:   sel,
@@ -384,7 +367,7 @@ func BenchmarkSortition(b *testing.B) {
 			Step:   step,
 		}
 
-		record.MicroAlgosWithRewards.Raw = uint64(money[i])
+		record.MicroAlgos.Raw = uint64(money[i])
 		m := Membership{
 			Record:     record,
 			Selector:   sel,

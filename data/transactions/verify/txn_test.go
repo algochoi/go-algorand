@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2021 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -30,7 +30,6 @@ import (
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/protocol"
-	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/algorand/go-algorand/util/execpool"
 )
 
@@ -107,8 +106,6 @@ func generateTestObjects(numTxs, numAccs int, blockRound basics.Round) ([]transa
 }
 
 func TestSignedPayment(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
 
 	payments, stxns, secrets, addrs := generateTestObjects(1, 1, 0)
@@ -126,12 +123,10 @@ func TestSignedPayment(t *testing.T) {
 	require.Equal(t, stxn.ID(), stxn2.ID(), "changing sig caused txid to change")
 	require.Error(t, Txn(&stxn2, 0, groupCtx), "verify succeeded with bad sig")
 
-	require.True(t, crypto.SignatureVerifier(addr).Verify(payment, stxn.Sig, true), "signature on the transaction is not the signature of the hash of the transaction under the spender's key")
+	require.True(t, crypto.SignatureVerifier(addr).Verify(payment, stxn.Sig), "signature on the transaction is not the signature of the hash of the transaction under the spender's key")
 }
 
 func TestTxnValidationEncodeDecode(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	_, signed, _, _ := generateTestObjects(100, 50, 0)
 
 	for _, txn := range signed {
@@ -152,8 +147,6 @@ func TestTxnValidationEncodeDecode(t *testing.T) {
 }
 
 func TestTxnValidationEmptySig(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	_, signed, _, _ := generateTestObjects(100, 50, 0)
 
 	for _, txn := range signed {
@@ -175,10 +168,8 @@ func TestTxnValidationEmptySig(t *testing.T) {
 const ccProto = protocol.ConsensusVersion("test-compact-cert-enabled")
 
 func TestTxnValidationCompactCert(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
-	proto.CompactCertRounds = 256
+	proto.CompactCertRounds = 128
 	config.Consensus[ccProto] = proto
 
 	stxn := transactions.SignedTxn{
@@ -245,8 +236,6 @@ func TestTxnValidationCompactCert(t *testing.T) {
 }
 
 func TestDecodeNil(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	// This is a regression test for improper decoding of a nil SignedTxn.
 	// This is a subtle case because decoding a msgpack nil does not run
 	// SignedTxn.CodecDecodeSelf().
@@ -263,8 +252,6 @@ func TestDecodeNil(t *testing.T) {
 }
 
 func TestPaysetGroups(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	_, signedTxn, secrets, addrs := generateTestObjects(10000, 20, 50)
 	blkHdr := bookkeeping.BlockHeader{
 		Round:       50,

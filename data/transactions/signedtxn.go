@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2021 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -17,7 +17,6 @@
 package transactions
 
 import (
-	"crypto/sha256"
 	"errors"
 
 	"github.com/algorand/go-algorand/crypto"
@@ -88,7 +87,7 @@ func (s SignedTxnInBlock) GetEncodedLength() int {
 // This is just s.AuthAddr or, if s.AuthAddr is zero, s.Txn.Sender.
 // It's provided as a convenience method.
 func (s SignedTxn) Authorizer() basics.Address {
-	if s.AuthAddr.IsZero() {
+	if (s.AuthAddr == basics.Address{}) {
 		return s.Txn.Sender
 	}
 	return s.AuthAddr
@@ -118,16 +117,7 @@ func (s *SignedTxnInBlock) ToBeHashed() (protocol.HashID, []byte) {
 func (s *SignedTxnInBlock) Hash() crypto.Digest {
 	enc := s.MarshalMsg(append(protocol.GetEncodingBuf(), []byte(protocol.SignedTxnInBlock)...))
 	defer protocol.PutEncodingBuf(enc)
-
 	return crypto.Hash(enc)
-}
-
-// HashSHA256 implements an optimized version of crypto.HashObj(s) using SHA256 instead of the default SHA512_256.
-func (s *SignedTxnInBlock) HashSHA256() crypto.Digest {
-	enc := s.MarshalMsg(append(protocol.GetEncodingBuf(), []byte(protocol.SignedTxnInBlock)...))
-	defer protocol.PutEncodingBuf(enc)
-
-	return sha256.Sum256(enc)
 }
 
 // WrapSignedTxnsWithAD takes an array SignedTxn and returns the same as SignedTxnWithAD

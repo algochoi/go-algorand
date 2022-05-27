@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2021 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -26,7 +26,6 @@ import (
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/account"
 	"github.com/algorand/go-algorand/data/basics"
-	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
@@ -114,7 +113,7 @@ func testingenv(t testing.TB, numAccounts, numTxs int, offlineAccounts bool) (*L
 
 	genesis[poolAddr] = basics.MakeAccountData(basics.NotParticipating, basics.MicroAlgos{Raw: 100000 * uint64(proto.RewardsRateRefreshInterval)})
 
-	bootstrap := bookkeeping.MakeGenesisBalances(genesis, poolAddr, sinkAddr)
+	bootstrap := MakeGenesisBalances(genesis, poolAddr, sinkAddr)
 
 	// generate test transactions
 	const inMem = true
@@ -130,7 +129,7 @@ func testingenv(t testing.TB, numAccounts, numTxs int, offlineAccounts bool) (*L
 	if latest != 0 {
 		panic(fmt.Errorf("newly created ledger doesn't start on round 0"))
 	}
-	bal := bootstrap.Balances
+	bal := bootstrap.balances
 
 	for i := 0; i < TXs; i++ {
 		send := gen.Int() % P

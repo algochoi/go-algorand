@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2021 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -17,51 +17,31 @@
 package logic
 
 import (
-	"strings"
 	"testing"
 
-	"github.com/algorand/go-algorand/test/partitiontest"
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
 func TestOpDocs(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	opsSeen := make(map[string]bool, len(OpSpecs))
 	for _, op := range OpSpecs {
 		opsSeen[op.Name] = false
 	}
 	for name := range opDocByName {
-		assert.Contains(t, opsSeen, name, "opDocByName contains strange opcode %#v", name)
+		_, exists := opsSeen[name]
+		if !exists {
+			t.Errorf("error: doc for op %#v that does not exist in OpSpecs", name)
+		}
 		opsSeen[name] = true
 	}
 	for op, seen := range opsSeen {
-		assert.True(t, seen, "opDocByName is missing doc for %#v", op)
-	}
-
-	require.Len(t, onCompletionDescriptions, len(OnCompletionNames))
-	require.Len(t, TypeNameDescriptions, len(TxnTypeNames))
-}
-
-// TestDocStragglers confirms that we don't have any docs laying
-// around for non-existent opcodes, most likely from a rename.
-func TestDocStragglers(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
-	for op := range opDocExtras {
-		_, ok := opDocByName[op]
-		require.True(t, ok, "%s is in opDocExtra, but not opDocByName", op)
-	}
-	for op := range opcodeImmediateNotes {
-		_, ok := opDocByName[op]
-		require.True(t, ok, "%s is in opcodeImmediateNotes, but not opDocByName", op)
+		if !seen {
+			t.Errorf("error: doc for op %#v missing from opDocByName", op)
+		}
 	}
 }
 
 func TestOpGroupCoverage(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	opsSeen := make(map[string]bool, len(OpSpecs))
 	for _, op := range OpSpecs {
 		opsSeen[op.Name] = false
@@ -70,7 +50,7 @@ func TestOpGroupCoverage(t *testing.T) {
 		for _, name := range names {
 			_, exists := opsSeen[name]
 			if !exists {
-				t.Errorf("op %#v in group list but not in OpSpecs\n", name)
+				t.Errorf("error: op %#v in group list but not in OpSpecs\n", name)
 				continue
 			}
 			opsSeen[name] = true
@@ -78,14 +58,12 @@ func TestOpGroupCoverage(t *testing.T) {
 	}
 	for name, seen := range opsSeen {
 		if !seen {
-			t.Errorf("op %#v not in any group of OpGroups\n", name)
+			t.Errorf("warning: op %#v not in any group of OpGroupList\n", name)
 		}
 	}
 }
 
 func TestOpDoc(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	xd := OpDoc("txn")
 	require.NotEmpty(t, xd)
 	xd = OpDoc("NOT AN INSTRUCTION")
@@ -93,32 +71,13 @@ func TestOpDoc(t *testing.T) {
 }
 
 func TestOpImmediateNote(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	xd := OpImmediateNote("txn")
 	require.NotEmpty(t, xd)
 	xd = OpImmediateNote("+")
 	require.Empty(t, xd)
 }
 
-func TestAllImmediatesDocumented(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
-	for _, op := range OpSpecs {
-		count := len(op.OpDetails.Immediates)
-		note := OpImmediateNote(op.Name)
-		if count == 1 && op.OpDetails.Immediates[0].kind >= immBytes {
-			// More elaborate than can be checked by easy count.
-			assert.NotEmpty(t, note)
-			continue
-		}
-		assert.Equal(t, count, strings.Count(note, "{"), "opcodeImmediateNotes for %s is wrong", op.Name)
-	}
-}
-
 func TestOpDocExtra(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	xd := OpDocExtra("bnz")
 	require.NotEmpty(t, xd)
 	xd = OpDocExtra("-")
@@ -126,25 +85,36 @@ func TestOpDocExtra(t *testing.T) {
 }
 
 func TestOpAllCosts(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	a := OpAllCosts("+")
 	require.Len(t, a, 1)
-	require.Equal(t, "1", a[0].Cost)
+	require.Equal(t, 1, a[0].Cost)
 
 	a = OpAllCosts("sha256")
 	require.Len(t, a, 2)
 	for _, cost := range a {
-		require.True(t, cost.Cost != "0")
+		require.True(t, cost.Cost > 1)
 	}
 }
 
 func TestOnCompletionDescription(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	desc := OnCompletionDescription(0)
 	require.Equal(t, "Only execute the `ApprovalProgram` associated with this application ID, with no additional effects.", desc)
 
 	desc = OnCompletionDescription(100)
 	require.Equal(t, "invalid constant value", desc)
+}
+
+func TestFieldDocs(t *testing.T) {
+	txnFields := TxnFieldDocs()
+	require.Greater(t, len(txnFields), 0)
+
+	globalFields := GlobalFieldDocs()
+	require.Greater(t, len(globalFields), 0)
+
+	doc := globalFields["MinTxnFee"]
+	require.NotContains(t, doc, "LogicSigVersion >= 2")
+
+	doc = globalFields["Round"]
+	require.Contains(t, doc, "LogicSigVersion >= 2")
+
 }
