@@ -8,7 +8,7 @@
 #
 # Examples: scripts/buildhost/run.sh
 #
-# Use the following travis variables:
+# Use the following travis varaibles:
 # BUILD_REQUESTS_BUCKET
 # BUILD_PULL_REQUESTS_BUCKET
 # AWS_ACCESS_KEY_ID

@@ -13,10 +13,7 @@
 # Usage:
 #  ./e2e_client_runner.py e2e_subs/*.sh
 #
-# Reads each bash script for `# TIMEOUT=N` line to configure timeout
-# to N seconds. The default is 10 seconds less than the timeout
-# associated with the entire set of tests, which defaults to 500, but
-# can be controlled with --timeout
+# Reads each bash script for `# TIMEOUT=N` line to configure timeout to N seconds. (default timeout is 200 seconds)
 
 import argparse
 import atexit
@@ -70,7 +67,7 @@ def read_script_for_timeout(fname):
                     return int(m.group(1))
         except:
             logger.debug('read timeout match err', exc_info=True)
-    return None
+    return 200
 
 
 def create_kmd_config_with_unsafe_scrypt(working_dir):
@@ -79,17 +76,17 @@ def create_kmd_config_with_unsafe_scrypt(working_dir):
     with open(os.path.join(kmd_config_dir,"kmd_config.json.example")) as f:
         kmd_conf_data = json.load(f)
     if "drivers" not in kmd_conf_data:
-        raise Exception("kmd_conf example does not contain drivers attribute")
+        raise Exception("kmd_conf example does not contian drivers attribute")
     if "sqlite" not in kmd_conf_data["drivers"]:
-        raise Exception("kmd_conf example does not contain sqlite attribute")
+        raise Exception("kmd_conf example does not contian sqlite attribute")
     if "allow_unsafe_scrypt" not in kmd_conf_data["drivers"]["sqlite"]:
-        raise Exception("kmd_conf example does not contain allow_unsafe_scrypt attribute")
+        raise Exception("kmd_conf example does not contian allow_unsafe_scrypt attribute")
     if "scrypt" not in kmd_conf_data["drivers"]["sqlite"]:
-        raise Exception("kmd_conf example does not contain scrypt attribute")
+        raise Exception("kmd_conf example does not contian scrypt attribute")
     if "scrypt_n" not in kmd_conf_data["drivers"]["sqlite"]["scrypt"]:
-        raise Exception("kmd_conf example does not contain scrypt_n attribute")
+        raise Exception("kmd_conf example does not contian scrypt_n attribute")
     if "scrypt_r" not in kmd_conf_data["drivers"]["sqlite"]["scrypt"]:
-        raise Exception("kmd_conf example does not contain scrypt_r attribute")
+        raise Exception("kmd_conf example does not contian scrypt_r attribute")
 
     kmd_conf_data["drivers"]["sqlite"]["allow_unsafe_scrypt"] = True
     kmd_conf_data["drivers"]["sqlite"]["scrypt"]["scrypt_n"] = 4096
@@ -97,8 +94,9 @@ def create_kmd_config_with_unsafe_scrypt(working_dir):
         json.dump(kmd_conf_data,f)
 
 
+    
 
-def _script_thread_inner(runset, scriptname, timeout):
+def _script_thread_inner(runset, scriptname):
     start = time.time()
     algod, kmd = runset.connect()
     pubw, maxpubaddr = runset.get_pub_wallet()
@@ -140,9 +138,7 @@ def _script_thread_inner(runset, scriptname, timeout):
     p = subprocess.Popen([scriptname, walletname], env=env, cwd=repodir, stdout=cmdlog, stderr=subprocess.STDOUT)
     cmdlog.close()
     runset.running(scriptname, p)
-    script_timeout = read_script_for_timeout(scriptname)
-    if script_timeout:
-        timeout = script_timeout
+    timeout = read_script_for_timeout(scriptname)
     try:
         retcode = p.wait(timeout)
     except subprocess.TimeoutExpired as te:
@@ -179,10 +175,10 @@ def _script_thread_inner(runset, scriptname, timeout):
     runset.done(scriptname, retcode == 0, dt)
     return
 
-def script_thread(runset, scriptname, to):
+def script_thread(runset, scriptname):
     start = time.time()
     try:
-        _script_thread_inner(runset, scriptname, to)
+        _script_thread_inner(runset, scriptname)
     except Exception as e:
         logger.error('error in e2e_client_runner.py', exc_info=True)
         runset.done(scriptname, False, time.time() - start)
@@ -222,9 +218,10 @@ class RunSet:
         if self.algod and self.kmd:
             return
 
+
         # should run from inside self.lock
         algodata = self.env['ALGORAND_DATA']
-
+        
         xrun(['goal', 'kmd', 'start', '-t', '3600','-d', algodata], env=self.env, timeout=5)
         self.kmd = openkmd(algodata)
         self.algod = openalgod(algodata)
@@ -253,11 +250,11 @@ class RunSet:
                 self.maxpubaddr = maxpubaddr
             return self.pubw, self.maxpubaddr
 
-    def start(self, scriptname, timeout):
+    def start(self, scriptname):
         with self.lock:
             if not self.ok:
                 return
-        t = threading.Thread(target=script_thread, args=(self, scriptname, timeout))
+        t = threading.Thread(target=script_thread, args=(self, scriptname,))
         t.start()
         with self.lock:
             self.threads[scriptname] = t
@@ -453,7 +450,7 @@ def main():
 
     rs = RunSet(env)
     for scriptname in args.scripts:
-        rs.start(scriptname, args.timeout-10)
+        rs.start(scriptname)
     rs.wait(args.timeout)
     if rs.errors:
         retcode = 1

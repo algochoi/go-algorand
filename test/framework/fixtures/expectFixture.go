@@ -110,7 +110,7 @@ func MakeExpectTest(t *testing.T) *ExpectFixture {
 	return ef
 }
 
-// Run Process all expect script files with suffix Test.exp within the current directory
+// Run Process all expect script files with suffix Test.exp within the current directroy
 func (ef *ExpectFixture) Run() {
 	for testName := range ef.expectFiles {
 		if match, _ := regexp.MatchString(ef.testFilter, testName); match {

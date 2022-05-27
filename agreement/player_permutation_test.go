@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2021 Algorand, Inc.
+// Copyright (C) 2019-2022 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -19,7 +19,6 @@ package agreement
 import (
 	"fmt"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/require"
 
@@ -27,11 +26,12 @@ import (
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/protocol"
+	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
 func makeRandomProposalPayload(r round) *proposal {
 	f := testBlockFactory{Owner: 1}
-	ve, _ := f.AssembleBlock(r, time.Time{})
+	ve, _ := f.AssembleBlock(r)
 
 	var payload unauthenticatedProposal
 	payload.Block = ve.Block()
@@ -744,6 +744,8 @@ func verifyPermutationExpectedActions(t *testing.T, playerN int, eventN int, hel
 
 // Generates a set of player states, router states, and messageEvents and tests all permutations of them
 func TestPlayerPermutation(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	for i := 0; i < 7; i++ {
 		for j := 0; j < 14; j++ {
 			_, pMachine, helper := getPlayerPermutation(t, i)

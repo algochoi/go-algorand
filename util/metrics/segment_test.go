@@ -32,21 +32,6 @@ type SegmentTest struct {
 }
 
 func TestMetricSegment(t *testing.T) {
-	const initialSleepDuration = 10 * time.Millisecond
-	const maxSleepDuration = 4 * time.Second
-	done := false
-	for sleepDuration := initialSleepDuration; sleepDuration <= maxSleepDuration; sleepDuration *= 2 {
-		done = testMetricSegmentHelper(t, sleepDuration)
-		if done {
-			break
-		}
-	}
-	if !done {
-		require.Fail(t, "test failed")
-	}
-}
-
-func testMetricSegmentHelper(t *testing.T, functionTime time.Duration) bool {
 
 	test := &SegmentTest{
 		MetricTest: NewMetricTest(),
@@ -62,7 +47,8 @@ func testMetricSegmentHelper(t *testing.T, functionTime time.Duration) bool {
 	})
 	metricService.Start(context.Background())
 
-	acceptedFunctionThreshold := 1.1 // 10 percent.
+	functionTime := time.Duration(400 * time.Millisecond)
+	acceptedFunctionThreshold := 0.1 // 10 percent.
 	segment := MakeSegment(&MetricName{Name: "test_segment_name1", Description: "this is the metric test for segment object"})
 	segmentTest := func() {
 		inst, _ := segment.EnterSegment(map[string]string{"pid": "123"})
@@ -92,9 +78,7 @@ func testMetricSegmentHelper(t *testing.T, functionTime time.Duration) bool {
 			if elapsedTime, err := strconv.ParseFloat(v, 64); err != nil {
 				t.Fatalf("The metric '%s' has unexpected value of '%s'", k, v)
 			} else {
-				if elapsedTime < functionTime.Seconds() || elapsedTime > functionTime.Seconds()*acceptedFunctionThreshold {
-					return false
-				}
+				require.InDelta(t, functionTime.Seconds(), elapsedTime, functionTime.Seconds()*acceptedFunctionThreshold, "The metric '%s' reported unexpected elapsed time of '%s'", k, v)
 			}
 		}
 		if strings.Contains(k, "test_segment_name1_sec_total{") {
@@ -102,9 +86,7 @@ func testMetricSegmentHelper(t *testing.T, functionTime time.Duration) bool {
 			if elapsedTime, err := strconv.ParseFloat(v, 64); err != nil {
 				t.Fatalf("The metric '%s' has unexpected value of '%s'", k, v)
 			} else {
-				if elapsedTime < 2*functionTime.Seconds() || elapsedTime > 2*functionTime.Seconds()*acceptedFunctionThreshold {
-					return false
-				}
+				require.InDelta(t, 2*functionTime.Seconds(), elapsedTime, 2*functionTime.Seconds()*acceptedFunctionThreshold, "The metric '%s' reported unexpected elapsed time of '%s'", k, v)
 			}
 		}
 		if strings.Contains(k, "test_segment_name1_total{") {
@@ -112,5 +94,4 @@ func testMetricSegmentHelper(t *testing.T, functionTime time.Duration) bool {
 			require.Equal(t, "2", v, "The metric '%s' has unexpected value of '%s'", k, v)
 		}
 	}
-	return true
 }

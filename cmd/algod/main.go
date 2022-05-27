@@ -58,11 +58,7 @@ var seed = flag.String("seed", "", "input to math/rand.Seed()")
 
 func main() {
 	flag.Parse()
-	exitCode := run()
-	os.Exit(exitCode)
-}
 
-func run() int {
 	dataDir := resolveDataDir()
 	absolutePath, absPathErr := filepath.Abs(dataDir)
 	config.UpdateVersionDataDir(absolutePath)
@@ -71,7 +67,8 @@ func run() int {
 		seedVal, err := strconv.ParseInt(*seed, 10, 64)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "bad seed %#v: %s\n", *seed, err)
-			return 1
+			os.Exit(1)
+			return
 		}
 		rand.Seed(seedVal)
 	} else {
@@ -80,7 +77,7 @@ func run() int {
 
 	if *versionCheck {
 		fmt.Println(config.FormatVersionAndLicense())
-		return 0
+		return
 	}
 
 	version := config.GetCurrentVersion()
@@ -93,53 +90,52 @@ func run() int {
 
 	if *branchCheck {
 		fmt.Println(config.Branch)
-		return 0
+		return
 	}
 
 	if *channelCheck {
 		fmt.Println(config.Channel)
-		return 0
+		return
 	}
 
 	// Don't fallback anymore - if not specified, we want to panic to force us to update our tooling and/or processes
 	if len(dataDir) == 0 {
 		fmt.Fprintln(os.Stderr, "Data directory not specified.  Please use -d or set $ALGORAND_DATA in your environment.")
-		return 1
+		os.Exit(1)
 	}
 
 	if absPathErr != nil {
 		fmt.Fprintf(os.Stderr, "Can't convert data directory's path to absolute, %v\n", dataDir)
-		return 1
+		os.Exit(1)
 	}
 
-	genesisPath := *genesisFile
-	if genesisPath == "" {
-		genesisPath = filepath.Join(dataDir, config.GenesisJSONFile)
+	if *genesisFile == "" {
+		*genesisFile = filepath.Join(dataDir, config.GenesisJSONFile)
 	}
 
 	// Load genesis
-	genesisText, err := ioutil.ReadFile(genesisPath)
+	genesisText, err := ioutil.ReadFile(*genesisFile)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Cannot read genesis file %s: %v\n", genesisPath, err)
-		return 1
+		fmt.Fprintf(os.Stderr, "Cannot read genesis file %s: %v\n", *genesisFile, err)
+		os.Exit(1)
 	}
 
 	var genesis bookkeeping.Genesis
 	err = protocol.DecodeJSON(genesisText, &genesis)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Cannot parse genesis file %s: %v\n", genesisPath, err)
-		return 1
+		fmt.Fprintf(os.Stderr, "Cannot parse genesis file %s: %v\n", *genesisFile, err)
+		os.Exit(1)
 	}
 
 	if *genesisPrint {
 		fmt.Println(genesis.ID())
-		return 0
+		return
 	}
 
 	// If data directory doesn't exist, we can't run. Don't bother trying.
 	if _, err := os.Stat(absolutePath); err != nil {
 		fmt.Fprintf(os.Stderr, "Data directory %s does not appear to be valid\n", dataDir)
-		return 1
+		os.Exit(1)
 	}
 
 	log := logging.Base()
@@ -150,11 +146,11 @@ func run() int {
 	locked, err := fileLock.TryLock()
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "unexpected failure in establishing algod.lock: %s \n", err.Error())
-		return 1
+		os.Exit(1)
 	}
 	if !locked {
 		fmt.Fprintln(os.Stderr, "failed to lock algod.lock; is an instance of algod already running in this data directory?")
-		return 1
+		os.Exit(1)
 	}
 	defer fileLock.Unlock()
 
@@ -181,7 +177,7 @@ func run() int {
 		}
 		if os.IsPermission(err) {
 			fmt.Fprintf(os.Stderr, "Permission error on accessing telemetry config: %v", err)
-			return 1
+			os.Exit(1)
 		}
 		fmt.Fprintf(os.Stdout, "Telemetry configured from '%s'\n", telemetryConfig.FilePath)
 
@@ -260,7 +256,8 @@ func run() int {
 			url, err := network.ParseHostOrURL(peer)
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "Provided command line parameter '%s' is not a valid host:port pair\n", peer)
-				return 1
+				os.Exit(1)
+				return
 			}
 			peerOverrideArray[idx] = url.Host
 		}
@@ -296,11 +293,12 @@ func run() int {
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		log.Error(err)
-		return 1
+		os.Exit(1)
+		return
 	}
 
 	if *initAndExit {
-		return 0
+		return
 	}
 
 	deadlockState := "enabled"
@@ -363,7 +361,6 @@ func run() int {
 	}
 
 	s.Start()
-	return 0
 }
 
 func resolveDataDir() string {

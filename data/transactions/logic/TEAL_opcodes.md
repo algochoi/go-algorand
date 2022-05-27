@@ -18,7 +18,7 @@ Ops have a 'cost' of 1 unless otherwise specified.
 - SHA256 hash of value X, yields [32]byte
 - **Cost**:
    - 7 (LogicSigVersion = 1)
-   - 35 (2 <= LogicSigVersion <= 5)
+   - 35 (2 <= LogicSigVersion <= 4)
 
 ## keccak256
 
@@ -28,7 +28,7 @@ Ops have a 'cost' of 1 unless otherwise specified.
 - Keccak256 hash of value X, yields [32]byte
 - **Cost**:
    - 26 (LogicSigVersion = 1)
-   - 130 (2 <= LogicSigVersion <= 5)
+   - 130 (2 <= LogicSigVersion <= 4)
 
 ## sha512_256
 
@@ -38,7 +38,7 @@ Ops have a 'cost' of 1 unless otherwise specified.
 - SHA512_256 hash of value X, yields [32]byte
 - **Cost**:
    - 9 (LogicSigVersion = 1)
-   - 45 (2 <= LogicSigVersion <= 5)
+   - 45 (2 <= LogicSigVersion <= 4)
 
 ## ed25519verify
 
@@ -72,7 +72,7 @@ Overflow is an error condition which halts execution and fails the transaction. 
 - Opcode: 0x0a
 - Pops: *... stack*, {uint64 A}, {uint64 B}
 - Pushes: uint64
-- A divided by B (truncated division). Panic if B == 0.
+- A divided by B. Panic if B == 0.
 
 `divmodw` is available to divide the two-element values produced by `mulw` and `addw`.
 
@@ -374,17 +374,17 @@ Overflow is an error condition which halts execution and fails the transaction. 
 | 2 | FirstValid | uint64 | round number |
 | 3 | FirstValidTime | uint64 | Causes program to fail; reserved for future use |
 | 4 | LastValid | uint64 | round number |
-| 5 | Note | []byte | Any data up to 1024 bytes |
-| 6 | Lease | []byte | 32 byte lease value |
+| 5 | Note | []byte |  |
+| 6 | Lease | []byte |  |
 | 7 | Receiver | []byte | 32 byte address |
 | 8 | Amount | uint64 | micro-Algos |
 | 9 | CloseRemainderTo | []byte | 32 byte address |
 | 10 | VotePK | []byte | 32 byte address |
 | 11 | SelectionPK | []byte | 32 byte address |
-| 12 | VoteFirst | uint64 | The first round that the participation key is valid. |
-| 13 | VoteLast | uint64 | The last round that the participation key is valid. |
-| 14 | VoteKeyDilution | uint64 | Dilution for the 2-level participation key |
-| 15 | Type | []byte | Transaction type as bytes |
+| 12 | VoteFirst | uint64 |  |
+| 13 | VoteLast | uint64 |  |
+| 14 | VoteKeyDilution | uint64 |  |
+| 15 | Type | []byte |  |
 | 16 | TypeEnum | uint64 | See table below |
 | 17 | XferAsset | uint64 | Asset ID |
 | 18 | AssetAmount | uint64 | value in Asset's units |
@@ -425,7 +425,6 @@ Overflow is an error condition which halts execution and fails the transaction. 
 | 53 | GlobalNumByteSlice | uint64 | Number of global state byteslices in ApplicationCall. LogicSigVersion >= 3. |
 | 54 | LocalNumUint | uint64 | Number of local state integers in ApplicationCall. LogicSigVersion >= 3. |
 | 55 | LocalNumByteSlice | uint64 | Number of local state byteslices in ApplicationCall. LogicSigVersion >= 3. |
-| 56 | ExtraProgramPages | uint64 | Number of additional pages for each of the application's approval and clear state programs. An ExtraProgramPages of 1 means 2048 more total bytes, or 1024 for each program. LogicSigVersion >= 4. |
 
 
 TypeEnum mapping:
@@ -510,7 +509,7 @@ for notes on transaction fields available, see `txn`. If this transaction is _i_
 - Opcode: 0x38 {uint8 transaction field index}
 - Pops: *... stack*, uint64
 - Pushes: any
-- push field F of the Xth transaction in the current group
+- push field F of the Ath transaction in the current group
 - LogicSigVersion >= 3
 
 for notes on transaction fields available, see `txn`. If top of stack is _i_, `gtxns field` is equivalent to `gtxn _i_ field`. gtxns exists so that _i_ can be calculated, often based on the index of the current transaction.
@@ -520,67 +519,23 @@ for notes on transaction fields available, see `txn`. If top of stack is _i_, `g
 - Opcode: 0x39 {uint8 transaction field index} {uint8 transaction field array index}
 - Pops: *... stack*, uint64
 - Pushes: any
-- push Ith value of the array field F from the Xth transaction in the current group
+- push Ith value of the array field F from the Ath transaction in the current group
 - LogicSigVersion >= 3
-
-## gload t i
-
-- Opcode: 0x3a {uint8 transaction group index} {uint8 position in scratch space to load from}
-- Pops: _None_
-- Pushes: any
-- push Ith scratch space index of the Tth transaction in the current group
-- LogicSigVersion >= 4
-- Mode: Application
-
-`gload` fails unless the requested transaction is an ApplicationCall and T < GroupIndex.
-
-## gloads i
-
-- Opcode: 0x3b {uint8 position in scratch space to load from}
-- Pops: *... stack*, uint64
-- Pushes: any
-- push Ith scratch space index of the Xth transaction in the current group
-- LogicSigVersion >= 4
-- Mode: Application
-
-`gloads` fails unless the requested transaction is an ApplicationCall and X < GroupIndex.
-
-## gaid t
-
-- Opcode: 0x3c {uint8 transaction group index}
-- Pops: _None_
-- Pushes: uint64
-- push the ID of the asset or application created in the Tth transaction of the current group
-- LogicSigVersion >= 4
-- Mode: Application
-
-`gaid` fails unless the requested transaction created an asset or application and T < GroupIndex.
-
-## gaids
-
-- Opcode: 0x3d
-- Pops: *... stack*, uint64
-- Pushes: uint64
-- push the ID of the asset or application created in the Xth transaction of the current group
-- LogicSigVersion >= 4
-- Mode: Application
-
-`gaids` fails unless the requested transaction created an asset or application and X < GroupIndex.
 
 ## bnz target
 
-- Opcode: 0x40 {int16 branch offset, big endian}
+- Opcode: 0x40 {int16 branch offset, big endian. (negative offsets are illegal before v4)}
 - Pops: *... stack*, uint64
 - Pushes: _None_
 - branch to TARGET if value X is not zero
 
-The `bnz` instruction opcode 0x40 is followed by two immediate data bytes which are a high byte first and low byte second which together form a 16 bit offset which the instruction may branch to. For a bnz instruction at `pc`, if the last element of the stack is not zero then branch to instruction at `pc + 3 + N`, else proceed to next instruction at `pc + 3`. Branch targets must be aligned instructions. (e.g. Branching to the second byte of a 2 byte op will be rejected.) Starting at v4, the offset is treated as a signed 16 bit integer allowing for backward branches and looping. In prior version (v1 to v3), branch offsets are limited to forward branches only, 0-0x7fff.
+The `bnz` instruction opcode 0x40 is followed by two immediate data bytes which are a high byte first and low byte second which together form a 16 bit offset which the instruction may branch to. For a bnz instruction at `pc`, if the last element of the stack is not zero then branch to instruction at `pc + 3 + N`, else proceed to next instruction at `pc + 3`. Branch targets must be well aligned instructions. (e.g. Branching to the second byte of a 2 byte op will be rejected.) Branch offsets are limited to forward branches only, 0-0x7fff until v4. v4 treats offset as a signed 16 bit integer allowing for backward branches and looping.
 
-At v2 it became allowed to branch to the end of the program exactly after the last instruction: bnz to byte N (with 0-indexing) was illegal for a TEAL program with N bytes before v2, and is legal after it. This change eliminates the need for a last instruction of no-op as a branch target at the end. (Branching beyond the end--in other words, to a byte larger than N--is still illegal and will cause the program to fail.)
+At LogicSigVersion 2 it became allowed to branch to the end of the program exactly after the last instruction: bnz to byte N (with 0-indexing) was illegal for a TEAL program with N bytes before LogicSigVersion 2, and is legal after it. This change eliminates the need for a last instruction of no-op as a branch target at the end. (Branching beyond the end--in other words, to a byte larger than N--is still illegal and will cause the program to fail.)
 
 ## bz target
 
-- Opcode: 0x41 {int16 branch offset, big endian}
+- Opcode: 0x41 {int16 branch offset, big endian. (negative offsets are illegal before v4)}
 - Pops: *... stack*, uint64
 - Pushes: _None_
 - branch to TARGET if value X is zero
@@ -590,7 +545,7 @@ See `bnz` for details on how branches work. `bz` inverts the behavior of `bnz`.
 
 ## b target
 
-- Opcode: 0x42 {int16 branch offset, big endian}
+- Opcode: 0x42 {int16 branch offset, big endian. (negative offsets are illegal before v4)}
 - Pops: _None_
 - Pushes: _None_
 - branch unconditionally to TARGET
@@ -704,7 +659,7 @@ see explanation of bit ordering in setbit
 - pop a target A, index B, and bit C. Set the Bth bit of A to C, and push the result
 - LogicSigVersion >= 3
 
-When A is a uint64, index 0 is the least significant bit. Setting bit 3 to 1 on the integer 0 yields 8, or 2^3. When A is a byte array, index 0 is the leftmost bit of the leftmost byte. Setting bits 0 through 11 to 1 in a 4-byte-array of 0s yields the byte array 0xfff00000. Setting bit 3 to 1 on the 1-byte-array 0x00 yields the byte array 0x10.
+bit indexing begins with low-order bits in integers. Setting bit 4 to 1 on the integer 0 yields 16 (`int 0x0010`, or 2^4). Indexing begins in the first bytes of a byte-string (as seen in getbyte and substring). Setting bits 0 through 11 to 1 in a 4 byte-array of 0s yields `byte 0xfff00000`
 
 ## getbyte
 
@@ -722,89 +677,47 @@ When A is a uint64, index 0 is the least significant bit. Setting bit 3 to 1 on 
 - pop a byte-array A, integer B, and small integer C (between 0..255). Set the Bth byte of A to C, and push the result
 - LogicSigVersion >= 3
 
-## extract s l
-
-- Opcode: 0x57 {uint8 start position} {uint8 length}
-- Pops: *... stack*, []byte
-- Pushes: []byte
-- pop a byte-array A. For immediate values in 0..255 S and L: extract a range of bytes from A starting at S up to but not including S+L, push the substring result. If L is 0, then extract to the end of the string. If S or S+L is larger than the array length, the program fails
-- LogicSigVersion >= 5
-
-## extract3
-
-- Opcode: 0x58
-- Pops: *... stack*, {[]byte A}, {uint64 B}, {uint64 C}
-- Pushes: []byte
-- pop a byte-array A and two integers B and C. Extract a range of bytes from A starting at B up to but not including B+C, push the substring result. If B or B+C is larger than the array length, the program fails
-- LogicSigVersion >= 5
-
-## extract16bits
-
-- Opcode: 0x59
-- Pops: *... stack*, {[]byte A}, {uint64 B}
-- Pushes: uint64
-- pop a byte-array A and integer B. Extract a range of bytes from A starting at B up to but not including B+2, convert bytes as big endian and push the uint64 result. If B or B+2 is larger than the array length, the program fails
-- LogicSigVersion >= 5
-
-## extract32bits
-
-- Opcode: 0x5a
-- Pops: *... stack*, {[]byte A}, {uint64 B}
-- Pushes: uint64
-- pop a byte-array A and integer B. Extract a range of bytes from A starting at B up to but not including B+4, convert bytes as big endian and push the uint64 result. If B or B+4 is larger than the array length, the program fails
-- LogicSigVersion >= 5
-
-## extract64bits
-
-- Opcode: 0x5b
-- Pops: *... stack*, {[]byte A}, {uint64 B}
-- Pushes: uint64
-- pop a byte-array A and integer B. Extract a range of bytes from A starting at B up to but not including B+8, convert bytes as big endian and push the uint64 result. If B or B+8 is larger than the array length, the program fails
-- LogicSigVersion >= 5
-
 ## balance
 
 - Opcode: 0x60
-- Pops: *... stack*, any
+- Pops: *... stack*, uint64
 - Pushes: uint64
-- get balance for account A, in microalgos. The balance is observed after the effects of previous transactions in the group, and after the fee for the current transaction is deducted.
+- get balance for the requested account specified by Txn.Accounts[A] in microalgos. A is specified as an account index in the Accounts field of the ApplicationCall transaction, zero index means the sender. The balance is observed after the effects of previous transactions in the group, and after the fee for the current transaction is deducted.
 - LogicSigVersion >= 2
 - Mode: Application
-
-params: Before v4, Txn.Accounts offset. Since v4, Txn.Accounts offset or an account address that appears in Txn.Accounts or is Txn.Sender). Return: value.
 
 ## app_opted_in
 
 - Opcode: 0x61
-- Pops: *... stack*, {any A}, {uint64 B}
+- Pops: *... stack*, {uint64 A}, {uint64 B}
 - Pushes: uint64
-- check if account A opted in for the application B => {0 or 1}
+- check if account specified by Txn.Accounts[A] opted in for the application B => {0 or 1}
 - LogicSigVersion >= 2
 - Mode: Application
 
-params: Txn.Accounts offset (or, since v4, an account address that appears in Txn.Accounts or is Txn.Sender), application id (or, since v4, a Txn.ForeignApps offset). Return: 1 if opted in and 0 otherwise.
+params: account index, application id (top of the stack on opcode entry). Return: 1 if opted in and 0 otherwise.
 
 ## app_local_get
 
 - Opcode: 0x62
-- Pops: *... stack*, {any A}, {[]byte B}
+- Pops: *... stack*, {uint64 A}, {[]byte B}
 - Pushes: any
-- read from account A from local state of the current application key B => value
+- read from account specified by Txn.Accounts[A] from local state of the current application key B => value
 - LogicSigVersion >= 2
 - Mode: Application
 
-params: Txn.Accounts offset (or, since v4, an account address that appears in Txn.Accounts or is Txn.Sender), state key. Return: value. The value is zero (of type uint64) if the key does not exist.
+params: account index, state key. Return: value. The value is zero (of type uint64) if the key does not exist.
 
 ## app_local_get_ex
 
 - Opcode: 0x63
-- Pops: *... stack*, {any A}, {uint64 B}, {[]byte C}
+- Pops: *... stack*, {uint64 A}, {uint64 B}, {[]byte C}
 - Pushes: *... stack*, any, uint64
-- read from account A from local state of the application B key C => [*... stack*, value, 0 or 1]
+- read from account specified by Txn.Accounts[A] from local state of the application B key C => [*... stack*, value, 0 or 1]
 - LogicSigVersion >= 2
 - Mode: Application
 
-params: Txn.Accounts offset (or, since v4, an account address that appears in Txn.Accounts or is Txn.Sender), application id (or, since v4, a Txn.ForeignApps offset), state key. Return: did_exist flag (top of the stack, 1 if exist and 0 otherwise), value. The value is zero (of type uint64) if the key does not exist.
+params: account index, application id, state key. Return: did_exist flag (top of the stack, 1 if exist and 0 otherwise), value. The value is zero (of type uint64) if the key does not exist.
 
 ## app_global_get
 
@@ -822,22 +735,22 @@ params: state key. Return: value. The value is zero (of type uint64) if the key 
 - Opcode: 0x65
 - Pops: *... stack*, {uint64 A}, {[]byte B}
 - Pushes: *... stack*, any, uint64
-- read from application A global state key B => [*... stack*, value, 0 or 1]
+- read from application Txn.ForeignApps[A] global state key B => [*... stack*, value, 0 or 1]. A is specified as an account index in the ForeignApps field of the ApplicationCall transaction, zero index means this app
 - LogicSigVersion >= 2
 - Mode: Application
 
-params: Txn.ForeignApps offset (or, since v4, an application id that appears in Txn.ForeignApps or is the CurrentApplicationID), state key. Return: did_exist flag (top of the stack, 1 if exist and 0 otherwise), value. The value is zero (of type uint64) if the key does not exist.
+params: application index, state key. Return: did_exist flag (top of the stack, 1 if exist and 0 otherwise), value. The value is zero (of type uint64) if the key does not exist.
 
 ## app_local_put
 
 - Opcode: 0x66
-- Pops: *... stack*, {any A}, {[]byte B}, {any C}
+- Pops: *... stack*, {uint64 A}, {[]byte B}, {any C}
 - Pushes: _None_
-- write to account specified by A to local state of a current application key B with value C
+- write to account specified by Txn.Accounts[A] to local state of a current application key B with value C
 - LogicSigVersion >= 2
 - Mode: Application
 
-params: Txn.Accounts offset (or, since v4, an account address that appears in Txn.Accounts or is Txn.Sender), state key, value.
+params: account index, state key, value.
 
 ## app_global_put
 
@@ -851,13 +764,13 @@ params: Txn.Accounts offset (or, since v4, an account address that appears in Tx
 ## app_local_del
 
 - Opcode: 0x68
-- Pops: *... stack*, {any A}, {[]byte B}
+- Pops: *... stack*, {uint64 A}, {[]byte B}
 - Pushes: _None_
-- delete from account A local state key B of the current application
+- delete from account specified by Txn.Accounts[A] local state key B of the current application
 - LogicSigVersion >= 2
 - Mode: Application
 
-params: Txn.Accounts offset (or, since v4, an account address that appears in Txn.Accounts or is Txn.Sender), state key.
+params: account index, state key.
 
 Deleting a key which is already absent has no effect on the application local state. (In particular, it does _not_ cause the program to fail.)
 
@@ -877,9 +790,9 @@ Deleting a key which is already absent has no effect on the application global s
 ## asset_holding_get i
 
 - Opcode: 0x70 {uint8 asset holding field index}
-- Pops: *... stack*, {any A}, {uint64 B}
+- Pops: *... stack*, {uint64 A}, {uint64 B}
 - Pushes: *... stack*, any, uint64
-- read from account A and asset B holding field X (imm arg) => {0 or 1 (top), value}
+- read from account specified by Txn.Accounts[A] and asset B holding field X (imm arg) => {0 or 1 (top), value}
 - LogicSigVersion >= 2
 - Mode: Application
 
@@ -891,14 +804,14 @@ Deleting a key which is already absent has no effect on the application global s
 | 1 | AssetFrozen | uint64 | Is the asset frozen or not |
 
 
-params: Txn.Accounts offset (or, since v4, an account address that appears in Txn.Accounts or is Txn.Sender), asset id (or, since v4, a Txn.ForeignAssets offset). Return: did_exist flag (1 if exist and 0 otherwise), value.
+params: account index, asset id. Return: did_exist flag (1 if exist and 0 otherwise), value.
 
 ## asset_params_get i
 
 - Opcode: 0x71 {uint8 asset params field index}
 - Pops: *... stack*, uint64
 - Pushes: *... stack*, any, uint64
-- read from asset A params field X (imm arg) => {0 or 1 (top), value}
+- read from asset Txn.ForeignAssets[A] params field X (imm arg) => {0 or 1 (top), value}
 - LogicSigVersion >= 2
 - Mode: Application
 
@@ -917,46 +830,18 @@ params: Txn.Accounts offset (or, since v4, an account address that appears in Tx
 | 8 | AssetReserve | []byte | Reserve address |
 | 9 | AssetFreeze | []byte | Freeze address |
 | 10 | AssetClawback | []byte | Clawback address |
-| 11 | AssetCreator | []byte | Creator address |
 
 
-params: Before v4, Txn.ForeignAssets offset. Since v4, Txn.ForeignAssets offset or an asset id that appears in Txn.ForeignAssets. Return: did_exist flag (1 if exist and 0 otherwise), value.
-
-## app_params_get i
-
-- Opcode: 0x72 {uint8 app params field index}
-- Pops: *... stack*, uint64
-- Pushes: *... stack*, any, uint64
-- read from app A params field X (imm arg) => {0 or 1 (top), value}
-- LogicSigVersion >= 5
-- Mode: Application
-
-`app_params_get` Fields:
-
-| Index | Name | Type | Notes |
-| --- | --- | --- | --- |
-| 0 | AppApprovalProgram | []byte | Bytecode of Approval Program |
-| 1 | AppClearStateProgram | []byte | Bytecode of Clear State Program |
-| 2 | AppGlobalNumUint | uint64 | Number of uint64 values allowed in Global State |
-| 3 | AppGlobalNumByteSlice | uint64 | Number of byte array values allowed in Global State |
-| 4 | AppLocalNumUint | uint64 | Number of uint64 values allowed in Local State |
-| 5 | AppLocalNumByteSlice | uint64 | Number of byte array values allowed in Local State |
-| 6 | AppExtraProgramPages | uint64 | Number of Extra Program Pages of code space |
-| 7 | AppCreator | []byte | Creator address |
-
-
-params: Txn.ForeignApps offset or an app id that appears in Txn.ForeignApps. Return: did_exist flag (1 if exist and 0 otherwise), value.
+params: txn.ForeignAssets offset. Return: did_exist flag (1 if exist and 0 otherwise), value.
 
 ## min_balance
 
 - Opcode: 0x78
-- Pops: *... stack*, any
+- Pops: *... stack*, uint64
 - Pushes: uint64
-- get minimum required balance for account A, in microalgos. Required balance is affected by [ASA](https://developer.algorand.org/docs/features/asa/#assets-overview) and [App](https://developer.algorand.org/docs/features/asc1/stateful/#minimum-balance-requirement-for-a-smart-contract) usage. When creating or opting into an app, the minimum balance grows before the app code runs, therefore the increase is visible there. When deleting or closing out, the minimum balance decreases after the app executes.
+- get minimum required balance for the requested account specified by Txn.Accounts[A] in microalgos. A is specified as an account index in the Accounts field of the ApplicationCall transaction, zero index means the sender. Required balance is affected by [ASA](https://developer.algorand.org/docs/features/asa/#assets-overview) and [App](https://developer.algorand.org/docs/features/asc1/stateful/#minimum-balance-requirement-for-a-smart-contract) usage. When creating or opting into an app, the minimum balance grows before the app code runs, therefore the increase is visible there. When deleting or closing out, the minimum balance decreases after the app executes.
 - LogicSigVersion >= 3
 - Mode: Application
-
-params: Before v4, Txn.Accounts offset. Since v4, Txn.Accounts offset or an account address that appears in Txn.Accounts or is Txn.Sender). Return: value.
 
 ## pushbytes bytes
 
@@ -980,13 +865,13 @@ pushint args are not added to the intcblock during assembly processes
 
 ## callsub target
 
-- Opcode: 0x88 {int16 branch offset, big endian}
+- Opcode: 0x88
 - Pops: _None_
 - Pushes: _None_
 - branch unconditionally to TARGET, saving the next instruction on the call stack
 - LogicSigVersion >= 4
 
-The call stack is separate from the data stack. Only `callsub` and `retsub` manipulate it.
+The call stack is separate from the data stack. Only `callsub` and `retsub` manipulate it.`
 
 ## retsub
 
@@ -996,7 +881,7 @@ The call stack is separate from the data stack. Only `callsub` and `retsub` mani
 - pop the top instruction from the call stack and branch to it
 - LogicSigVersion >= 4
 
-The call stack is separate from the data stack. Only `callsub` and `retsub` manipulate it.
+The call stack is separate from the data stack. Only `callsub` and `retsub` manipulate it.`
 
 ## shl
 
@@ -1019,7 +904,7 @@ The call stack is separate from the data stack. Only `callsub` and `retsub` mani
 - Opcode: 0x92
 - Pops: *... stack*, uint64
 - Pushes: uint64
-- The largest integer B such that B^2 <= X
+- The largest integer X such that X^2 <= A
 - **Cost**: 4
 - LogicSigVersion >= 4
 
@@ -1028,7 +913,7 @@ The call stack is separate from the data stack. Only `callsub` and `retsub` mani
 - Opcode: 0x93
 - Pops: *... stack*, any
 - Pushes: uint64
-- The highest set bit in X. If X is a byte-array, it is interpreted as a big-endian unsigned integer. bitlen of 0 is 0, bitlen of 8 is 4
+- The index of the highest bit in A. If A is a byte-array, it is interpreted as a big-endian unsigned integer
 - LogicSigVersion >= 4
 
 bitlen interprets arrays as big-endian integers, unlike setbit/getbit
@@ -1073,7 +958,7 @@ bitlen interprets arrays as big-endian integers, unlike setbit/getbit
 - Opcode: 0xa2
 - Pops: *... stack*, {[]byte A}, {[]byte B}
 - Pushes: []byte
-- A divided by B (truncated division), where A and B are byte-arrays interpreted as big-endian unsigned integers. Panic if B is zero.
+- A divided by B, where A and B are byte-arrays interpreted as big-endian unsigned integers. Panic if B is zero.
 - **Cost**: 20
 - LogicSigVersion >= 4
 
@@ -1175,7 +1060,7 @@ bitlen interprets arrays as big-endian integers, unlike setbit/getbit
 - Opcode: 0xae
 - Pops: *... stack*, []byte
 - Pushes: []byte
-- X with all bits inverted
+- A with all bits inverted
 - **Cost**: 4
 - LogicSigVersion >= 4
 
@@ -1184,5 +1069,5 @@ bitlen interprets arrays as big-endian integers, unlike setbit/getbit
 - Opcode: 0xaf
 - Pops: *... stack*, uint64
 - Pushes: []byte
-- push a byte-array of length X, containing all zero bytes
+- push a byte-array of length A, containing all zero bytes
 - LogicSigVersion >= 4

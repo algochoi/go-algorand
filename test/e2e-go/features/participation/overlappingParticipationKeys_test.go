@@ -18,7 +18,6 @@ package participation
 
 import (
 	"context"
-	"encoding/hex"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -45,10 +44,8 @@ func TestOverlappingParticipationKeys(t *testing.T) {
 	consensus := make(config.ConsensusProtocols)
 	shortPartKeysProtocol := config.Consensus[protocol.ConsensusCurrentVersion]
 	shortPartKeysProtocol.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
-	// keys round = current - 2 * (2 * 1) (see selector.go)
-	// new keys must exist at least 4 rounds prior use
 	shortPartKeysProtocol.SeedLookback = 2
-	shortPartKeysProtocol.SeedRefreshInterval = 1
+	shortPartKeysProtocol.SeedRefreshInterval = 8
 	if runtime.GOARCH == "amd64" {
 		// amd64 platforms are generally quite capable, so accelerate the round times to make the test run faster.
 		shortPartKeysProtocol.AgreementFilterTimeoutPeriod0 = 1 * time.Second
@@ -58,8 +55,6 @@ func TestOverlappingParticipationKeys(t *testing.T) {
 
 	var fixture fixtures.RestClientFixture
 	fixture.SetConsensus(consensus)
-	// ShortParticipationKeys template has LastPartKeyRound=8
-	// to allow the 3rd key to be registered and appear after 4+4 round for its first use
 	fixture.SetupNoStart(t, filepath.Join("nettemplates", "ShortParticipationKeys.json"))
 	defer fixture.Shutdown()
 
@@ -77,7 +72,7 @@ func TestOverlappingParticipationKeys(t *testing.T) {
 	genesisHash := crypto.HashObj(genesis)
 	rootKeys := make(map[int]*account.Root)
 	regTransactions := make(map[int]transactions.SignedTxn)
-	lastRound := uint64(39) // check 3 rounds of keys rotations
+	lastRound := uint64(64)
 
 	// prepare the participation keys ahead of time.
 	for round := uint64(1); round < lastRound; round++ {
@@ -86,9 +81,9 @@ func TestOverlappingParticipationKeys(t *testing.T) {
 		}
 		acctIdx := (round - 1) % 10
 		txStartRound := round
-		txEndRound := txStartRound + 10 + 4
-		regStartRound := round
-		regEndRound := regStartRound + 11 + 4
+		txEndRound := txStartRound + 36 + 10
+		regStartRound := round + 32
+		regEndRound := regStartRound + 11
 		err = prepareParticipationKey(a, &fixture, acctIdx, txStartRound, txEndRound, regStartRound, regEndRound, genesisHash, rootKeys, regTransactions)
 		a.NoError(err)
 	}
@@ -102,13 +97,13 @@ func TestOverlappingParticipationKeys(t *testing.T) {
 		currentRound++
 		if (currentRound-1)%10 < uint64(accountsNum) {
 			acctIdx := (currentRound - 1) % 10
-			startRound := currentRound + 2 // +2 and -2 below to balance, start/end must match in part key file name
-			endRound := startRound + 10 + 4 - 2
-			regStartRound := currentRound
-			regEndRound := regStartRound + 11 + 4
-			pk, err := addParticipationKey(a, &fixture, acctIdx, startRound, endRound, regTransactions)
+			startRound := currentRound + 2
+			endRound := startRound + 36 + 10 - 2
+			regStartRound := currentRound + 32
+			regEndRound := regStartRound + 11
+			err = addParticipationKey(a, &fixture, acctIdx, startRound, endRound, regTransactions)
 			a.NoError(err)
-			t.Logf("[.] Round %d, Added reg key for node %d range [%d..%d] %s\n", currentRound, acctIdx, regStartRound, regEndRound, hex.EncodeToString(pk[:8]))
+			t.Logf("[.] Round %d, Added reg key for node %d range [%d..%d]\n", currentRound, acctIdx, regStartRound, regEndRound)
 		} else {
 			t.Logf("[.] Round %d\n", currentRound)
 		}
@@ -120,7 +115,7 @@ func TestOverlappingParticipationKeys(t *testing.T) {
 
 }
 
-func addParticipationKey(a *require.Assertions, fixture *fixtures.RestClientFixture, acctNum uint64, startRound, endRound uint64, regTransactions map[int]transactions.SignedTxn) (crypto.OneTimeSignatureVerifier, error) {
+func addParticipationKey(a *require.Assertions, fixture *fixtures.RestClientFixture, acctNum uint64, startRound, endRound uint64, regTransactions map[int]transactions.SignedTxn) error {
 	dataDir := fixture.NodeDataDirs()[acctNum]
 	nc := fixture.GetNodeControllerForDataDir(dataDir)
 	genesisDir, err := nc.GetGenesisDir()
@@ -128,14 +123,17 @@ func addParticipationKey(a *require.Assertions, fixture *fixtures.RestClientFixt
 	partKeyName := filepath.Join(dataDir, config.PartKeyFilename("Wallet", startRound, endRound))
 	partKeyNameTarget := filepath.Join(genesisDir, config.PartKeyFilename("Wallet", startRound, endRound))
 
-	// make the rename in the background to ensure it won't take too long. We have ~4 rounds to complete this.
+	// make the rename in the background to ensure it won't take too long. We have ~32 rounds to complete this.
 	go os.Rename(partKeyName, partKeyNameTarget)
 
 	signedTxn := regTransactions[int(startRound-2)]
 	a.NotEmpty(signedTxn.Sig)
 	_, err = fixture.GetAlgodClientForController(nc).SendRawTransaction(signedTxn)
-	a.NoError(err)
-	return signedTxn.Txn.KeyregTxnFields.VotePK, err
+	if err != nil {
+		a.NoError(err)
+		return err
+	}
+	return err
 }
 
 func prepareParticipationKey(a *require.Assertions, fixture *fixtures.RestClientFixture, acctNum uint64, txStartRound, txEndRound, regStartRound, regEndRound uint64, genesisHash crypto.Digest, rootKeys map[int]*account.Root, regTransactions map[int]transactions.SignedTxn) error {
@@ -192,15 +190,15 @@ func prepareParticipationKey(a *require.Assertions, fixture *fixtures.RestClient
 		return err
 	}
 
-	persistedParticipation, err := account.FillDBWithParticipationKeys(partkeyHandle, rootAccount.Address(), basics.Round(regStartRound), basics.Round(regEndRound), fixture.LibGoalFixture.Genesis().PartKeyDilution)
+	persistedPerticipation, err := account.FillDBWithParticipationKeys(partkeyHandle, rootAccount.Address(), basics.Round(regStartRound), basics.Round(regEndRound), fixture.LibGoalFixture.Genesis().PartKeyDilution)
 	if err != nil {
 		a.NoError(err)
 		return err
 	}
 	partkeyHandle.Vacuum(context.Background())
-	persistedParticipation.Close()
+	persistedPerticipation.Close()
 
-	unsignedTxn := persistedParticipation.GenerateRegistrationTransaction(basics.MicroAlgos{Raw: 1000}, basics.Round(txStartRound), basics.Round(txEndRound), [32]byte{})
+	unsignedTxn := persistedPerticipation.GenerateRegistrationTransaction(basics.MicroAlgos{Raw: 1000}, basics.Round(txStartRound), basics.Round(txEndRound), [32]byte{})
 	copy(unsignedTxn.GenesisHash[:], genesisHash[:])
 	if err != nil {
 		a.NoError(err)

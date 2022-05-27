@@ -29,7 +29,7 @@ import (
 )
 
 func TestLogFilterExamples(t *testing.T) {
-	// iterate on all the example files in the local directory.
+	// iterate on all the example files in the local directroy.
 	exampleFiles := []string{}
 	filepath.Walk(".", func(path string, info os.FileInfo, err error) error {
 		if err != nil {

@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2021 Algorand, Inc.
+// Copyright (C) 2019-2022 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -23,11 +23,15 @@ import (
 
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
+	"github.com/algorand/go-algorand/ledger/ledgercore"
+	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
 func TestOnlineTopHeap_Less(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	h := onlineTopHeap{
-		accts: []*onlineAccount{
+		accts: []*ledgercore.OnlineAccount{
 			{
 				Address:                 basics.Address{},
 				NormalizedOnlineBalance: 0,
@@ -53,8 +57,10 @@ func TestOnlineTopHeap_Less(t *testing.T) {
 }
 
 func TestOnlineTopHeap_Swap(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	h := onlineTopHeap{
-		accts: []*onlineAccount{
+		accts: []*ledgercore.OnlineAccount{
 			{
 				Address:                 basics.Address{},
 				NormalizedOnlineBalance: 0,
@@ -80,8 +86,10 @@ func TestOnlineTopHeap_Swap(t *testing.T) {
 }
 
 func TestOnlineTopHeap_Push(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	h := onlineTopHeap{
-		accts: []*onlineAccount{
+		accts: []*ledgercore.OnlineAccount{
 			{
 				Address:                 basics.Address{},
 				NormalizedOnlineBalance: 0,
@@ -95,7 +103,7 @@ func TestOnlineTopHeap_Push(t *testing.T) {
 
 	acct0 := h.accts[0]
 	acct1 := h.accts[1]
-	acct2 := &onlineAccount{
+	acct2 := &ledgercore.OnlineAccount{
 		Address:                 basics.Address(crypto.Hash([]byte("address"))),
 		NormalizedOnlineBalance: 0,
 	}
@@ -109,8 +117,10 @@ func TestOnlineTopHeap_Push(t *testing.T) {
 }
 
 func TestOnlineTopHeap_Pop(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	h := onlineTopHeap{
-		accts: []*onlineAccount{
+		accts: []*ledgercore.OnlineAccount{
 			{
 				Address:                 basics.Address{},
 				NormalizedOnlineBalance: 0,

@@ -145,7 +145,8 @@ int 1
 
 	// create the app
 	tx, err := client.MakeUnsignedAppCreateTx(
-		transactions.OptInOC, approvalOps.Program, clearstateOps.Program, schema, schema, nil, nil, nil, nil, 0)
+		transactions.OptInOC, approvalOps.Program, clearstateOps.Program, schema, schema, nil, nil, nil, nil,
+	)
 	a.NoError(err)
 	tx, err = client.FillUnsignedTxTemplate(creator, 0, 0, fee, tx)
 	a.NoError(err)
@@ -154,43 +155,29 @@ int 1
 	round, err = client.CurrentRound()
 	a.NoError(err)
 
-	successfullBroadcastCount := 0
 	_, err = client.BroadcastTransaction(signedTxn)
-	if err != nil {
-		a.Contains(err.Error(), "application transaction not supported")
-	} else {
-		// if we had no error it must mean that we've upgraded already. Verify that.
-		curStatus, err := client.Status()
-		a.NoError(err)
-		require.NotEqual(t, consensusTestUnupgradedProtocol, protocol.ConsensusVersion(curStatus.LastVersion))
-		successfullBroadcastCount++
-	}
+	a.Error(err)
+	a.Contains(err.Error(), "application transaction not supported")
 
 	curStatus, err := client.Status()
 	a.NoError(err)
+	initialStatus := curStatus
 
 	startLoopTime := time.Now()
 
 	// wait until the network upgrade : this can take a while.
-	for protocol.ConsensusVersion(curStatus.LastVersion) == consensusTestUnupgradedProtocol {
+	for curStatus.LastVersion == initialStatus.LastVersion {
 		curStatus, err = client.Status()
 		a.NoError(err)
 
 		a.Less(int64(time.Now().Sub(startLoopTime)), int64(3*time.Minute))
 		time.Sleep(time.Duration(smallLambdaMs) * time.Millisecond)
+		round = curStatus.LastRound
 	}
-
-	round = curStatus.LastRound
-
-	// make a change to the node field to ensure we're not broadcasting the same transaction as we tried before.
-	tx.Note = []byte{1, 2, 3}
-	signedTxn, err = client.SignTransactionWithWallet(wh, nil, tx)
-	a.NoError(err)
 
 	// now, that we have upgraded to the new protocol which supports applications, try again.
 	_, err = client.BroadcastTransaction(signedTxn)
 	a.NoError(err)
-	successfullBroadcastCount++
 
 	curStatus, err = client.Status()
 	a.NoError(err)
@@ -205,7 +192,7 @@ int 1
 	// check creator's balance record for the app entry and the state changes
 	ad, err = client.AccountData(creator)
 	a.NoError(err)
-	a.Equal(successfullBroadcastCount, len(ad.AppParams))
+	a.Equal(1, len(ad.AppParams))
 	var appIdx basics.AppIndex
 	var params basics.AppParams
 	for i, p := range ad.AppParams {
@@ -222,7 +209,7 @@ int 1
 	a.True(ok)
 	a.Equal(uint64(1), value.Uint)
 
-	a.Equal(successfullBroadcastCount, len(ad.AppLocalStates))
+	a.Equal(1, len(ad.AppLocalStates))
 	state, ok := ad.AppLocalStates[appIdx]
 	a.True(ok)
 	a.Equal(schema, state.Schema)
@@ -248,7 +235,7 @@ int 1
 	// check creator's balance record for the app entry and the state changes
 	ad, err = client.AccountData(creator)
 	a.NoError(err)
-	a.Equal(successfullBroadcastCount, len(ad.AppParams))
+	a.Equal(1, len(ad.AppParams))
 	params, ok = ad.AppParams[appIdx]
 	a.True(ok)
 	a.Equal(approvalOps.Program, params.ApprovalProgram)
@@ -260,7 +247,7 @@ int 1
 	a.True(ok)
 	a.Equal(uint64(2), value.Uint)
 
-	a.Equal(successfullBroadcastCount, len(ad.AppLocalStates))
+	a.Equal(1, len(ad.AppLocalStates))
 	state, ok = ad.AppLocalStates[appIdx]
 	a.True(ok)
 	a.Equal(schema, state.Schema)
@@ -269,7 +256,7 @@ int 1
 	a.True(ok)
 	a.Equal(uint64(1), value.Uint)
 
-	a.Equal(uint64(2*successfullBroadcastCount), ad.TotalAppSchema.NumUint)
+	a.Equal(uint64(2), ad.TotalAppSchema.NumUint)
 
 	// check user's balance record for the app entry and the state changes
 	ad, err = client.AccountData(user)
@@ -388,7 +375,8 @@ int 1
 
 	// create the app
 	tx, err := client.MakeUnsignedAppCreateTx(
-		transactions.OptInOC, approvalOps.Program, clearstateOps.Program, schema, schema, nil, nil, nil, nil, 0)
+		transactions.OptInOC, approvalOps.Program, clearstateOps.Program, schema, schema, nil, nil, nil, nil,
+	)
 	a.NoError(err)
 	tx, err = client.FillUnsignedTxTemplate(creator, round, round+primaryNodeUnupgradedProtocol.DefaultUpgradeWaitRounds, fee, tx)
 	a.NoError(err)
