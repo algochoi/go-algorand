@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2021 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -51,14 +51,14 @@ var getCmd = &cobra.Command{
 				return
 			}
 
-			val, err := serializeObjectProperty(cfg, getParameterArg)
+			val, err := getObjectProperty(cfg, getParameterArg)
 			if err != nil {
 				reportWarnf("Error retrieving property '%s' - %s", getParameterArg, err)
 				anyError = true
 				return
 			}
 
-			fmt.Print(val)
+			fmt.Printf("%s", val)
 		})
 		if anyError {
 			os.Exit(1)
@@ -66,14 +66,14 @@ var getCmd = &cobra.Command{
 	},
 }
 
-func serializeObjectProperty(object interface{}, property string) (ret string, err error) {
+func getObjectProperty(object interface{}, property string) (ret interface{}, err error) {
 	v := reflect.ValueOf(object)
 	val := reflect.Indirect(v)
 	f := val.FieldByName(property)
 
 	if !f.IsValid() {
-		return "", fmt.Errorf("unknown property named '%s'", property)
+		return object, fmt.Errorf("unknown property named '%s'", property)
 	}
 
-	return fmt.Sprintf("%v", f.Interface()), nil
+	return f.Interface(), nil
 }

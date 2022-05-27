@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2021 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -352,7 +352,7 @@ func (n *NetworkFacade) Zero() timers.Clock {
 	n.zeroClock = n.fuzzer.WallClock()
 
 	// we don't want to expire all the pending clocks here.
-	// this callback is coming *only* from the agreement service.
+	// this callback is coming *only* from the agreement sevice.
 	// it also means that we're not in the demux loop, so no one is blocking
 	// on any of the clocks.
 
@@ -371,9 +371,6 @@ func (n *NetworkFacade) Rezero() {
 		fmt.Printf("NetworkFacade service-%v rezero clock = %d\n", n.nodeID, n.zeroClock)
 	}
 }
-
-// Since implements the Clock interface.
-func (n *NetworkFacade) Since() time.Duration { return 0 }
 
 func (n *NetworkFacade) TimeoutAt(d time.Duration) <-chan time.Time {
 	defer n.timeoutAtInitOnce.Do(func() {

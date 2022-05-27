@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2021 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -27,19 +27,14 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
-	"runtime"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
-	"github.com/algorand/go-algorand/crypto/merklesignature"
 	"github.com/algorand/go-algorand/data/basics"
-	"github.com/algorand/go-algorand/ledger/ledgercore"
-	ledgertesting "github.com/algorand/go-algorand/ledger/testing"
 	"github.com/algorand/go-algorand/protocol"
-	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
 func makeString(len int) string {
@@ -50,15 +45,12 @@ func makeString(len int) string {
 	return s
 }
 
-func makeTestEncodedBalanceRecordV5(t *testing.T) encodedBalanceRecordV5 {
-	er := encodedBalanceRecordV5{}
+func makeTestEncodedBalanceRecord(t *testing.T) encodedBalanceRecord {
+	er := encodedBalanceRecord{}
 	hash := crypto.Hash([]byte{1, 2, 3})
 	copy(er.Address[:], hash[:])
 	oneTimeSecrets := crypto.GenerateOneTimeSignatureSecrets(0, 1)
 	vrfSecrets := crypto.GenerateVRFSecrets()
-	var stateProofID merklesignature.Verifier
-	crypto.RandBytes(stateProofID[:])
-
 	ad := basics.AccountData{
 		Status:             basics.NotParticipating,
 		MicroAlgos:         basics.MicroAlgos{},
@@ -66,7 +58,6 @@ func makeTestEncodedBalanceRecordV5(t *testing.T) encodedBalanceRecordV5 {
 		RewardedMicroAlgos: basics.MicroAlgos{},
 		VoteID:             oneTimeSecrets.OneTimeSignatureVerifier,
 		SelectionID:        vrfSecrets.PK,
-		StateProofID:       stateProofID,
 		VoteFirstValid:     basics.Round(0x1234123412341234),
 		VoteLastValid:      basics.Round(0x1234123412341234),
 		VoteKeyDilution:    0x1234123412341234,
@@ -75,12 +66,8 @@ func makeTestEncodedBalanceRecordV5(t *testing.T) encodedBalanceRecordV5 {
 		AuthAddr:           basics.Address(crypto.Hash([]byte{1, 2, 3, 4})),
 	}
 	currentConsensusParams := config.Consensus[protocol.ConsensusCurrentVersion]
-	maxAssetsPerAccount := currentConsensusParams.MaxAssetsPerAccount
-	// if the number of supported assets is unlimited, create only 1000 for the purpose of this unit test.
-	if maxAssetsPerAccount == 0 {
-		maxAssetsPerAccount = config.Consensus[protocol.ConsensusV30].MaxAssetsPerAccount
-	}
-	for assetCreatorAssets := 0; assetCreatorAssets < maxAssetsPerAccount; assetCreatorAssets++ {
+
+	for assetCreatorAssets := 0; assetCreatorAssets < currentConsensusParams.MaxAssetsPerAccount; assetCreatorAssets++ {
 		ap := basics.AssetParams{
 			Total:         0x1234123412341234,
 			Decimals:      0x12341234,
@@ -97,7 +84,7 @@ func makeTestEncodedBalanceRecordV5(t *testing.T) encodedBalanceRecordV5 {
 		ad.AssetParams[basics.AssetIndex(0x1234123412341234-assetCreatorAssets)] = ap
 	}
 
-	for assetHolderAssets := 0; assetHolderAssets < maxAssetsPerAccount; assetHolderAssets++ {
+	for assetHolderAssets := 0; assetHolderAssets < currentConsensusParams.MaxAssetsPerAccount; assetHolderAssets++ {
 		ah := basics.AssetHolding{
 			Amount: 0x1234123412341234,
 			Frozen: true,
@@ -107,21 +94,16 @@ func makeTestEncodedBalanceRecordV5(t *testing.T) encodedBalanceRecordV5 {
 
 	maxApps := currentConsensusParams.MaxAppsCreated
 	maxOptIns := currentConsensusParams.MaxAppsOptedIn
-	if maxApps == 0 {
-		maxApps = config.Consensus[protocol.ConsensusV30].MaxAppsCreated
+	maxBytesLen := currentConsensusParams.MaxAppKeyLen
+	if maxBytesLen > currentConsensusParams.MaxAppBytesValueLen {
+		maxBytesLen = currentConsensusParams.MaxAppBytesValueLen
 	}
-	if maxOptIns == 0 {
-		maxOptIns = config.Consensus[protocol.ConsensusV30].MaxAppsOptedIn
-	}
-	maxKeyBytesLen := currentConsensusParams.MaxAppKeyLen
-	maxSumBytesLen := currentConsensusParams.MaxAppSumKeyValueLens
-
 	genKey := func() (string, basics.TealValue) {
-		len := int(crypto.RandUint64() % uint64(maxKeyBytesLen))
+		len := int(crypto.RandUint64() % uint64(maxBytesLen))
 		if len == 0 {
 			return "k", basics.TealValue{Type: basics.TealUintType, Uint: 0}
 		}
-		key := make([]byte, maxSumBytesLen-len)
+		key := make([]byte, len)
 		crypto.RandBytes(key)
 		return string(key), basics.TealValue{Type: basics.TealUintType, Bytes: string(key)}
 	}
@@ -157,12 +139,10 @@ func makeTestEncodedBalanceRecordV5(t *testing.T) encodedBalanceRecordV5 {
 }
 
 func TestEncodedBalanceRecordEncoding(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
-	er := makeTestEncodedBalanceRecordV5(t)
+	er := makeTestEncodedBalanceRecord(t)
 	encodedBr := er.MarshalMsg(nil)
 
-	var er2 encodedBalanceRecordV5
+	var er2 encodedBalanceRecord
 	_, err := er2.UnmarshalMsg(encodedBr)
 	require.NoError(t, err)
 
@@ -170,31 +150,20 @@ func TestEncodedBalanceRecordEncoding(t *testing.T) {
 }
 
 func TestCatchpointFileBalancesChunkEncoding(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
-	// The next operations are heavy on the memory.
-	// Garbage collection helps prevent trashing
-	runtime.GC()
-
-	fbc := catchpointFileBalancesChunkV5{}
+	fbc := catchpointFileBalancesChunk{}
 	for i := 0; i < 512; i++ {
-		fbc.Balances = append(fbc.Balances, makeTestEncodedBalanceRecordV5(t))
+		fbc.Balances = append(fbc.Balances, makeTestEncodedBalanceRecord(t))
 	}
 	encodedFbc := fbc.MarshalMsg(nil)
 
-	var fbc2 catchpointFileBalancesChunkV5
+	var fbc2 catchpointFileBalancesChunk
 	_, err := fbc2.UnmarshalMsg(encodedFbc)
 	require.NoError(t, err)
 
 	require.Equal(t, fbc, fbc2)
-	// Garbage collection helps prevent trashing
-	// for next tests
-	runtime.GC()
 }
 
 func TestBasicCatchpointWriter(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	// create new protocol version, which has lower lookback
 	testProtocolVersion := protocol.ConsensusVersion("test-protocol-TestBasicCatchpointWriter")
 	protoParams := config.Consensus[protocol.ConsensusCurrentVersion]
@@ -202,21 +171,23 @@ func TestBasicCatchpointWriter(t *testing.T) {
 	protoParams.SeedLookback = 2
 	protoParams.SeedRefreshInterval = 8
 	config.Consensus[testProtocolVersion] = protoParams
-	temporaryDirectroy, _ := ioutil.TempDir(os.TempDir(), CatchpointDirName)
+	temporaryDirectroy, _ := ioutil.TempDir(os.TempDir(), "catchpoints")
 	defer func() {
 		delete(config.Consensus, testProtocolVersion)
 		os.RemoveAll(temporaryDirectroy)
 	}()
-	accts := ledgertesting.RandomAccounts(300, false)
 
-	ml := makeMockLedgerForTracker(t, true, 10, testProtocolVersion, []map[basics.Address]basics.AccountData{accts})
+	ml := makeMockLedgerForTracker(t, true, 10, testProtocolVersion)
 	defer ml.Close()
+	accts := randomAccounts(300, false)
 
+	au := &accountUpdates{}
 	conf := config.GetDefaultLocal()
 	conf.CatchpointInterval = 1
 	conf.Archival = true
-	au := newAcctUpdates(t, ml, conf, ".")
-	err := au.loadFromDisk(ml, 0)
+	au.initialize(conf, ".", protoParams, accts)
+	defer au.close()
+	err := au.loadFromDisk(ml)
 	require.NoError(t, err)
 	au.close()
 	fileName := filepath.Join(temporaryDirectroy, "15.catchpoint")
@@ -280,7 +251,7 @@ func TestBasicCatchpointWriter(t *testing.T) {
 			require.Equal(t, blockHeaderDigest, fileHeader.BlockHeaderDigest)
 			require.Equal(t, uint64(len(accts)), fileHeader.TotalAccounts)
 		} else if header.Name == "balances.1.1.msgpack" {
-			var balances catchpointFileBalancesChunkV6
+			var balances catchpointFileBalancesChunk
 			err = protocol.Decode(balancesBlockBytes, &balances)
 			require.NoError(t, err)
 			require.Equal(t, uint64(len(accts)), uint64(len(balances.Balances)))
@@ -291,8 +262,6 @@ func TestBasicCatchpointWriter(t *testing.T) {
 }
 
 func TestFullCatchpointWriter(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	// create new protocol version, which has lower lookback
 	testProtocolVersion := protocol.ConsensusVersion("test-protocol-TestFullCatchpointWriter")
 	protoParams := config.Consensus[protocol.ConsensusCurrentVersion]
@@ -300,21 +269,23 @@ func TestFullCatchpointWriter(t *testing.T) {
 	protoParams.SeedLookback = 2
 	protoParams.SeedRefreshInterval = 8
 	config.Consensus[testProtocolVersion] = protoParams
-	temporaryDirectroy, _ := ioutil.TempDir(os.TempDir(), CatchpointDirName)
+	temporaryDirectroy, _ := ioutil.TempDir(os.TempDir(), "catchpoints")
 	defer func() {
 		delete(config.Consensus, testProtocolVersion)
 		os.RemoveAll(temporaryDirectroy)
 	}()
 
-	accts := ledgertesting.RandomAccounts(BalancesPerCatchpointFileChunk*3, false)
-	ml := makeMockLedgerForTracker(t, true, 10, testProtocolVersion, []map[basics.Address]basics.AccountData{accts})
+	ml := makeMockLedgerForTracker(t, true, 10, testProtocolVersion)
 	defer ml.Close()
+	accts := randomAccounts(BalancesPerCatchpointFileChunk*3, false)
 
+	au := &accountUpdates{}
 	conf := config.GetDefaultLocal()
 	conf.CatchpointInterval = 1
 	conf.Archival = true
-	au := newAcctUpdates(t, ml, conf, ".")
-	err := au.loadFromDisk(ml, 0)
+	au.initialize(conf, ".", protoParams, accts)
+	defer au.close()
+	err := au.loadFromDisk(ml)
 	require.NoError(t, err)
 	au.close()
 	fileName := filepath.Join(temporaryDirectroy, "15.catchpoint")
@@ -336,7 +307,7 @@ func TestFullCatchpointWriter(t *testing.T) {
 	require.NoError(t, err)
 
 	// create a ledger.
-	var initState ledgercore.InitState
+	var initState InitState
 	initState.Block.CurrentProtocol = protocol.ConsensusCurrentVersion
 	l, err := OpenLedger(ml.log, "TestFullCatchpointWriter", true, initState, conf)
 	require.NoError(t, err)
@@ -384,15 +355,15 @@ func TestFullCatchpointWriter(t *testing.T) {
 	}
 
 	err = l.trackerDBs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
-		err := applyCatchpointStagingBalances(ctx, tx, 0, 0)
+		err := applyCatchpointStagingBalances(ctx, tx, 0)
 		return err
 	})
 	require.NoError(t, err)
 
 	// verify that the account data aligns with what we originally stored :
 	for addr, acct := range accts {
-		acctData, validThrough, _, err := l.LookupLatest(addr)
-		require.NoErrorf(t, err, "failed to lookup for account %v after restoring from catchpoint", addr)
+		acctData, validThrough, err := l.LookupWithoutRewards(0, addr)
+		require.NoError(t, err)
 		require.Equal(t, acct, acctData)
 		require.Equal(t, basics.Round(0), validThrough)
 	}

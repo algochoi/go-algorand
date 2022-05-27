@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2021 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -31,7 +31,6 @@ import (
 	"github.com/algorand/go-algorand/libgoal"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/framework/fixtures"
-	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
 type assetIDParams struct {
@@ -54,9 +53,6 @@ func helperFillSignBroadcast(client libgoal.Client, wh []byte, sender string, tx
 }
 
 func TestAssetValidRounds(t *testing.T) {
-	partitiontest.PartitionTest(t)
-	defer fixtures.ShutdownSynchronizedTest(t)
-
 	t.Parallel()
 	a := require.New(fixtures.SynchronizedTest(t))
 
@@ -188,9 +184,6 @@ func TestAssetValidRounds(t *testing.T) {
 }
 
 func TestAssetConfig(t *testing.T) {
-	partitiontest.PartitionTest(t)
-	defer fixtures.ShutdownSynchronizedTest(t)
-
 	if testing.Short() {
 		t.Skip()
 	}
@@ -232,14 +225,9 @@ func TestAssetConfig(t *testing.T) {
 	a.NoError(err)
 	a.Equal(len(info.AssetParams), 0)
 
-	// Create max number of assets, or 1000 if the number of assets are unlimitd.
-	maxAssetsCount := config.Consensus[protocol.ConsensusFuture].MaxAssetsPerAccount
-	if maxAssetsCount == 0 {
-		maxAssetsCount = config.Consensus[protocol.ConsensusV30].MaxAssetsPerAccount
-	}
-
+	// Create max number of assets
 	txids := make(map[string]string)
-	for i := 0; i < maxAssetsCount; i++ {
+	for i := 0; i < config.Consensus[protocol.ConsensusFuture].MaxAssetsPerAccount; i++ {
 		// re-generate wh, since this test takes a while and sometimes
 		// the wallet handle expires.
 		wh, err = client.GetUnencryptedWalletHandle()
@@ -249,32 +237,36 @@ func TestAssetConfig(t *testing.T) {
 		txid, err := helperFillSignBroadcast(client, wh, account0, tx, err)
 		a.NoError(err)
 		txids[txid] = account0
+
+		// Travis is slow, so help it along by waiting every once in a while
+		// for these transactions to commit..
+		if (i % 50) == 0 {
+			_, curRound := fixture.GetBalanceAndRound(account0)
+			confirmed := fixture.WaitForAllTxnsToConfirm(curRound+20, txids)
+			a.True(confirmed)
+			txids = make(map[string]string)
+		}
 	}
 
-	status, err := fixture.AlgodClient.Status()
-	a.NoError(err)
-	confirmed := fixture.WaitForAllTxnsToConfirm(status.LastRound+20, txids)
+	_, curRound := fixture.GetBalanceAndRound(account0)
+	confirmed := fixture.WaitForAllTxnsToConfirm(curRound+20, txids)
 	a.True(confirmed, "creating max number of assets")
-	txids = make(map[string]string)
 
 	// re-generate wh, since this test takes a while and sometimes
 	// the wallet handle expires.
 	wh, err = client.GetUnencryptedWalletHandle()
 	a.NoError(err)
 
-	var tx transactions.Transaction
-	if config.Consensus[protocol.ConsensusFuture].MaxAssetsPerAccount != 0 {
-		// Creating more assets should return an error
-		tx, err = client.MakeUnsignedAssetCreateTx(1, false, manager, reserve, freeze, clawback, fmt.Sprintf("toomany"), fmt.Sprintf("toomany"), assetURL, assetMetadataHash, 0)
-		_, err = helperFillSignBroadcast(client, wh, account0, tx, err)
-		a.Error(err)
-		a.True(strings.Contains(err.Error(), "too many assets in account:"))
-	}
+	// Creating more assets should return an error
+	tx, err := client.MakeUnsignedAssetCreateTx(1, false, manager, reserve, freeze, clawback, fmt.Sprintf("toomany"), fmt.Sprintf("toomany"), assetURL, assetMetadataHash, 0)
+	_, err = helperFillSignBroadcast(client, wh, account0, tx, err)
+	a.Error(err)
+	a.True(strings.Contains(err.Error(), "too many assets in account:"))
 
 	// Check that assets are visible
 	info, err = client.AccountInformation(account0)
 	a.NoError(err)
-	a.Equal(maxAssetsCount, len(info.AssetParams))
+	a.Equal(len(info.AssetParams), config.Consensus[protocol.ConsensusFuture].MaxAssetsPerAccount)
 	var assets []assetIDParams
 	for idx, cp := range info.AssetParams {
 		assets = append(assets, assetIDParams{idx, cp})
@@ -332,15 +324,13 @@ func TestAssetConfig(t *testing.T) {
 	a.NoError(err)
 	txids[txid] = manager
 
-	status, err = fixture.AlgodClient.Status()
-	a.NoError(err)
-	confirmed = fixture.WaitForAllTxnsToConfirm(status.LastRound+20, txids)
+	_, curRound = fixture.GetBalanceAndRound(account0)
+	confirmed = fixture.WaitForAllTxnsToConfirm(curRound+20, txids)
 	a.True(confirmed, "changing keys")
-	txids = make(map[string]string)
 
 	info, err = client.AccountInformation(account0)
 	a.NoError(err)
-	a.Equal(maxAssetsCount, len(info.AssetParams))
+	a.Equal(len(info.AssetParams), config.Consensus[protocol.ConsensusFuture].MaxAssetsPerAccount)
 	for idx, cp := range info.AssetParams {
 		a.Equal(cp.UnitName, fmt.Sprintf("test%d", cp.Total-1))
 		a.Equal(cp.AssetName, fmt.Sprintf("testname%d", cp.Total-1))
@@ -403,11 +393,19 @@ func TestAssetConfig(t *testing.T) {
 		txid, err := helperFillSignBroadcast(client, wh, sender, tx, err)
 		a.NoError(err)
 		txids[txid] = sender
+
+		// Travis is slow, so help it along by waiting every once in a while
+		// for these transactions to commit..
+		if (idx % 50) == 0 {
+			_, curRound = fixture.GetBalanceAndRound(account0)
+			confirmed = fixture.WaitForAllTxnsToConfirm(curRound+20, txids)
+			a.True(confirmed)
+			txids = make(map[string]string)
+		}
 	}
 
-	status, err = fixture.AlgodClient.Status()
-	a.NoError(err)
-	confirmed = fixture.WaitForAllTxnsToConfirm(status.LastRound+20, txids)
+	_, curRound = fixture.GetBalanceAndRound(account0)
+	confirmed = fixture.WaitForAllTxnsToConfirm(curRound+20, txids)
 	a.True(confirmed, "destroying assets")
 
 	// re-generate wh, since this test takes a while and sometimes
@@ -421,14 +419,11 @@ func TestAssetConfig(t *testing.T) {
 }
 
 func TestAssetInformation(t *testing.T) {
-	partitiontest.PartitionTest(t)
-	defer fixtures.ShutdownSynchronizedTest(t)
-
 	t.Parallel()
 	a := require.New(fixtures.SynchronizedTest(t))
 
 	var fixture fixtures.RestClientFixture
-	fixture.Setup(t, filepath.Join("nettemplates", "TwoNodes50EachV24.json"))
+	fixture.Setup(t, filepath.Join("nettemplates", "TwoNodes50EachFuture.json"))
 	defer fixture.Shutdown()
 
 	client := fixture.LibGoalClient
@@ -460,7 +455,7 @@ func TestAssetInformation(t *testing.T) {
 	a.Equal(len(info.AssetParams), 0)
 
 	// There should be no assets to start with
-	info2, err := client.AccountInformationV2(account0, true)
+	info2, err := client.AccountInformationV2(account0)
 	a.NoError(err)
 	a.NotNil(info2.CreatedAssets)
 	a.Equal(len(*info2.CreatedAssets), 0)
@@ -488,7 +483,7 @@ func TestAssetInformation(t *testing.T) {
 	}
 
 	// Check that AssetInformationV2 returns the correct AssetParams
-	info2, err = client.AccountInformationV2(account0, true)
+	info2, err = client.AccountInformationV2(account0)
 	a.NoError(err)
 	a.NotNil(info2.CreatedAssets)
 	for _, cp := range *info2.CreatedAssets {
@@ -516,9 +511,6 @@ func TestAssetInformation(t *testing.T) {
 }
 
 func TestAssetGroupCreateSendDestroy(t *testing.T) {
-	partitiontest.PartitionTest(t)
-	defer fixtures.ShutdownSynchronizedTest(t)
-
 	t.Parallel()
 	a := require.New(fixtures.SynchronizedTest(t))
 
@@ -627,18 +619,9 @@ func TestAssetGroupCreateSendDestroy(t *testing.T) {
 	err = client0.BroadcastTransactionGroup(stxns)
 	a.NoError(err)
 
-	status0, err := client0.Status()
-	a.NoError(err)
-
-	confirmed := fixture.WaitForAllTxnsToConfirm(status0.LastRound+5, txids)
+	_, curRound := fixture.GetBalanceAndRound(account0)
+	confirmed := fixture.WaitForAllTxnsToConfirm(curRound+5, txids)
 	a.True(confirmed)
-
-	status0, err = client0.Status()
-	a.NoError(err)
-
-	// wait for client1 to reach the same round as client0
-	_, err = client1.WaitForRound(status0.LastRound)
-	a.NoError(err)
 
 	txids = make(map[string]string)
 
@@ -655,17 +638,9 @@ func TestAssetGroupCreateSendDestroy(t *testing.T) {
 	a.NoError(err)
 	txids[txid] = account0
 
-	status0, err = client0.Status()
-	a.NoError(err)
-	confirmed = fixture.WaitForAllTxnsToConfirm(status0.LastRound+5, txids)
+	_, curRound = fixture.GetBalanceAndRound(account0)
+	confirmed = fixture.WaitForAllTxnsToConfirm(curRound+5, txids)
 	a.True(confirmed)
-
-	status0, err = client0.Status()
-	a.NoError(err)
-
-	// wait for client1 to reach the same round as client0
-	_, err = client1.WaitForRound(status0.LastRound)
-	a.NoError(err)
 
 	// asset 3 (create + destroy) not available
 	_, err = client1.AssetInformation(assetID3)
@@ -677,9 +652,6 @@ func TestAssetGroupCreateSendDestroy(t *testing.T) {
 }
 
 func TestAssetSend(t *testing.T) {
-	partitiontest.PartitionTest(t)
-	defer fixtures.ShutdownSynchronizedTest(t)
-
 	t.Parallel()
 	a := require.New(fixtures.SynchronizedTest(t))
 
@@ -927,9 +899,6 @@ func TestAssetSend(t *testing.T) {
 }
 
 func TestAssetCreateWaitRestartDelete(t *testing.T) {
-	partitiontest.PartitionTest(t)
-	defer fixtures.ShutdownSynchronizedTest(t)
-
 	a, fixture, client, account0 := setupTestAndNetwork(t, "", nil)
 	defer fixture.Shutdown()
 
@@ -991,9 +960,6 @@ func TestAssetCreateWaitRestartDelete(t *testing.T) {
 }
 
 func TestAssetCreateWaitBalLookbackDelete(t *testing.T) {
-	partitiontest.PartitionTest(t)
-	defer fixtures.ShutdownSynchronizedTest(t)
-
 	if testing.Short() {
 		t.Skip()
 	}

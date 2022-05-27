@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2021 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -23,7 +23,6 @@ import (
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/protocol"
-	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
 // this helper object creates threshold events
@@ -66,8 +65,6 @@ func makeVoteTrackerRoundZero() listener {
 }
 
 func TestVoteTrackerPeriodStepCachedThresholdPrivate(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	// goal: generate a next vote bottom quorum for the given period
 	// check that Cached is set properly. This is a private
 	// state test, this file also ensures that the matching event is generated appropriately.
@@ -102,7 +99,7 @@ func TestVoteTrackerPeriodStepCachedThresholdPrivate(t *testing.T) {
 	require.NoError(t, err)
 	require.NoErrorf(t, res, "Expected threshold event not relayed")
 
-	// now, given that a bottom threshold was emitted, make sure private state was set (so we can appropriately respond to queries)
+	// now, given that a bottom threshold was emmited, make sure private state was set (so we can appropriately respond to queries)
 	vt := perRouter.voteRoot.underlying().(*voteTrackerPeriod)
 	require.Truef(t, vt.Cached.Bottom, "VoteTrackerPeriod didn't set bottom to true")
 
@@ -133,8 +130,6 @@ func TestVoteTrackerPeriodStepCachedThresholdPrivate(t *testing.T) {
 
 // add value threshold only, make sure its returned in status
 func TestVoteTrackerPeriodValueStatus(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	h := nextThresholdHelper{}
 	b := testCaseBuilder{}
 	v1 := randomBlockHash()
@@ -154,8 +149,6 @@ func TestVoteTrackerPeriodValueStatus(t *testing.T) {
 
 // check seen no thresholds
 func TestVoteTrackerPeriodNoneSeen(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	b := testCaseBuilder{}
 	expectedStatus := nextThresholdStatusEvent{Bottom: false, Proposal: bottom}
 	b.AddInOutPair(nextThresholdStatusRequestEvent{}, expectedStatus)
@@ -170,8 +163,6 @@ func TestVoteTrackerPeriodNoneSeen(t *testing.T) {
 
 // check seen bottom threshold only
 func TestVoteTrackerPeriodBottomOnly(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	h := nextThresholdHelper{}
 	b := testCaseBuilder{}
 	in := h.MakeValidNextThresholdVal(t, 1, 1, next, bottom)
@@ -189,8 +180,6 @@ func TestVoteTrackerPeriodBottomOnly(t *testing.T) {
 
 // check seen both bottom and value threshodl
 func TestVoteTrackerPeriodValueAndBottom(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	h := nextThresholdHelper{}
 	b := testCaseBuilder{}
 	in := h.MakeValidNextThresholdVal(t, 1, 1, next, bottom)
@@ -213,8 +202,6 @@ func TestVoteTrackerPeriodValueAndBottom(t *testing.T) {
 /* VoteTrackerRound Tests */
 
 func TestVoteTrackerRoundUpdatesFreshest(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	h := nextThresholdHelper{}
 	b := testCaseBuilder{}
 	v1 := randomBlockHash()
@@ -233,8 +220,6 @@ func TestVoteTrackerRoundUpdatesFreshest(t *testing.T) {
 }
 
 func TestVoteTrackerRoundUpdatesFreshestNextOverSoft(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	h := nextThresholdHelper{}
 	b := testCaseBuilder{}
 	v1 := randomBlockHash()
@@ -259,8 +244,6 @@ func TestVoteTrackerRoundUpdatesFreshestNextOverSoft(t *testing.T) {
 }
 
 func TestVoteTrackerRoundUpdatesFreshestPeriod(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	h := nextThresholdHelper{}
 	b := testCaseBuilder{}
 	v1 := randomBlockHash()
@@ -285,8 +268,6 @@ func TestVoteTrackerRoundUpdatesFreshestPeriod(t *testing.T) {
 }
 
 func TestVoteTrackerRoundUpdatesFreshestBot(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	h := nextThresholdHelper{}
 	b := testCaseBuilder{}
 	v1 := randomBlockHash()
@@ -316,8 +297,6 @@ func TestVoteTrackerRoundUpdatesFreshestBot(t *testing.T) {
 }
 
 func TestVoteTrackerRoundForwardsVoteAccepted(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	// check forwards vote accepted, and returns only a fresh bundle
 	// this is really a test on the composition of machines. We should build
 	// a framework for composing tests instead of writing these e2e's in the future.

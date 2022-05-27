@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2021 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -25,7 +25,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	generatedV2 "github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated"
+	"github.com/algorand/go-algorand/daemon/algod/api/spec/v1"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/libgoal"
 )
@@ -205,7 +205,7 @@ func (accountList *AccountsList) loadList() {
 	}
 }
 
-func (accountList *AccountsList) outputAccount(addr string, acctInfo generatedV2.Account, multisigInfo *libgoal.MultisigInfo) {
+func (accountList *AccountsList) outputAccount(addr string, acctInfo v1.Account, multisigInfo *libgoal.MultisigInfo) {
 	if acctInfo.Address == "" {
 		fmt.Printf("[n/a]\t%s\t%s\t[n/a] microAlgos", accountList.getNameByAddress(addr), addr)
 	} else {
@@ -225,28 +225,25 @@ func (accountList *AccountsList) outputAccount(addr string, acctInfo generatedV2
 	if multisigInfo != nil {
 		fmt.Printf("\t[%d/%d multisig]", multisigInfo.Threshold, len(multisigInfo.PKs))
 	}
-	if acctInfo.CreatedAssets != nil && len(*acctInfo.CreatedAssets) > 0 {
+	if len(acctInfo.AssetParams) > 0 {
 		var out []string
-		for _, asset := range *acctInfo.CreatedAssets {
-			var unitName string
-			if asset.Params.UnitName != nil {
-				_, unitName = unicodePrintable(*asset.Params.UnitName)
-			}
-			out = append(out, fmt.Sprintf("%d (%d %s)", asset.Index, asset.Params.Total, unitName))
+		for curid, params := range acctInfo.AssetParams {
+			_, unitName := unicodePrintable(params.UnitName)
+			out = append(out, fmt.Sprintf("%d (%d %s)", curid, params.Total, unitName))
 		}
 		fmt.Printf("\t[created asset IDs: %s]", strings.Join(out, ", "))
 	}
-	if acctInfo.CreatedApps != nil && len(*acctInfo.CreatedApps) > 0 {
+	if len(acctInfo.AppParams) > 0 {
 		var out []string
-		for _, app := range *acctInfo.CreatedApps {
-			out = append(out, fmt.Sprintf("%d", app.Id))
+		for aid := range acctInfo.AppParams {
+			out = append(out, fmt.Sprintf("%d", aid))
 		}
 		fmt.Printf("\t[created app IDs: %s]", strings.Join(out, ", "))
 	}
-	if acctInfo.AppsLocalState != nil && len(*acctInfo.AppsLocalState) > 0 {
+	if len(acctInfo.AppLocalStates) > 0 {
 		var out []string
-		for _, app := range *acctInfo.AppsLocalState {
-			out = append(out, fmt.Sprintf("%d", app.Id))
+		for aid := range acctInfo.AppLocalStates {
+			out = append(out, fmt.Sprintf("%d", aid))
 		}
 		fmt.Printf("\t[opted in app IDs: %s]", strings.Join(out, ", "))
 	}

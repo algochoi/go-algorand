@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2021 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -23,7 +23,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/crypto"
-	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
 const (
@@ -31,8 +30,6 @@ const (
 )
 
 func TestAddingAndRemoving(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	mt, _ := MakeTrie(nil, defaultTestMemoryConfig)
 	// create 10000 hashes.
 	hashes := make([]crypto.Digest, 10000)
@@ -85,8 +82,6 @@ func TestAddingAndRemoving(t *testing.T) {
 }
 
 func TestRandomAddingAndRemoving(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	mt, err := MakeTrie(nil, defaultTestMemoryConfig)
 	require.NoError(t, err)
 

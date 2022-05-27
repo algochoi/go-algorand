@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2021 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -29,11 +29,9 @@ import (
 
 	"github.com/algorand/go-deadlock"
 
-	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/network"
 	"github.com/algorand/go-algorand/protocol"
-	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
 type sentMessage struct {
@@ -332,7 +330,7 @@ func makewhiteholeNetwork(domain *whiteholeDomain) *whiteholeNetwork {
 
 func spinNetworkImpl(domain *whiteholeDomain) (whiteholeNet *whiteholeNetwork, counter *messageCounter) {
 	whiteholeNet = makewhiteholeNetwork(domain)
-	netImpl := WrapNetwork(whiteholeNet, logging.Base(), config.GetDefaultLocal()).(*networkImpl)
+	netImpl := WrapNetwork(whiteholeNet, logging.Base()).(*networkImpl)
 	counter = startMessageCounter(netImpl)
 	whiteholeNet.Start()
 	netImpl.Start()
@@ -340,8 +338,6 @@ func spinNetworkImpl(domain *whiteholeDomain) (whiteholeNet *whiteholeNetwork, c
 }
 
 func TestNetworkImpl(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	t.Parallel()
 
 	domain := &whiteholeDomain{

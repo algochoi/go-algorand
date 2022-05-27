@@ -1,7 +1,6 @@
 {
   "Genesis": {
     "NetworkName": "oneOnline",
-    "LastPartKeyRound": 3000,
     "Wallets": [
       {
         "Name": "Wallet1",

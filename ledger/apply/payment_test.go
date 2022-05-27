@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2021 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -27,7 +27,6 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/protocol"
-	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
 var poolAddr = basics.Address{0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff}
@@ -45,8 +44,6 @@ func keypair() *crypto.SignatureSecrets {
 }
 
 func TestAlgosEncoding(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	var a basics.MicroAlgos
 	var b basics.MicroAlgos
 	var i uint64
@@ -80,8 +77,6 @@ func TestAlgosEncoding(t *testing.T) {
 }
 
 func TestPaymentApply(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	mockBalV0 := makeMockBalances(protocol.ConsensusCurrentVersion)
 
 	secretSrc := keypair()
@@ -109,8 +104,6 @@ func TestPaymentApply(t *testing.T) {
 }
 
 func TestCheckSpender(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	mockBalV0 := makeMockBalances(protocol.ConsensusCurrentVersion)
 	mockBalV7 := makeMockBalances(protocol.ConsensusV7)
 
@@ -150,17 +143,11 @@ func TestCheckSpender(t *testing.T) {
 }
 
 func TestPaymentValidation(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	payments, _, _, _ := generateTestObjects(100, 50)
 	genHash := crypto.Digest{0x42}
 	for i, txn := range payments {
 		txn.GenesisHash = genHash
 		payments[i] = txn
-	}
-	tcpast := transactions.ExplicitTxnContext{
-		Proto:   config.Consensus[protocol.ConsensusV27],
-		GenHash: genHash,
 	}
 	tc := transactions.ExplicitTxnContext{
 		Proto:   config.Consensus[protocol.ConsensusCurrentVersion],
@@ -231,22 +218,13 @@ func TestPaymentValidation(t *testing.T) {
 
 		badFee := txn
 		badFee.Fee = basics.MicroAlgos{}
-		if badFee.WellFormed(spec, tcpast.Proto) == nil {
+		if badFee.WellFormed(spec, tc.Proto) == nil {
 			t.Errorf("transaction with no fee %#v verified incorrectly", badFee)
 		}
-		require.Nil(t, badFee.WellFormed(spec, tc.Proto))
-
-		badFee.Fee.Raw = 1
-		if badFee.WellFormed(spec, tcpast.Proto) == nil {
-			t.Errorf("transaction with low fee %#v verified incorrectly", badFee)
-		}
-		require.Nil(t, badFee.WellFormed(spec, tc.Proto))
 	}
 }
 
 func TestPaymentSelfClose(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	secretSrc := keypair()
 	src := basics.Address(secretSrc.SignatureVerifier)
 

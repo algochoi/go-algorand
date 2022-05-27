@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2021 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -28,7 +28,6 @@ import (
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/ledger/apply"
-	"github.com/algorand/go-algorand/ledger/ledgercore"
 
 	"github.com/algorand/go-algorand/ledger"
 	"github.com/algorand/go-algorand/protocol"
@@ -88,7 +87,7 @@ func (dr *DryrunRequest) ExpandSources() error {
 	for i, s := range dr.Sources {
 		ops, err := logic.AssembleString(s.Source)
 		if err != nil {
-			return fmt.Errorf("dryrun Source[%d]: %v", i, err)
+			return fmt.Errorf("Dryrun Source[%d]: %v", i, err)
 		}
 		switch s.FieldName {
 		case "lsig":
@@ -105,7 +104,7 @@ func (dr *DryrunRequest) ExpandSources() error {
 				}
 			}
 		default:
-			return fmt.Errorf("dryrun Source[%d]: bad field name %#v", i, s.FieldName)
+			return fmt.Errorf("Dryrun Source[%d]: bad field name %#v", i, s.FieldName)
 		}
 	}
 	return nil
@@ -119,6 +118,7 @@ type dryrunDebugReceiver struct {
 }
 
 func (ddr *dryrunDebugReceiver) updateScratch() {
+	any := false
 	maxActive := -1
 	lasti := len(ddr.history) - 1
 
@@ -126,24 +126,37 @@ func (ddr *dryrunDebugReceiver) updateScratch() {
 		return
 	}
 
-	if ddr.scratchActive == nil {
-		ddr.scratchActive = make([]bool, 256)
-	}
-
 	for i, sv := range *ddr.history[lasti].Scratch {
-		ddr.scratchActive[i] = false
 		if sv.Type != uint64(basics.TealUintType) || sv.Uint != 0 {
-			ddr.scratchActive[i] = true
+			any = true
 			maxActive = i
 		}
 	}
 
-	if maxActive == -1 {
-		ddr.history[lasti].Scratch = nil
-		return
+	if any {
+		if ddr.scratchActive == nil {
+			ddr.scratchActive = make([]bool, maxActive+1, 256)
+		}
+		for i := len(ddr.scratchActive); i <= maxActive; i++ {
+			sv := (*ddr.history[lasti].Scratch)[i]
+			active := sv.Type != uint64(basics.TealUintType) || sv.Uint != 0
+			ddr.scratchActive = append(ddr.scratchActive, active)
+		}
+	} else {
+		if ddr.scratchActive != nil {
+			*ddr.history[lasti].Scratch = (*ddr.history[lasti].Scratch)[:len(ddr.scratchActive)]
+		} else {
+			ddr.history[lasti].Scratch = nil
+			return
+		}
 	}
 
-	*ddr.history[lasti].Scratch = (*ddr.history[lasti].Scratch)[:maxActive+1]
+	scratchlen := maxActive + 1
+	if len(ddr.scratchActive) > scratchlen {
+		scratchlen = len(ddr.scratchActive)
+	}
+
+	*ddr.history[lasti].Scratch = (*ddr.history[lasti].Scratch)[:scratchlen]
 	for i := range *ddr.history[lasti].Scratch {
 		if !ddr.scratchActive[i] {
 			(*ddr.history[lasti].Scratch)[i].Type = 0
@@ -243,27 +256,27 @@ func (dl *dryrunLedger) BlockHdr(basics.Round) (bookkeeping.BlockHeader, error) 
 	return bookkeeping.BlockHeader{}, nil
 }
 
-func (dl *dryrunLedger) CheckDup(config.ConsensusParams, basics.Round, basics.Round, basics.Round, transactions.Txid, ledgercore.Txlease) error {
+func (dl *dryrunLedger) CheckDup(config.ConsensusParams, basics.Round, basics.Round, basics.Round, transactions.Txid, ledger.TxLease) error {
 	return nil
 }
 
-func (dl *dryrunLedger) lookup(rnd basics.Round, addr basics.Address) (basics.AccountData, basics.Round, error) {
+func (dl *dryrunLedger) LookupWithoutRewards(rnd basics.Round, addr basics.Address) (basics.AccountData, basics.Round, error) {
 	// check accounts from debug records uploaded
+	any := false
 	out := basics.AccountData{}
 	accti, ok := dl.accountsIn[addr]
 	if ok {
+		any = true
 		acct := dl.dr.Accounts[accti]
 		var err error
 		if out, err = AccountToAccountData(&acct); err != nil {
 			return basics.AccountData{}, 0, err
 		}
 		out.MicroAlgos.Raw = acct.AmountWithoutPendingRewards
-		// Clear RewardsBase since dryrun has no idea about rewards level so the underlying calculation with reward will fail.
-		// The amount needed is known as acct.Amount but this method must return AmountWithoutPendingRewards
-		out.RewardsBase = 0
 	}
 	appi, ok := dl.accountApps[addr]
 	if ok {
+		any = true
 		app := dl.dr.Apps[appi]
 		params, err := ApplicationParamsToAppParams(&app.Params)
 		if err != nil {
@@ -282,48 +295,10 @@ func (dl *dryrunLedger) lookup(rnd basics.Round, addr basics.Address) (basics.Ac
 			}
 		}
 	}
-	// Returns a 0 account for account that wasn't supplied.  This is new as of
-	// AVM 1.1 timeframe, but seems correct (allows using app accounts, and the
-	// fee sink without supplying them)
+	if !any {
+		return basics.AccountData{}, 0, fmt.Errorf("no account for addr %s", addr.String())
+	}
 	return out, rnd, nil
-}
-
-func (dl *dryrunLedger) LookupWithoutRewards(rnd basics.Round, addr basics.Address) (ledgercore.AccountData, basics.Round, error) {
-	ad, rnd, err := dl.lookup(rnd, addr)
-	if err != nil {
-		return ledgercore.AccountData{}, 0, err
-	}
-	return ledgercore.ToAccountData(ad), rnd, nil
-}
-
-func (dl *dryrunLedger) LookupApplication(rnd basics.Round, addr basics.Address, aidx basics.AppIndex) (ledgercore.AppResource, error) {
-	ad, _, err := dl.lookup(rnd, addr)
-	if err != nil {
-		return ledgercore.AppResource{}, err
-	}
-	var result ledgercore.AppResource
-	if p, ok := ad.AppParams[basics.AppIndex(aidx)]; ok {
-		result.AppParams = &p
-	}
-	if s, ok := ad.AppLocalStates[basics.AppIndex(aidx)]; ok {
-		result.AppLocalState = &s
-	}
-	return result, nil
-}
-
-func (dl *dryrunLedger) LookupAsset(rnd basics.Round, addr basics.Address, aidx basics.AssetIndex) (ledgercore.AssetResource, error) {
-	ad, _, err := dl.lookup(rnd, addr)
-	if err != nil {
-		return ledgercore.AssetResource{}, err
-	}
-	var result ledgercore.AssetResource
-	if p, ok := ad.AssetParams[basics.AssetIndex(aidx)]; ok {
-		result.AssetParams = &p
-	}
-	if p, ok := ad.Assets[basics.AssetIndex(aidx)]; ok {
-		result.AssetHolding = &p
-	}
-	return result, nil
 }
 
 func (dl *dryrunLedger) GetCreatorForRound(rnd basics.Round, cidx basics.CreatableIndex, ctype basics.CreatableType) (basics.Address, bool, error) {
@@ -360,6 +335,41 @@ func (dl *dryrunLedger) GetCreatorForRound(rnd basics.Round, cidx basics.Creatab
 	return basics.Address{}, false, fmt.Errorf("unknown creatable type %d", ctype)
 }
 
+func (dl *dryrunLedger) getAppParams(addr basics.Address, aidx basics.AppIndex) (params basics.AppParams, err error) {
+	idx, ok := dl.accountApps[addr]
+	if !ok {
+		err = fmt.Errorf("addr %s is not know to dryrun", addr.String())
+		return
+	}
+	if aidx != basics.AppIndex(dl.dr.Apps[idx].Id) {
+		err = fmt.Errorf("creator addr %s does not match to app id %d", addr.String(), aidx)
+		return
+	}
+	if params, err = ApplicationParamsToAppParams(&dl.dr.Apps[idx].Params); err != nil {
+		return
+	}
+	return
+}
+
+func (dl *dryrunLedger) getLocalKV(addr basics.Address, aidx basics.AppIndex) (kv basics.TealKeyValue, err error) {
+	idx, ok := dl.accountsIn[addr]
+	if !ok {
+		err = fmt.Errorf("addr %s is not know to dryrun", addr.String())
+		return
+	}
+	var ad basics.AccountData
+	if ad, err = AccountToAccountData(&dl.dr.Accounts[idx]); err != nil {
+		return
+	}
+	loc, ok := ad.AppLocalStates[aidx]
+	if !ok {
+		err = fmt.Errorf("addr %s not opted in to app %d, cannot fetch state", addr.String(), aidx)
+		return
+	}
+	kv = loc.KeyValue
+	return
+}
+
 func makeBalancesAdapter(dl *dryrunLedger, txn *transactions.Transaction, appIdx basics.AppIndex) (ba apply.Balances, err error) {
 	ba = ledger.MakeDebugBalances(dl, basics.Round(dl.dr.Round), protocol.ConsensusVersion(dl.dr.ProtocolVersion), dl.dr.LatestTimestamp)
 
@@ -387,37 +397,22 @@ func doDryrunRequest(dr *DryrunRequest, response *generated.DryrunResponse) {
 		return
 	}
 	proto := config.Consensus[protocol.ConsensusVersion(dr.ProtocolVersion)]
-	txgroup := transactions.WrapSignedTxnsWithAD(dr.Txns)
-	specials := transactions.SpecialAddresses{}
-	ep := logic.NewEvalParams(txgroup, &proto, &specials)
-
-	origEnableAppCostPooling := proto.EnableAppCostPooling
-	// Enable EnableAppCostPooling so that dryrun
-	// 1) can determine cost 2) reports actual cost for large programs that fail
-	proto.EnableAppCostPooling = true
-
-	// allow a huge execution budget
-	maxCurrentBudget := proto.MaxAppProgramCost * 100
-	pooledAppBudget := maxCurrentBudget
-	allowedBudget := 0
-	cumulativeCost := 0
-	for _, stxn := range dr.Txns {
-		if stxn.Txn.Type == protocol.ApplicationCallTx {
-			allowedBudget += proto.MaxAppProgramCost
-		}
-	}
-	ep.PooledApplicationBudget = &pooledAppBudget
 
 	response.Txns = make([]generated.DryrunTxnResult, len(dr.Txns))
 	for ti, stxn := range dr.Txns {
+		ep := logic.EvalParams{
+			Txn:        &stxn,
+			Proto:      &proto,
+			TxnGroup:   dr.Txns,
+			GroupIndex: ti,
+		}
 		var result generated.DryrunTxnResult
 		if len(stxn.Lsig.Logic) > 0 {
 			var debug dryrunDebugReceiver
 			ep.Debugger = &debug
-			pass, err := logic.EvalSignature(ti, ep)
+			pass, err := logic.Eval(stxn.Lsig.Logic, ep)
 			var messages []string
-			result.Disassembly = debug.lines          // Keep backwards compat
-			result.LogicSigDisassembly = &debug.lines // Also add to Lsig specific
+			result.Disassembly = debug.lines
 			result.LogicSigTrace = &debug.history
 			if pass {
 				messages = append(messages, "PASS")
@@ -506,15 +501,12 @@ func doDryrunRequest(dr *DryrunRequest, response *generated.DryrunResponse) {
 					program = app.ApprovalProgram
 					messages[0] = "ApprovalProgram"
 				}
-				pass, delta, err := ba.StatefulEval(ti, ep, appIdx, program)
-				if !pass {
-					delta = ep.TxnGroup[ti].EvalDelta
-				}
+				pass, delta, err := ba.StatefulEval(ep, appIdx, program)
 				result.Disassembly = debug.lines
 				result.AppCallTrace = &debug.history
 				result.GlobalDelta = StateDeltaToStateDelta(delta.GlobalDelta)
 				if len(delta.LocalDeltas) > 0 {
-					localDeltas := make([]generated.AccountStateDelta, 0, len(delta.LocalDeltas))
+					localDeltas := make([]generated.AccountStateDelta, len(delta.LocalDeltas))
 					for k, v := range delta.LocalDeltas {
 						ldaddr, err2 := stxn.Txn.AddressByIndex(k, stxn.Txn.Sender)
 						if err2 != nil {
@@ -527,31 +519,6 @@ func doDryrunRequest(dr *DryrunRequest, response *generated.DryrunResponse) {
 					}
 					result.LocalDeltas = &localDeltas
 				}
-
-				// ensure the program has not exceeded execution budget
-				cost := maxCurrentBudget - pooledAppBudget
-				if pass {
-					if !origEnableAppCostPooling {
-						if cost > proto.MaxAppProgramCost {
-							pass = false
-							err = fmt.Errorf("cost budget exceeded: budget is %d but program cost was %d", proto.MaxAppProgramCost, cost)
-						}
-					} else if cumulativeCost+cost > allowedBudget {
-						pass = false
-						err = fmt.Errorf("cost budget exceeded: budget is %d but program cost was %d", allowedBudget-cumulativeCost, cost)
-					}
-				}
-				cost64 := uint64(cost)
-				result.Cost = &cost64
-				maxCurrentBudget = pooledAppBudget
-				cumulativeCost += cost
-
-				var err3 error
-				result.Logs, err3 = DeltaLogToLog(delta.Logs)
-				if err3 != nil {
-					messages = append(messages, err3.Error())
-				}
-
 				if pass {
 					messages = append(messages, "PASS")
 				} else {
@@ -592,18 +559,6 @@ func StateDeltaToStateDelta(sd basics.StateDelta) *generated.StateDelta {
 	}
 
 	return &gsd
-}
-
-// DeltaLogToLog base64 encode the logs
-func DeltaLogToLog(logs []string) (*[][]byte, error) {
-	if len(logs) == 0 {
-		return nil, nil
-	}
-	logsAsBytes := make([][]byte, len(logs))
-	for i, log := range logs {
-		logsAsBytes[i] = []byte(log)
-	}
-	return &logsAsBytes, nil
 }
 
 // MergeAppParams merges values, existing in "base" take priority over new in "update"

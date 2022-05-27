@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2021 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -20,13 +20,10 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/stretchr/testify/require"
 )
 
 func TestLoadBootstrappedData(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	badSpecPath := filepath.Join("./../../test", "testdata/deployednettemplates/networks/bootstrapped/badSpec.json")
 	_, err := LoadBootstrappedData(badSpecPath)
 	require.NotEqual(t, nil, err)

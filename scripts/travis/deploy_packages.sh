@@ -24,9 +24,7 @@ then
     exit 1
 fi
 
-if [ -z "${NO_BUILD}" ] || [ "${NO_BUILD}" != "true" ]; then
-    scripts/travis/build.sh
-fi
+scripts/travis/build.sh
 
 export RELEASE_GENESIS_PROCESS=true
 export NO_BUILD=true

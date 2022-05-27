@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2021 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -19,20 +19,17 @@ package driver
 import (
 	"encoding/binary"
 	"fmt"
-	"os"
 
-	"github.com/karalabe/usb"
+	"github.com/karalabe/hid"
 )
 
 const ledgerVendorID = 0x2c97
-const ledgerUsagePage = 0xffa0
 
 // LedgerUSB is a wrapper around a Ledger USB HID device, used to implement
 // the protocol used for sending messages to the application running on the
 // Ledger hardware wallet.
 type LedgerUSB struct {
-	hiddev usb.Device
-	info   usb.DeviceInfo
+	hiddev *hid.Device
 }
 
 // LedgerUSBError is a wrapper around the two-byte error code that the Ledger
@@ -84,11 +81,7 @@ func (l *LedgerUSB) WritePackets(msg []byte) error {
 		if err != nil {
 			return err
 		}
-		// on Windows:
-		// The usb library adds one extra byte to the input passed to the USB device
-		// so the written bytes are larger than what we've send
-		// https://github.com/karalabe/hid/blob/9c14560f9ee858c43f40b5cd01392b167aacf4e8/hid_enabled.go#L167
-		if cc < len(packet) {
+		if cc != len(packet) {
 			return fmt.Errorf("WritePackets: short write: %d != %d", cc, len(packet))
 		}
 
@@ -197,28 +190,18 @@ func (l *LedgerUSB) Exchange(msg []byte) ([]byte, error) {
 }
 
 // USBInfo returns information about the underlying USB device.
-func (l *LedgerUSB) USBInfo() usb.DeviceInfo {
-	return l.info
+func (l *LedgerUSB) USBInfo() hid.DeviceInfo {
+	return l.hiddev.DeviceInfo
 }
 
 // LedgerEnumerate returns all of the Ledger devices connected to this machine.
-func LedgerEnumerate() ([]usb.DeviceInfo, error) {
-	if !usb.Supported() || os.Getenv("KMD_NOUSB") != "" {
+func LedgerEnumerate() ([]hid.DeviceInfo, error) {
+	if !hid.Supported() {
 		return nil, fmt.Errorf("HID not supported")
 	}
 
-	var infos []usb.DeviceInfo
-	// The enumeration process is based on:
-	//  https://github.com/LedgerHQ/blue-loader-python/blob/master/ledgerblue/comm.py#L212
-	//  we search for the Ledger Vendor id and ignore devices that don't have specific usagepage or interface
-	hids, err := usb.EnumerateHid(ledgerVendorID, 0)
-	if err != nil {
-		return []usb.DeviceInfo{}, err
-	}
-	for _, info := range hids {
-		if info.UsagePage != ledgerUsagePage && info.Interface != 0 {
-			continue
-		}
+	var infos []hid.DeviceInfo
+	for _, info := range hid.Enumerate(ledgerVendorID, 0) {
 		infos = append(infos, info)
 	}
 

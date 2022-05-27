@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2021 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -21,7 +21,6 @@ import (
 	"net/http"
 	"testing"
 
-	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/labstack/echo/v4"
 	"github.com/stretchr/testify/require"
 )
@@ -37,8 +36,6 @@ func success(ctx echo.Context) error {
 }
 
 func TestAuth(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	tokens := []string{"token1", "token2"}
 
 	tests := []struct {

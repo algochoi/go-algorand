@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2021 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -27,7 +27,6 @@ import (
 
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/protocol"
-	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
 func transcodeNoError(t *testing.T, mpToJSON bool, in io.ReadCloser, out io.WriteCloser) {
@@ -165,8 +164,6 @@ func randomMap(width int, depth int) interface{} {
 }
 
 func TestIdempotence(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	niter := 10000
 	if testing.Short() {
 		niter = 1000
@@ -179,8 +176,6 @@ func TestIdempotence(t *testing.T) {
 }
 
 func TestIdempotenceMultiobject(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	niter := 1000
 	if testing.Short() {
 		niter = 100
@@ -216,8 +211,6 @@ type parentStruct struct {
 }
 
 func TestIdempotenceStruct(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	niter := 10000
 	if testing.Short() {
 		niter = 1000

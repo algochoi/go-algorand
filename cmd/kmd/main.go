@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2021 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -88,7 +88,7 @@ func runKmd(dataDir string, timeoutSecs uint64) {
 	tryMlockall(log)
 
 	// Create a "kill" channel to allow the server to shut down gracefully
-	kill := make(chan os.Signal, 1)
+	kill := make(chan os.Signal)
 
 	// Timeouts can also send on the kill channel; because signal.Notify
 	// will not block, this shouldn't cause an issue. From docs: "Package

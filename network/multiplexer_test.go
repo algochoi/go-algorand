@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2021 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -24,7 +24,6 @@ import (
 
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
-	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
 func makeSignedTxnMsg() IncomingMessage {
@@ -55,8 +54,6 @@ func (th *testHandler) SawMsg(msg IncomingMessage) bool {
 }
 
 func TestMultiplexer(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	m := MakeMultiplexer(logging.TestingLog(t))
 	handler := &testHandler{}
 

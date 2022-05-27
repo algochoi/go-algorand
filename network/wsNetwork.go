@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2021 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -23,6 +23,7 @@ import (
 	"errors"
 	"fmt"
 	"io/ioutil"
+	"math"
 	"net"
 	"net/http"
 	"net/textproto"
@@ -30,6 +31,7 @@ import (
 	"path"
 	"regexp"
 	"runtime"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -39,16 +41,15 @@ import (
 	"github.com/algorand/go-deadlock"
 	"github.com/algorand/websocket"
 	"github.com/gorilla/mux"
+	"golang.org/x/net/netutil"
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/logging/telemetryspec"
-	"github.com/algorand/go-algorand/network/limitlistener"
 	"github.com/algorand/go-algorand/protocol"
 	tools_network "github.com/algorand/go-algorand/tools/network"
 	"github.com/algorand/go-algorand/tools/network/dnssec"
-	"github.com/algorand/go-algorand/util"
 	"github.com/algorand/go-algorand/util/metrics"
 )
 
@@ -77,6 +78,9 @@ const httpServerIdleTimeout = time.Second * 4
 // values, including the request line. It does not limit the
 // size of the request body.
 const httpServerMaxHeaderBytes = 4096
+
+// MaxInt is the maximum int which might be int32 or int64
+const MaxInt = int((^uint(0)) >> 1)
 
 // connectionActivityMonitorInterval is the interval at which we check
 // if any of the connected peers have been idle for a long while and
@@ -125,12 +129,6 @@ var maxPing = metrics.MakeGauge(metrics.MetricName{Name: "algod_network_peer_max
 var peers = metrics.MakeGauge(metrics.MetricName{Name: "algod_network_peers", Description: "Number of active peers."})
 var incomingPeers = metrics.MakeGauge(metrics.MetricName{Name: "algod_network_incoming_peers", Description: "Number of active incoming peers."})
 var outgoingPeers = metrics.MakeGauge(metrics.MetricName{Name: "algod_network_outgoing_peers", Description: "Number of active outgoing peers."})
-
-// peerDisconnectionAckDuration defines the time we would wait for the peer disconnection to compelete.
-const peerDisconnectionAckDuration time.Duration = 5 * time.Second
-
-// peerShutdownDisconnectionAckDuration defines the time we would wait for the peer disconnection to compelete during shutdown.
-const peerShutdownDisconnectionAckDuration time.Duration = 50 * time.Millisecond
 
 // Peer opaque interface for referring to a neighbor in the network
 type Peer interface{}
@@ -373,7 +371,7 @@ type WebsocketNetwork struct {
 	// connPerfMonitor is used on outgoing connections to measure their relative message timing
 	connPerfMonitor *connectionPerformanceMonitor
 
-	// lastNetworkAdvanceMu syncronized the access to lastNetworkAdvance
+	// lastNetworkAdvanceMu syncronized teh access to lastNetworkAdvance
 	lastNetworkAdvanceMu deadlock.Mutex
 
 	// lastNetworkAdvance contains the last timestamp where the agreement protocol was able to make a notable progress.
@@ -404,12 +402,6 @@ type WebsocketNetwork struct {
 	// that messagesOfInterestEnc does not change once it is set during
 	// network start.
 	messagesOfInterestMu deadlock.Mutex
-
-	// peersConnectivityCheckTicker is the timer for testing that all the connected peers
-	// are still transmitting or receiving information. The channel produced by this ticker
-	// is consumed by any of the messageHandlerThread(s). The ticker itself is created during
-	// Start(), and being shut down when Stop() is called.
-	peersConnectivityCheckTicker *time.Ticker
 }
 
 type broadcastRequest struct {
@@ -427,9 +419,6 @@ func (wn *WebsocketNetwork) Address() (string, bool) {
 	parsedURL := url.URL{Scheme: wn.scheme}
 	var connected bool
 	if wn.listener == nil {
-		if wn.config.NetAddress == "" {
-			parsedURL.Scheme = ""
-		}
 		parsedURL.Host = wn.config.NetAddress
 		connected = false
 	} else {
@@ -440,7 +429,7 @@ func (wn *WebsocketNetwork) Address() (string, bool) {
 }
 
 // PublicAddress what we tell other nodes to connect to.
-// Might be different than our locally perceived network address due to NAT/etc.
+// Might be different than our locally percieved network address due to NAT/etc.
 // Returns config "PublicAddress" if available, otherwise local addr.
 func (wn *WebsocketNetwork) PublicAddress() string {
 	if len(wn.config.PublicAddress) > 0 {
@@ -549,13 +538,13 @@ func (wn *WebsocketNetwork) disconnect(badnode Peer, reason disconnectReason) {
 		return
 	}
 	peer := badnode.(*wsPeer)
-	peer.CloseAndWait(time.Now().Add(peerDisconnectionAckDuration))
+	peer.CloseAndWait()
 	wn.removePeer(peer, reason)
 }
 
-func closeWaiter(wg *sync.WaitGroup, peer *wsPeer, deadline time.Time) {
+func closeWaiter(wg *sync.WaitGroup, peer *wsPeer) {
 	defer wg.Done()
-	peer.CloseAndWait(deadline)
+	peer.CloseAndWait()
 }
 
 // DisconnectPeers shuts down all connections
@@ -564,9 +553,8 @@ func (wn *WebsocketNetwork) DisconnectPeers() {
 	defer wn.peersLock.Unlock()
 	closeGroup := sync.WaitGroup{}
 	closeGroup.Add(len(wn.peers))
-	deadline := time.Now().Add(peerDisconnectionAckDuration)
 	for _, peer := range wn.peers {
-		go closeWaiter(&closeGroup, peer, deadline)
+		go closeWaiter(&closeGroup, peer)
 	}
 	wn.peers = wn.peers[:0]
 	closeGroup.Wait()
@@ -739,11 +727,25 @@ func (wn *WebsocketNetwork) setup() {
 
 // Start makes network connections and threads
 func (wn *WebsocketNetwork) Start() {
+	var err error
+	if wn.config.IncomingConnectionsLimit < 0 {
+		wn.config.IncomingConnectionsLimit = MaxInt
+	}
+
 	wn.messagesOfInterestMu.Lock()
 	defer wn.messagesOfInterestMu.Unlock()
 	wn.messagesOfInterestEncoded = true
 	if wn.messagesOfInterest != nil {
 		wn.messagesOfInterestEnc = MarshallMessageOfInterestMap(wn.messagesOfInterest)
+	}
+
+	// Make sure we do not accept more incoming connections than our
+	// open file rlimit, with some headroom for other FDs (DNS, log
+	// files, SQLite files, telemetry, ...)
+	err = wn.rlimitIncomingConnections()
+	if err != nil {
+		wn.log.Error("ws network start: rlimitIncomingConnections ", err)
+		return
 	}
 
 	if wn.config.NetAddress != "" {
@@ -753,8 +755,7 @@ func (wn *WebsocketNetwork) Start() {
 			return
 		}
 		// wrap the original listener with a limited connection listener
-		listener = limitlistener.RejectingLimitListener(
-			listener, uint64(wn.config.IncomingConnectionsLimit), wn.log)
+		listener = netutil.LimitListener(listener, wn.config.IncomingConnectionsLimit)
 		// wrap the limited connection listener with a requests tracker listener
 		wn.listener = wn.requestsTracker.Listener(listener)
 		wn.log.Debugf("listening on %s", wn.listener.Addr().String())
@@ -772,6 +773,9 @@ func (wn *WebsocketNetwork) Start() {
 		wn.scheme = "http"
 	}
 	wn.meshUpdateRequests <- meshRequest{false, nil}
+	if wn.config.EnablePingHandler {
+		wn.RegisterHandlers(pingHandlers)
+	}
 	if wn.prioScheme != nil {
 		wn.RegisterHandlers(prioHandlers)
 	}
@@ -781,16 +785,13 @@ func (wn *WebsocketNetwork) Start() {
 	}
 	wn.wg.Add(1)
 	go wn.meshThread()
-
-	// we shouldn't have any ticker here.. but in case we do - just stop it.
-	if wn.peersConnectivityCheckTicker != nil {
-		wn.peersConnectivityCheckTicker.Stop()
+	if wn.config.PeerPingPeriodSeconds > 0 {
+		wn.wg.Add(1)
+		go wn.pingThread()
 	}
-	wn.peersConnectivityCheckTicker = time.NewTicker(connectionActivityMonitorInterval)
 	for i := 0; i < incomingThreads; i++ {
 		wn.wg.Add(1)
-		// We pass the peersConnectivityCheckTicker.C here so that we don't need to syncronize the access to the ticker's data structure.
-		go wn.messageHandlerThread(wn.peersConnectivityCheckTicker.C)
+		go wn.messageHandlerThread()
 	}
 	wn.wg.Add(1)
 	go wn.broadcastThread()
@@ -820,12 +821,8 @@ func (wn *WebsocketNetwork) innerStop() {
 	wn.peersLock.Lock()
 	defer wn.peersLock.Unlock()
 	wn.wg.Add(len(wn.peers))
-	// this method is called only during node shutdown. In this case, we want to send the
-	// shutdown message, but we don't want to wait for a long time - since we might not be lucky
-	// to get a response.
-	deadline := time.Now().Add(peerShutdownDisconnectionAckDuration)
 	for _, peer := range wn.peers {
-		go closeWaiter(&wn.wg, peer, deadline)
+		go closeWaiter(&wn.wg, peer)
 	}
 	wn.peers = wn.peers[:0]
 }
@@ -835,12 +832,6 @@ func (wn *WebsocketNetwork) innerStop() {
 func (wn *WebsocketNetwork) Stop() {
 	wn.handlers.ClearHandlers([]Tag{})
 
-	// if we have a working ticker, just stop it and clear it out. The access to this variable is safe since the Start()/Stop() are synced by the
-	// caller, and the WebsocketNetwork doesn't access wn.peersConnectivityCheckTicker directly.
-	if wn.peersConnectivityCheckTicker != nil {
-		wn.peersConnectivityCheckTicker.Stop()
-		wn.peersConnectivityCheckTicker = nil
-	}
 	wn.innerStop()
 	var listenAddr string
 	if wn.listener != nil {
@@ -858,11 +849,8 @@ func (wn *WebsocketNetwork) Stop() {
 		wn.log.Debugf("closed %s", listenAddr)
 	}
 
-	// Wait for the requestsTracker to finish up to avoid potential race condition
-	<-wn.requestsTracker.getWaitUntilNoConnectionsChannel(5 * time.Millisecond)
 	wn.messagesOfInterestMu.Lock()
 	defer wn.messagesOfInterestMu.Unlock()
-
 	wn.messagesOfInterestEncoded = false
 	wn.messagesOfInterestEnc = nil
 	wn.messagesOfInterest = nil
@@ -1123,7 +1111,6 @@ func (wn *WebsocketNetwork) ServeHTTP(response http.ResponseWriter, request *htt
 			InstanceName: trackedRequest.otherInstanceName,
 		})
 
-	// We are careful to encode this prior to starting the server to avoid needing 'messagesOfInterestMu' here.
 	if wn.messagesOfInterestEnc != nil {
 		err = peer.Unicast(wn.ctx, wn.messagesOfInterestEnc, protocol.MsgOfInterestTag)
 		if err != nil {
@@ -1135,9 +1122,10 @@ func (wn *WebsocketNetwork) ServeHTTP(response http.ResponseWriter, request *htt
 	incomingPeers.Set(float64(wn.numIncomingPeers()), nil)
 }
 
-func (wn *WebsocketNetwork) messageHandlerThread(peersConnectivityCheckCh <-chan time.Time) {
+func (wn *WebsocketNetwork) messageHandlerThread() {
 	defer wn.wg.Done()
-
+	inactivityCheckTicker := time.NewTicker(connectionActivityMonitorInterval)
+	defer inactivityCheckTicker.Stop()
 	for {
 		select {
 		case <-wn.ctx.Done():
@@ -1180,7 +1168,7 @@ func (wn *WebsocketNetwork) messageHandlerThread(peersConnectivityCheckCh <-chan
 				}
 			default:
 			}
-		case <-peersConnectivityCheckCh:
+		case <-inactivityCheckTicker.C:
 			// go over the peers and ensure we have some type of communication going on.
 			wn.checkPeersConnectivity()
 		}
@@ -1275,7 +1263,7 @@ func (wn *WebsocketNetwork) broadcastThread() {
 				}
 			}
 			select {
-			case <-util.NanoAfter(sleepDuration):
+			case <-time.After(sleepDuration):
 				if (request != nil) && time.Now().After(requestDeadline) {
 					// message time have elapsed.
 					return true
@@ -1354,7 +1342,7 @@ func (wn *WebsocketNetwork) peerSnapshot(dest []*wsPeer) ([]*wsPeer, int32) {
 		// clear out the unused portion of the peers array to allow the GC to cleanup unused peers.
 		remainderPeers := dest[len(wn.peers):cap(dest)]
 		for i := range remainderPeers {
-			// we want to delete only up to the first nil peer, since we're always writing to this array from the beginning to the end
+			// we want to delete only up to the first nil peer, since we're always writing to this array from the begining to the end
 			if remainderPeers[i] == nil {
 				break
 			}
@@ -1752,6 +1740,81 @@ func (wn *WebsocketNetwork) prioWeightRefresh() {
 	}
 }
 
+// Wake up the thread to do work this often.
+const pingThreadPeriod = 30 * time.Second
+
+// If ping stats are older than this, don't include in metrics.
+const maxPingAge = 30 * time.Minute
+
+// pingThread wakes up periodically to refresh the ping times on peers and update the metrics gauges.
+func (wn *WebsocketNetwork) pingThread() {
+	defer wn.wg.Done()
+	ticker := time.NewTicker(pingThreadPeriod)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ticker.C:
+		case <-wn.ctx.Done():
+			return
+		}
+		sendList := wn.peersToPing()
+		wn.log.Debugf("ping %d peers...", len(sendList))
+		for _, peer := range sendList {
+			if !peer.sendPing() {
+				// if we failed to send a ping, see how long it was since last successful ping.
+				lastPingSent, _ := peer.pingTimes()
+				wn.log.Infof("failed to ping to %v for the past %f seconds", peer, time.Now().Sub(lastPingSent).Seconds())
+			}
+		}
+	}
+}
+
+// Walks list of peers, gathers list of peers to ping, also calculates statistics.
+func (wn *WebsocketNetwork) peersToPing() []*wsPeer {
+	wn.peersLock.RLock()
+	defer wn.peersLock.RUnlock()
+	// Never flood outbound traffic by trying to ping all the peers at once.
+	// Send to at most one fifth of the peers.
+	maxSend := 1 + (len(wn.peers) / 5)
+	out := make([]*wsPeer, 0, maxSend)
+	now := time.Now()
+	// a list to sort to find median
+	times := make([]float64, 0, len(wn.peers))
+	var min = math.MaxFloat64
+	var max float64
+	var sum float64
+	pingPeriod := time.Duration(wn.config.PeerPingPeriodSeconds) * time.Second
+	for _, peer := range wn.peers {
+		lastPingSent, lastPingRoundTripTime := peer.pingTimes()
+		sendToNow := now.Sub(lastPingSent)
+		if (sendToNow > pingPeriod) && (len(out) < maxSend) {
+			out = append(out, peer)
+		}
+		if (lastPingRoundTripTime > 0) && (sendToNow < maxPingAge) {
+			ftime := lastPingRoundTripTime.Seconds()
+			sum += ftime
+			times = append(times, ftime)
+			if ftime < min {
+				min = ftime
+			}
+			if ftime > max {
+				max = ftime
+			}
+		}
+	}
+	if len(times) != 0 {
+		sort.Float64s(times)
+		median := times[len(times)/2]
+		medianPing.Set(median, nil)
+		mean := sum / float64(len(times))
+		meanPing.Set(mean, nil)
+		minPing.Set(min, nil)
+		maxPing.Set(max, nil)
+		wn.log.Infof("ping times min=%f mean=%f median=%f max=%f", min, mean, median, max)
+	}
+	return out
+}
+
 func (wn *WebsocketNetwork) getDNSAddrs(dnsBootstrap string) (relaysAddresses []string, archiverAddresses []string) {
 	var err error
 	relaysAddresses, err = tools_network.ReadFromSRV("algobootstrap", "tcp", dnsBootstrap, wn.config.FallbackDNSResolverAddress, wn.config.DNSSecuritySRVEnforced())
@@ -1787,7 +1850,7 @@ var SupportedProtocolVersions = []string{"2.1"}
 // ProtocolVersion is the current version attached to the ProtocolVersionHeader header
 /* Version history:
  *  1   Catchup service over websocket connections with unicast messages between peers
- *  2.1 Introduced topic key/data pairs and enabled services over the gossip connections
+ *  2.1 Introducted topic key/data pairs and enabled services over the gossip connections
  */
 const ProtocolVersion = "2.1"
 
@@ -1827,42 +1890,18 @@ var errBcastInvalidArray = errors.New("invalid broadcast array")
 
 var errBcastQFull = errors.New("broadcast queue full")
 
-var errURLNoHost = errors.New("could not parse a host from url")
-
-var errURLColonHost = errors.New("host name starts with a colon")
-
-// HostColonPortPattern matches "^[-a-zA-Z0-9.]+:\\d+$" e.g. "foo.com.:1234"
-var HostColonPortPattern = regexp.MustCompile("^[-a-zA-Z0-9.]+:\\d+$")
+// HostColonPortPattern matches "^[^:]+:\\d+$" e.g. "foo.com.:1234"
+var HostColonPortPattern = regexp.MustCompile("^[^:]+:\\d+$")
 
 // ParseHostOrURL handles "host:port" or a full URL.
 // Standard library net/url.Parse chokes on "host:port".
 func ParseHostOrURL(addr string) (*url.URL, error) {
-	// If the entire addr is "host:port" grab that right away.
-	// Don't try url.Parse() because that will grab "host:" as if it were "scheme:"
+	var parsedURL *url.URL
 	if HostColonPortPattern.MatchString(addr) {
-		return &url.URL{Scheme: "http", Host: addr}, nil
+		parsedURL = &url.URL{Scheme: "http", Host: addr}
+		return parsedURL, nil
 	}
-	parsed, err := url.Parse(addr)
-	if err == nil {
-		if parsed.Host == "" {
-			return nil, errURLNoHost
-		}
-		return parsed, nil
-	}
-	if strings.HasPrefix(addr, "http:") || strings.HasPrefix(addr, "https:") || strings.HasPrefix(addr, "ws:") || strings.HasPrefix(addr, "wss:") || strings.HasPrefix(addr, "://") || strings.HasPrefix(addr, "//") {
-		return parsed, err
-	}
-	// This turns "[::]:4601" into "http://[::]:4601" which url.Parse can do
-	parsed, e2 := url.Parse("http://" + addr)
-	if e2 == nil {
-		// https://datatracker.ietf.org/doc/html/rfc1123#section-2
-		// first character is relaxed to allow either a letter or a digit
-		if parsed.Host[0] == ':' && (len(parsed.Host) < 2 || parsed.Host[1] != ':') {
-			return nil, errURLColonHost
-		}
-		return parsed, nil
-	}
-	return parsed, err /* return original err, not our prefix altered try */
+	return url.Parse(addr)
 }
 
 // addrToGossipAddr parses host:port or a URL and returns the URL to the websocket interface at that address.
@@ -1880,7 +1919,7 @@ func (wn *WebsocketNetwork) addrToGossipAddr(addr string) (string, error) {
 	return parsedURL.String(), nil
 }
 
-// tryConnectReserveAddr synchronously checks that addr is not already being connected to, returns (websocket URL or "", true if connection may proceed)
+// tryConnectReserveAddr synchronously checks that addr is not already being connected to, returns (websocket URL or "", true if connection may procede)
 func (wn *WebsocketNetwork) tryConnectReserveAddr(addr string) (gossipAddr string, ok bool) {
 	wn.tryConnectLock.Lock()
 	defer wn.tryConnectLock.Unlock()
@@ -1906,7 +1945,7 @@ func (wn *WebsocketNetwork) tryConnectReserveAddr(addr string) (gossipAddr strin
 	return gossipAddr, true
 }
 
-// tryConnectReleaseAddr should be called when connection succeeds and becomes a peer or fails and is no longer being attempted
+// tryConnectReleaseAddr should be called when connection succedes and becomes a peer or fails and is no longer being attempted
 func (wn *WebsocketNetwork) tryConnectReleaseAddr(addr, gossipAddr string) {
 	wn.tryConnectLock.Lock()
 	defer wn.tryConnectLock.Unlock()
@@ -1958,7 +1997,7 @@ func (wn *WebsocketNetwork) tryConnect(addr, gossipAddr string) {
 	for _, supportedProtocolVersion := range SupportedProtocolVersions {
 		requestHeader.Add(ProtocolAcceptVersionHeader, supportedProtocolVersion)
 	}
-	// for backward compatibility, include the ProtocolVersion header as well.
+	// for backward compatability, include the ProtocolVersion header as well.
 	requestHeader.Set(ProtocolVersionHeader, ProtocolVersion)
 	SetUserAgentHeader(requestHeader)
 	myInstanceName := wn.log.GetInstanceName()

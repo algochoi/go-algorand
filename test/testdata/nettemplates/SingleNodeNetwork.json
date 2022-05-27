@@ -1,7 +1,6 @@
 {
   "Genesis": {
     "NetworkName": "snn",
-    "LastPartKeyRound": 3000,
     "Wallets": [
       {
         "Name": "Wallet1",

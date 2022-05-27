@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2021 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -121,7 +121,7 @@ func (hlc *heapLRUCache) inc() {
 	}
 }
 func (hlc *heapLRUCache) reIndex() {
-	if len(hlc.entries.heap) == 0 {
+	if hlc.entries.heap != nil || len(hlc.entries.heap) == 0 {
 		return
 	}
 	minprio := hlc.entries.heap[0].useIndex

@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2021 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -56,36 +56,27 @@ type PCOffset struct {
 	Offset int `codec:"offset"`
 }
 
-// CallFrame stores the label name and the line of the subroutine.
-// An array of CallFrames form the CallStack.
-type CallFrame struct {
-	FrameLine int    `codec:"frameLine"`
-	LabelName string `codec:"labelname"`
-}
-
 // DebugState is a representation of the evaluation context that we encode
 // to json and send to tealdbg
 type DebugState struct {
 	// fields set once on Register
-	ExecID      string                         `codec:"execid"`
-	Disassembly string                         `codec:"disasm"`
-	PCOffset    []PCOffset                     `codec:"pctooffset"`
-	TxnGroup    []transactions.SignedTxnWithAD `codec:"txngroup"`
-	GroupIndex  int                            `codec:"gindex"`
-	Proto       *config.ConsensusParams        `codec:"proto"`
-	Globals     []basics.TealValue             `codec:"globals"`
+	ExecID      string                   `codec:"execid"`
+	Disassembly string                   `codec:"disasm"`
+	PCOffset    []PCOffset               `codec:"pctooffset"`
+	TxnGroup    []transactions.SignedTxn `codec:"txngroup"`
+	GroupIndex  int                      `codec:"gindex"`
+	Proto       *config.ConsensusParams  `codec:"proto"`
+	Globals     []basics.TealValue       `codec:"globals"`
 
 	// fields updated every step
-	PC           int                `codec:"pc"`
-	Line         int                `codec:"line"`
-	Stack        []basics.TealValue `codec:"stack"`
-	Scratch      []basics.TealValue `codec:"scratch"`
-	Error        string             `codec:"error"`
-	OpcodeBudget int                `codec:"budget"`
-	CallStack    []CallFrame        `codec:"callstack"`
+	PC      int                `codec:"pc"`
+	Line    int                `codec:"line"`
+	Stack   []basics.TealValue `codec:"stack"`
+	Scratch []basics.TealValue `codec:"scratch"`
+	Error   string             `codec:"error"`
 
 	// global/local state changes are updated every step. Stateful TEAL only.
-	transactions.EvalDelta
+	basics.EvalDelta
 }
 
 // GetProgramID returns program or execution ID that is string representation of sha256 checksum.
@@ -95,39 +86,42 @@ func GetProgramID(program []byte) string {
 	return hex.EncodeToString(hash[:])
 }
 
-func makeDebugState(cx *EvalContext) *DebugState {
-	disasm, dsInfo, err := disassembleInstrumented(cx.program, nil)
+func makeDebugState(cx *evalContext) DebugState {
+	disasm, dsInfo, err := disassembleInstrumented(cx.program)
 	if err != nil {
 		// Report disassembly error as program text
 		disasm = err.Error()
 	}
 
 	// initialize DebuggerState with immutable fields
-	ds := &DebugState{
+	ds := DebugState{
 		ExecID:      GetProgramID(cx.program),
 		Disassembly: disasm,
 		PCOffset:    dsInfo.pcOffset,
-		GroupIndex:  int(cx.groupIndex),
+		GroupIndex:  cx.GroupIndex,
 		TxnGroup:    cx.TxnGroup,
 		Proto:       cx.Proto,
 	}
 
-	globals := make([]basics.TealValue, len(globalFieldSpecs))
-	for _, fs := range globalFieldSpecs {
-		// Don't try to grab app only fields when evaluating a signature
-		if (cx.runModeFlags&modeSig) != 0 && fs.mode == modeApp {
-			continue
-		}
-		sv, err := cx.globalFieldToValue(fs)
+	globals := make([]basics.TealValue, len(GlobalFieldNames))
+	for fieldIdx := range GlobalFieldNames {
+		sv, err := cx.globalFieldToStack(GlobalField(fieldIdx))
 		if err != nil {
 			sv = stackValue{Bytes: []byte(err.Error())}
 		}
-		globals[fs.field] = stackValueToTealValue(&sv)
+		globals[fieldIdx] = stackValueToTealValue(&sv)
 	}
 	ds.Globals = globals
 
-	if (cx.runModeFlags & modeApp) != 0 {
-		ds.EvalDelta = cx.txn.EvalDelta
+	// pre-allocate state maps
+	if (cx.runModeFlags & runModeApplication) != 0 {
+		ds.EvalDelta, err = cx.Ledger.GetDelta(&cx.Txn.Txn)
+		if err != nil {
+			sv := stackValue{Bytes: []byte(err.Error())}
+			tv := stackValueToTealValue(&sv)
+			vd := tv.ToValueDelta()
+			ds.EvalDelta.GlobalDelta = basics.StateDelta{"error": vd}
+		}
 	}
 
 	return ds
@@ -200,55 +194,38 @@ func valueDeltaToValueDelta(vd *basics.ValueDelta) basics.ValueDelta {
 	}
 }
 
-// parseCallStack initializes an array of CallFrame objects from the raw
-// callstack.
-func (d *DebugState) parseCallstack(callstack []int) []CallFrame {
-	callFrames := make([]CallFrame, 0)
-	lines := strings.Split(d.Disassembly, "\n")
-	for _, pc := range callstack {
-		// The callsub is pc - 3 from the callstack pc
-		callsubLineNum := d.PCToLine(pc - 3)
-		callSubLine := strings.Fields(lines[callsubLineNum])
-		label := ""
-		if callSubLine[0] == "callsub" {
-			label = callSubLine[1]
-		}
-		callFrames = append(callFrames, CallFrame{
-			FrameLine: callsubLineNum,
-			LabelName: label,
-		})
-	}
-	return callFrames
-}
+func (cx *evalContext) refreshDebugState() *DebugState {
+	ds := &cx.debugState
 
-func (cx *EvalContext) refreshDebugState(evalError error) *DebugState {
-	ds := cx.debugState
-
-	// Update pc, line, error, stack, scratch space, callstack,
-	// and opcode budget
+	// Update pc, line, error, stack, and scratch space
 	ds.PC = cx.pc
 	ds.Line = ds.PCToLine(cx.pc)
-	if evalError != nil {
-		ds.Error = evalError.Error()
+	if cx.err != nil {
+		ds.Error = cx.err.Error()
 	}
 
-	stack := make([]basics.TealValue, len(cx.stack))
+	stack := make([]basics.TealValue, len(cx.stack), len(cx.stack))
 	for i, sv := range cx.stack {
 		stack[i] = stackValueToTealValue(&sv)
 	}
 
-	scratch := make([]basics.TealValue, len(cx.scratch))
+	scratch := make([]basics.TealValue, len(cx.scratch), len(cx.scratch))
 	for i, sv := range cx.scratch {
 		scratch[i] = stackValueToTealValue(&sv)
 	}
 
 	ds.Stack = stack
 	ds.Scratch = scratch
-	ds.OpcodeBudget = cx.remainingBudget()
-	ds.CallStack = ds.parseCallstack(cx.callstack)
 
-	if (cx.runModeFlags & modeApp) != 0 {
-		ds.EvalDelta = cx.txn.EvalDelta
+	if (cx.runModeFlags & runModeApplication) != 0 {
+		var err error
+		ds.EvalDelta, err = cx.Ledger.GetDelta(&cx.Txn.Txn)
+		if err != nil {
+			sv := stackValue{Bytes: []byte(err.Error())}
+			tv := stackValueToTealValue(&sv)
+			vd := tv.ToValueDelta()
+			ds.EvalDelta.GlobalDelta = basics.StateDelta{"error": vd}
+		}
 	}
 
 	return ds

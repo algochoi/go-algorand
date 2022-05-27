@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2021 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -20,9 +20,7 @@ import (
 	"encoding/base32"
 	"encoding/base64"
 	"encoding/json"
-	"errors"
 	"fmt"
-	"net/http"
 	"os"
 	"strconv"
 	"strings"
@@ -30,7 +28,6 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/algorand/go-algorand/crypto"
-	apiclient "github.com/algorand/go-algorand/daemon/algod/api/client"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
@@ -585,7 +582,7 @@ var appExecuteCmd = &cobra.Command{
 			localSchema = header.Query.Local.ToStateSchema()
 			globalSchema = header.Query.Global.ToStateSchema()
 		}
-		tx, err := client.MakeUnsignedApplicationCallTx(appIdx, appArgs, appAccounts, foreignApps, foreignAssets, onCompletion, approvalProg, clearProg, globalSchema, localSchema, 0)
+		tx, err := client.MakeUnsignedApplicationCallTx(appIdx, appArgs, appAccounts, foreignApps, foreignAssets, onCompletion, approvalProg, clearProg, globalSchema, localSchema)
 		if err != nil {
 			reportErrorf("Cannot create application txn: %v", err)
 		}
@@ -603,10 +600,6 @@ var appExecuteCmd = &cobra.Command{
 		tx, err = client.FillUnsignedTxTemplate(account, fv, lv, fee, tx)
 		if err != nil {
 			reportErrorf("Cannot construct transaction: %s", err)
-		}
-		explicitFee := cmd.Flags().Changed("fee")
-		if explicitFee {
-			tx.Fee = basics.MicroAlgos{Raw: fee}
 		}
 
 		if outFilename == "" {
@@ -674,20 +667,18 @@ var appQueryCmd = &cobra.Command{
 		var tealval basics.TealValue
 		if scope == "local" {
 			// Fetching local state. Get account information
-			ai, err := client.RawAccountApplicationInformation(account, appIdx)
+			ad, err := client.AccountData(account)
 			if err != nil {
-				var httpError apiclient.HTTPError
-				if errors.As(err, &httpError) && httpError.StatusCode == http.StatusNotFound {
-					reportErrorf(errorAccountNotOptedInToApp, account, appIdx)
-				}
 				reportErrorf(errorRequestFail, err)
 			}
 
-			if ai.AppLocalState == nil {
+			// Get application local state
+			local, ok := ad.AppLocalStates[basics.AppIndex(appIdx)]
+			if !ok {
 				reportErrorf(errorAccountNotOptedInToApp, account, appIdx)
 			}
 
-			kv := ai.AppLocalState.KeyValue
+			kv := local.KeyValue
 			tealval = kv[meta.Key]
 		}
 
@@ -699,16 +690,18 @@ var appQueryCmd = &cobra.Command{
 			}
 
 			// Get creator information
-			ai, err := client.RawAccountApplicationInformation(app.Params.Creator, appIdx)
+			ad, err := client.AccountData(app.Params.Creator)
 			if err != nil {
 				reportErrorf(errorRequestFail, err)
 			}
 
-			if ai.AppParams == nil {
-				reportErrorf(errorAccountNotOptedInToApp, account, appIdx)
+			// Get app params
+			params, ok := ad.AppParams[basics.AppIndex(appIdx)]
+			if !ok {
+				reportErrorf(errorNoSuchApplication, appIdx)
 			}
 
-			kv := ai.AppParams.GlobalState
+			kv := params.GlobalState
 			tealval = kv[meta.Key]
 		}
 

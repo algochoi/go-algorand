@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2021 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -14,30 +14,28 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
 
-//go:build !windows
 // +build !windows
 
 package util
 
 import (
-	"fmt"
 	"syscall"
 )
 
 /* misc */
 
-// SetFdSoftLimit sets a new file descriptors soft limit.
-func SetFdSoftLimit(newLimit uint64) error {
+// RaiseRlimit increases the number of file descriptors we can have
+func RaiseRlimit(amount uint64) error {
 	var rLimit syscall.Rlimit
 	err := syscall.Getrlimit(syscall.RLIMIT_NOFILE, &rLimit)
 	if err != nil {
-		return fmt.Errorf("SetFdSoftLimit() err: %w", err)
+		return err
 	}
 
-	rLimit.Cur = newLimit
+	rLimit.Cur = amount
 	err = syscall.Setrlimit(syscall.RLIMIT_NOFILE, &rLimit)
 	if err != nil {
-		return fmt.Errorf("SetFdSoftLimit() err: %w", err)
+		return err
 	}
 	return nil
 }

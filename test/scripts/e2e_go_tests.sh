@@ -6,28 +6,14 @@ set -e
 set -o pipefail
 
 export GOPATH=$(go env GOPATH)
+export GO111MODULE=on
 
-# Needed for now because circleci doesn't use makefile yet
-if [ -z "$(which gotestsum)" ]; then
-    GOTESTCOMMAND=${GOTESTCOMMAND:="go test"}
-else
-    TEST_RESULTS=${TEST_RESULTS:="$(pwd)"}
-    GOTESTCOMMAND=${GOTESTCOMMAND:="gotestsum --format testname --junitfile ${TEST_RESULTS}/results.xml --jsonfile ${TEST_RESULTS}/testresults.json --"}
-fi
-
-echo "GOTESTCOMMAND will be: ${GOTESTCOMMAND}"
-
-# If one or more -t <pattern> are specified, use GOTESTCOMMAND -run <pattern> for each
+# If one or more -t <pattern> are specified, use go test -run <pattern> for each
 
 TESTPATTERNS=()
 NORACEBUILD=""
-export RUN_EXPECT="FALSE"
 while [ "$1" != "" ]; do
     case "$1" in
-        -e)
-            # The test code checks this variable.
-            export RUN_EXPECT="TRUE"
-            ;;
         -t)
             shift
             TESTPATTERNS+=($1)
@@ -42,11 +28,6 @@ while [ "$1" != "" ]; do
     esac
     shift
 done
-
-if [[ -n $TESTPATTERNS && -n $RUN_EXPECT ]]; then
-    echo "-t and -e are mutually exclusive."
-    exit 1
-fi
 
 # Anchor our repo root reference location
 REPO_ROOT="$( cd "$(dirname "$0")" ; pwd -P )"/../..
@@ -100,30 +81,47 @@ cd ${SRCROOT}/test/e2e-go
 
 # ARM64 has some memory related issues with fork. Since we don't really care
 # about testing the forking capabilities, we're just run the tests one at a time.
+EXECUTE_TESTS_INDIVIDUALLY="false"
 ARCHTYPE=$("${SRCROOT}/scripts/archtype.sh")
 echo "ARCHTYPE:    ${ARCHTYPE}"
 if [[ "${ARCHTYPE}" = arm* ]]; then
-    PARALLEL_FLAG="-p 1"
+    EXECUTE_TESTS_INDIVIDUALLY="true"
 fi
 
-PACKAGES="./..."
-if [ "$RUN_EXPECT" = "TRUE" ]; then
-  PACKAGES=$(go list ./...|grep expect)
-fi
-
-echo "PARALLEL_FLAG = ${PARALLEL_FLAG}"
-echo "PACKAGES = ${PACKAGES}"
+echo "EXECUTE_TEST_INDIVIDUALLY = ${EXECUTE_TESTS_INDIVIDUALLY}"
 
 if [ "${#TESTPATTERNS[@]}" -eq 0 ]; then
-    ${GOTESTCOMMAND} ${RACE_OPTION} ${PARALLEL_FLAG} -timeout 1h -v ${SHORTTEST} ${PACKAGES}
+    if [ "${EXECUTE_TESTS_INDIVIDUALLY}" = "true" ]; then
+        TESTS_DIRECTORIES=$(GO111MODULE=off go list ./...)
+        for TEST_DIR in ${TESTS_DIRECTORIES[@]}; do
+            TESTS=$(go test -list ".*" ${TEST_DIR} -vet=off | grep -v "github.com" || true)
+            for TEST_NAME in ${TESTS[@]}; do
+                go test ${RACE_OPTION} -timeout 1h -vet=off -v ${SHORTTEST} -run ${TEST_NAME} ${TEST_DIR} | logfilter
+                KMD_INSTANCES_COUNT=$(set +o pipefail; ps -Af | grep kmd | grep -v "grep" | wc -l | tr -d ' ')
+                if [ "${KMD_INSTANCES_COUNT}" != "0" ]; then
+                    echo "One or more than one KMD instances remains running:"
+                    ps -Af | grep kmd | grep -v "grep"
+                    exit 1
+                fi
+                ALGOD_INSTANCES_COUNT=$(set +o pipefail; ps -Af | grep algod | grep -v "grep" | wc -l | tr -d ' ')
+                if [ "${ALGOD_INSTANCES_COUNT}" != "0" ]; then
+                    echo "One or more than one algod instances remains running:"
+                    ps -Af | grep algod | grep -v "grep"
+                    exit 1
+                fi
+            done
+        done
+    else
+        go test ${RACE_OPTION} -timeout 1h -v ${SHORTTEST} ./... | logfilter
+    fi
 else
     for TEST in ${TESTPATTERNS[@]}; do
-        ${GOTESTCOMMAND} ${RACE_OPTION} ${PARALLEL_FLAG} -timeout 1h -v ${SHORTTEST} -run ${TEST} ${PACKAGES}
+        go test ${RACE_OPTION} -timeout 1h -v ${SHORTTEST} -run ${TEST} ./... | logfilter
     done
 fi
 
 if [ ${CLEANUP_TEMPDIR} -ne 0 ]; then
-    rm -rf "${TEMPDIR}"
+    rm -rf ${TEMPDIR}
 fi
 
 echo "----------------------------------------------------------------------"

@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2021 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -22,7 +22,6 @@ import (
 	"time"
 
 	"github.com/algorand/go-algorand/tools/network/dnssec"
-	"github.com/algorand/go-algorand/util"
 )
 
 type netDialer interface {
@@ -80,7 +79,7 @@ func (d *Dialer) DialContext(ctx context.Context, network, address string) (net.
 		select {
 		case <-ctx.Done():
 			return nil, ctx.Err()
-		case <-util.NanoAfter(waitTime):
+		case <-time.After(waitTime):
 		}
 	}
 	conn, err := d.innerDialContext(ctx, network, address)

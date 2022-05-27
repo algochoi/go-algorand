@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2021 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -33,11 +33,11 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
+	"github.com/algorand/go-algorand/ledger"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/network"
 	"github.com/algorand/go-algorand/protocol"
-	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/algorand/go-algorand/util/db"
 	"github.com/algorand/go-deadlock"
 )
@@ -77,11 +77,7 @@ func (s *testWorkerStubs) addBlock(ccNextRound basics.Round) {
 	hdr.Round = s.latest
 	hdr.CurrentProtocol = protocol.ConsensusFuture
 
-	var ccBasic = bookkeeping.CompactCertState{
-		CompactCertVoters:      make([]byte, compactcert.HashSize),
-		CompactCertVotersTotal: basics.MicroAlgos{},
-		CompactCertNextRound:   0,
-	}
+	var ccBasic bookkeeping.CompactCertState
 	ccBasic.CompactCertVotersTotal.Raw = uint64(s.totalWeight)
 
 	if hdr.Round > 0 {
@@ -100,29 +96,10 @@ func (s *testWorkerStubs) addBlock(ccNextRound basics.Round) {
 	}
 }
 
-func (s *testWorkerStubs) StateProofKeys(rnd basics.Round) (out []account.StateProofRecordForRound) {
+func (s *testWorkerStubs) Keys(rnd basics.Round) (out []account.Participation) {
 	for _, part := range s.keys {
 		if part.OverlapsInterval(rnd, rnd) {
-			partRecord := account.ParticipationRecord{
-				ParticipationID:   part.ID(),
-				Account:           part.Parent,
-				FirstValid:        part.FirstValid,
-				LastValid:         part.LastValid,
-				KeyDilution:       part.KeyDilution,
-				LastVote:          0,
-				LastBlockProposal: 0,
-				LastStateProof:    0,
-				EffectiveFirst:    0,
-				EffectiveLast:     0,
-				VRF:               part.VRF,
-				Voting:            part.Voting,
-			}
-			signerInRound := part.StateProofSecrets.GetSigner(uint64(rnd))
-			partRecordForRound := account.StateProofRecordForRound{
-				ParticipationRecord: partRecord,
-				StateProofSecrets:   signerInRound,
-			}
-			out = append(out, partRecordForRound)
+			out = append(out, part)
 		}
 	}
 	return
@@ -144,8 +121,8 @@ func (s *testWorkerStubs) BlockHdr(r basics.Round) (bookkeeping.BlockHeader, err
 	return hdr, nil
 }
 
-func (s *testWorkerStubs) CompactCertVoters(r basics.Round) (*ledgercore.VotersForRound, error) {
-	voters := &ledgercore.VotersForRound{
+func (s *testWorkerStubs) CompactCertVoters(r basics.Round) (*ledger.VotersForRound, error) {
+	voters := &ledger.VotersForRound{
 		Proto:       config.Consensus[protocol.ConsensusFuture],
 		AddrToPos:   make(map[basics.Address]uint64),
 		TotalWeight: basics.MicroAlgos{Raw: uint64(s.totalWeight)},
@@ -153,13 +130,14 @@ func (s *testWorkerStubs) CompactCertVoters(r basics.Round) (*ledgercore.VotersF
 
 	for i, k := range s.keysForVoters {
 		voters.AddrToPos[k.Parent] = uint64(i)
-		voters.Participants = append(voters.Participants, basics.Participant{
-			PK:     *k.StateProofSecrets.GetVerifier(),
-			Weight: 1,
+		voters.Participants = append(voters.Participants, compactcert.Participant{
+			PK:          k.Voting.OneTimeSignatureVerifier,
+			Weight:      1,
+			KeyDilution: config.Consensus[protocol.ConsensusFuture].DefaultKeyDilution,
 		})
 	}
 
-	tree, err := merklearray.BuildVectorCommitmentTree(voters.Participants, crypto.HashFactory{HashType: compactcert.HashType})
+	tree, err := merklearray.Build(voters.Participants)
 	if err != nil {
 		return nil, err
 	}
@@ -196,7 +174,7 @@ func (s *testWorkerStubs) Broadcast(ctx context.Context, tag protocol.Tag, data 
 	return nil
 }
 
-func (s *testWorkerStubs) BroadcastInternalSignedTxGroup(tx []transactions.SignedTxn) error {
+func (s *testWorkerStubs) BroadcastSignedTxGroup(tx []transactions.SignedTxn) error {
 	require.Equal(s.t, len(tx), 1)
 	s.txmsg <- tx[0]
 	return nil
@@ -223,29 +201,23 @@ func newTestWorker(t testing.TB, s *testWorkerStubs) *Worker {
 	return newTestWorkerDB(t, s, dbs.Wdb)
 }
 
-// You must call defer part.Close() after calling this function,
-// since it creates a DB accessor but the caller must close it (required for mss)
-func newPartKey(t testing.TB, parent basics.Address) account.PersistedParticipation {
+func newPartKey(t testing.TB, parent basics.Address) account.Participation {
 	fn := fmt.Sprintf("%s.%d", strings.ReplaceAll(t.Name(), "/", "."), crypto.RandUint64())
 	partDB, err := db.MakeAccessor(fn, false, true)
 	require.NoError(t, err)
 
-	part, err := account.FillDBWithParticipationKeys(partDB, parent, 0, basics.Round(10*config.Consensus[protocol.ConsensusFuture].CompactCertRounds), config.Consensus[protocol.ConsensusFuture].DefaultKeyDilution)
+	part, err := account.FillDBWithParticipationKeys(partDB, parent, 0, 1024*1024, config.Consensus[protocol.ConsensusFuture].DefaultKeyDilution)
 	require.NoError(t, err)
-
-	return part
+	part.Close()
+	return part.Participation
 }
 
 func TestWorkerAllSigs(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	var keys []account.Participation
 	for i := 0; i < 10; i++ {
 		var parent basics.Address
 		crypto.RandBytes(parent[:])
-		p := newPartKey(t, parent)
-		defer p.Close()
-		keys = append(keys, p.Participation)
+		keys = append(keys, newPartKey(t, parent))
 	}
 
 	s := newWorkerStubs(t, keys, len(keys))
@@ -285,7 +257,7 @@ func TestWorkerAllSigs(t *testing.T) {
 			ccparams := compactcert.Params{
 				Msg:          signedHdr,
 				ProvenWeight: provenWeight,
-				SigRound:     basics.Round(signedHdr.Round),
+				SigRound:     basics.Round(signedHdr.Round + 1),
 				SecKQ:        proto.CompactCertSecKQ,
 			}
 
@@ -301,15 +273,11 @@ func TestWorkerAllSigs(t *testing.T) {
 }
 
 func TestWorkerPartialSigs(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	var keys []account.Participation
 	for i := 0; i < 7; i++ {
 		var parent basics.Address
 		crypto.RandBytes(parent[:])
-		p := newPartKey(t, parent)
-		defer p.Close()
-		keys = append(keys, p.Participation)
+		keys = append(keys, newPartKey(t, parent))
 	}
 
 	s := newWorkerStubs(t, keys, 10)
@@ -348,7 +316,7 @@ func TestWorkerPartialSigs(t *testing.T) {
 	ccparams := compactcert.Params{
 		Msg:          signedHdr,
 		ProvenWeight: provenWeight,
-		SigRound:     basics.Round(signedHdr.Round),
+		SigRound:     basics.Round(signedHdr.Round + 1),
 		SecKQ:        proto.CompactCertSecKQ,
 	}
 
@@ -361,15 +329,11 @@ func TestWorkerPartialSigs(t *testing.T) {
 }
 
 func TestWorkerInsufficientSigs(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	var keys []account.Participation
 	for i := 0; i < 2; i++ {
 		var parent basics.Address
 		crypto.RandBytes(parent[:])
-		p := newPartKey(t, parent)
-		defer p.Close()
-		keys = append(keys, p.Participation)
+		keys = append(keys, newPartKey(t, parent))
 	}
 
 	s := newWorkerStubs(t, keys, 10)
@@ -394,15 +358,11 @@ func TestWorkerInsufficientSigs(t *testing.T) {
 }
 
 func TestLatestSigsFromThisNode(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	var keys []account.Participation
 	for i := 0; i < 10; i++ {
 		var parent basics.Address
 		crypto.RandBytes(parent[:])
-		p := newPartKey(t, parent)
-		defer p.Close()
-		keys = append(keys, p.Participation)
+		keys = append(keys, newPartKey(t, parent))
 	}
 
 	s := newWorkerStubs(t, keys, 10)
@@ -416,48 +376,30 @@ func TestLatestSigsFromThisNode(t *testing.T) {
 	// Wait for a compact cert to be formed, so we know the signer thread is caught up.
 	_ = <-s.txmsg
 
-	var latestSigs map[basics.Address]basics.Round
-	var err error
-	for x := 0; x < 10; x++ {
-		latestSigs, err = w.LatestSigsFromThisNode()
-		require.NoError(t, err)
-		if len(latestSigs) == len(keys) {
-			break
-		}
-		time.Sleep(256 * time.Millisecond)
-	}
-	require.Equal(t, len(keys), len(latestSigs))
+	latestSigs, err := w.LatestSigsFromThisNode()
+	require.NoError(t, err)
+	require.Equal(t, len(latestSigs), len(keys))
 	for _, k := range keys {
 		require.Equal(t, latestSigs[k.Parent], basics.Round(2*proto.CompactCertRounds))
 	}
 
 	// Add a block that claims the compact cert is formed.
-	s.mu.Lock()
 	s.addBlock(3 * basics.Round(proto.CompactCertRounds))
-	s.mu.Unlock()
 
 	// Wait for the builder to discard the signatures.
-	for x := 0; x < 10; x++ {
-		latestSigs, err = w.LatestSigsFromThisNode()
-		require.NoError(t, err)
-		if len(latestSigs) == 0 {
-			break
-		}
-		time.Sleep(256 * time.Millisecond)
-	}
-	require.Equal(t, 0, len(latestSigs))
+	time.Sleep(time.Second)
+
+	latestSigs, err = w.LatestSigsFromThisNode()
+	require.NoError(t, err)
+	require.Equal(t, len(latestSigs), 0)
 }
 
 func TestWorkerRestart(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	var keys []account.Participation
 	for i := 0; i < 10; i++ {
 		var parent basics.Address
 		crypto.RandBytes(parent[:])
-		p := newPartKey(t, parent)
-		defer p.Close()
-		keys = append(keys, p.Participation)
+		keys = append(keys, newPartKey(t, parent))
 	}
 
 	s := newWorkerStubs(t, keys, 10)
@@ -492,15 +434,11 @@ func TestWorkerRestart(t *testing.T) {
 }
 
 func TestWorkerHandleSig(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	var keys []account.Participation
 	for i := 0; i < 2; i++ {
 		var parent basics.Address
 		crypto.RandBytes(parent[:])
-		p := newPartKey(t, parent)
-		defer p.Close()
-		keys = append(keys, p.Participation)
+		keys = append(keys, newPartKey(t, parent))
 	}
 
 	s := newWorkerStubs(t, keys, 10)

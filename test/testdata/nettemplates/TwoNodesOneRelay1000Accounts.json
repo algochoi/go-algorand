@@ -2,7 +2,7 @@
     "Genesis": {
       "NetworkName": "tbd",
       "PartKeyDilution": 100,
-      "LastPartKeyRound": 3000,
+      "LastPartKeyRound": 20000,
       "Wallets": [
         {
           "Name": "Wallet1",

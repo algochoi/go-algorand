@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2021 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -35,7 +35,6 @@ import (
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
-	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
 var proto = config.Consensus[protocol.ConsensusCurrentVersion]
@@ -80,12 +79,12 @@ func mockLedger(t TestingT, initAccounts map[basics.Address]basics.AccountData, 
 	}
 
 	var err error
-	initBlock.TxnCommitments, err = initBlock.PaysetCommit()
+	initBlock.TxnRoot, err = initBlock.PaysetCommit()
 	require.NoError(t, err)
 
 	fn := fmt.Sprintf("/tmp/%s.%d.sqlite3", t.Name(), crypto.RandUint64())
 	const inMem = true
-	genesisInitState := ledgercore.InitState{Block: initBlock, Accounts: initAccounts, GenesisHash: hash}
+	genesisInitState := ledger.InitState{Block: initBlock, Accounts: initAccounts, GenesisHash: hash}
 	cfg := config.GetDefaultLocal()
 	cfg.Archival = true
 	l, err := ledger.OpenLedger(logging.Base(), fn, true, genesisInitState, cfg)
@@ -101,13 +100,13 @@ func makeMockLedgerFuture(t TestingT, initAccounts map[basics.Address]basics.Acc
 	return mockLedger(t, initAccounts, protocol.ConsensusFuture)
 }
 
-func newBlockEvaluator(t TestingT, l *ledger.Ledger) BlockEvaluator {
+func newBlockEvaluator(t TestingT, l *ledger.Ledger) *ledger.BlockEvaluator {
 	latest := l.Latest()
 	prev, err := l.BlockHdr(latest)
 	require.NoError(t, err)
 
 	next := bookkeeping.MakeBlock(prev)
-	eval, err := l.StartEvaluator(next.BlockHeader, 0, 0)
+	eval, err := l.StartEvaluator(next.BlockHeader, 0)
 	require.NoError(t, err)
 
 	return eval
@@ -136,8 +135,6 @@ func initAccFixed(initAddrs []basics.Address, bal uint64) map[basics.Address]bas
 const testPoolSize = 1000
 
 func TestMinBalanceOK(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	numOfAccounts := 5
 	// Generate accounts
 	secrets := make([]*crypto.SignatureSecrets, numOfAccounts)
@@ -179,8 +176,6 @@ func TestMinBalanceOK(t *testing.T) {
 }
 
 func TestSenderGoesBelowMinBalance(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	numOfAccounts := 5
 	// Generate accounts
 	secrets := make([]*crypto.SignatureSecrets, numOfAccounts)
@@ -222,8 +217,6 @@ func TestSenderGoesBelowMinBalance(t *testing.T) {
 }
 
 func TestSenderGoesBelowMinBalanceDueToAssets(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	numOfAccounts := 5
 	// Generate accounts
 	secrets := make([]*crypto.SignatureSecrets, numOfAccounts)
@@ -294,8 +287,6 @@ func TestSenderGoesBelowMinBalanceDueToAssets(t *testing.T) {
 }
 
 func TestCloseAccount(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	numOfAccounts := 5
 	// Generate accounts
 	secrets := make([]*crypto.SignatureSecrets, numOfAccounts)
@@ -357,8 +348,6 @@ func TestCloseAccount(t *testing.T) {
 }
 
 func TestCloseAccountWhileTxIsPending(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	numOfAccounts := 5
 	// Generate accounts
 	secrets := make([]*crypto.SignatureSecrets, numOfAccounts)
@@ -420,8 +409,6 @@ func TestCloseAccountWhileTxIsPending(t *testing.T) {
 }
 
 func TestClosingAccountBelowMinBalance(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	numOfAccounts := 5
 	// Generate accounts
 	secrets := make([]*crypto.SignatureSecrets, numOfAccounts)
@@ -465,8 +452,6 @@ func TestClosingAccountBelowMinBalance(t *testing.T) {
 }
 
 func TestRecipientGoesBelowMinBalance(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	numOfAccounts := 5
 	// Generate accounts
 	secrets := make([]*crypto.SignatureSecrets, numOfAccounts)
@@ -508,8 +493,6 @@ func TestRecipientGoesBelowMinBalance(t *testing.T) {
 }
 
 func TestRememberForget(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	numOfAccounts := 5
 	// Generate accounts
 	secrets := make([]*crypto.SignatureSecrets, numOfAccounts)
@@ -575,8 +558,6 @@ func TestRememberForget(t *testing.T) {
 
 //	Test that clean up works
 func TestCleanUp(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	numOfAccounts := 10
 	// Generate accounts
 	secrets := make([]*crypto.SignatureSecrets, numOfAccounts)
@@ -654,8 +635,6 @@ func TestCleanUp(t *testing.T) {
 }
 
 func TestFixOverflowOnNewBlock(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	numOfAccounts := 10
 	// Generate accounts
 	secrets := make([]*crypto.SignatureSecrets, numOfAccounts)
@@ -750,8 +729,6 @@ func TestFixOverflowOnNewBlock(t *testing.T) {
 }
 
 func TestOverspender(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	numOfAccounts := 2
 	// Generate accounts
 	secrets := make([]*crypto.SignatureSecrets, numOfAccounts)
@@ -813,8 +790,6 @@ func TestOverspender(t *testing.T) {
 }
 
 func TestRemove(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	numOfAccounts := 2
 	// Generate accounts
 	secrets := make([]*crypto.SignatureSecrets, numOfAccounts)
@@ -856,8 +831,6 @@ func TestRemove(t *testing.T) {
 }
 
 func TestLogicSigOK(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	oparams := config.Consensus[protocol.ConsensusCurrentVersion]
 	params := oparams
 	params.LogicSigMaxCost = 20000
@@ -916,8 +889,6 @@ func TestLogicSigOK(t *testing.T) {
 }
 
 func TestTransactionPool_CurrentFeePerByte(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	numOfAccounts := 5
 	// Generate accounts
 	secrets := make([]*crypto.SignatureSecrets, numOfAccounts)
@@ -1167,7 +1138,7 @@ func BenchmarkTransactionPoolSteadyState(b *testing.B) {
 		for len(ledgerTxnQueue) > 0 {
 			stx := ledgerTxnQueue[0]
 			err := eval.Transaction(stx, transactions.ApplyData{})
-			if err == ledgercore.ErrNoSpace {
+			if err == ledger.ErrNoSpace {
 				break
 			}
 			require.NoError(b, err)
@@ -1187,8 +1158,6 @@ func BenchmarkTransactionPoolSteadyState(b *testing.B) {
 }
 
 func TestTxPoolSizeLimits(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	numOfAccounts := 2
 	// Generate accounts
 	secrets := make([]*crypto.SignatureSecrets, numOfAccounts)

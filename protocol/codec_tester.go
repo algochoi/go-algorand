@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2021 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -17,7 +17,6 @@
 package protocol
 
 import (
-	"errors"
 	"fmt"
 	"io/ioutil"
 	"math/rand"
@@ -25,11 +24,8 @@ import (
 	"path"
 	"path/filepath"
 	"reflect"
-	"runtime"
 	"strings"
 	"testing"
-
-	"github.com/algorand/go-algorand/test/partitiontest"
 
 	"github.com/algorand/go-deadlock"
 
@@ -57,21 +53,9 @@ func RandomizeObject(template interface{}) (interface{}, error) {
 	if tt.Kind() != reflect.Ptr {
 		return nil, fmt.Errorf("RandomizeObject: must be ptr")
 	}
-	v := reflect.New(tt.Elem())
-	changes := int(^uint(0) >> 1)
-	err := randomizeValue(v.Elem(), tt.String(), "", &changes, make(map[reflect.Type]bool))
-	return v.Interface(), err
-}
 
-// RandomizeObjectField returns a random object of the same type as template where a single field was modified.
-func RandomizeObjectField(template interface{}) (interface{}, error) {
-	tt := reflect.TypeOf(template)
-	if tt.Kind() != reflect.Ptr {
-		return nil, fmt.Errorf("RandomizeObject: must be ptr")
-	}
 	v := reflect.New(tt.Elem())
-	changes := 1
-	err := randomizeValue(v.Elem(), tt.String(), "", &changes, make(map[reflect.Type]bool))
+	err := randomizeValue(v.Elem(), tt.String(), "")
 	return v.Interface(), err
 }
 
@@ -106,60 +90,28 @@ func printWarning(warnMsg string) {
 var testedDatatypesForAllocBound = map[string]bool{}
 var testedDatatypesForAllocBoundMu = deadlock.Mutex{}
 
-func checkMsgpAllocBoundDirective(dataType reflect.Type) bool {
-	// does any of the go files in the package directory has the msgp:allocbound defined for that datatype ?
-	gopath := os.Getenv("GOPATH")
-	const repositoryRoot = "go-algorand/"
-	const thisFile = "protocol/codec_tester.go"
-	packageFilesPath := path.Join(gopath, "src", dataType.PkgPath())
-
-	if _, err := os.Stat(packageFilesPath); os.IsNotExist(err) {
-		// no such directory. Try to assemble the path based on the current working directory.
-		cwd, err := os.Getwd()
-		if err != nil {
-			return false
-		}
-		if cwdPaths := strings.SplitAfter(cwd, repositoryRoot); len(cwdPaths) == 2 {
-			cwd = cwdPaths[0]
-		} else {
-			// try to assemble the project directory based on the current stack frame
-			_, file, _, ok := runtime.Caller(0)
-			if !ok {
-				return false
-			}
-			cwd = strings.TrimSuffix(file, thisFile)
-		}
-
-		relPkdPath := strings.SplitAfter(dataType.PkgPath(), repositoryRoot)
-		if len(relPkdPath) != 2 {
-			return false
-		}
-		packageFilesPath = path.Join(cwd, relPkdPath[1])
-		if _, err := os.Stat(packageFilesPath); os.IsNotExist(err) {
-			return false
-		}
-	}
-	packageFiles := []string{}
-	filepath.Walk(packageFilesPath, func(path string, info os.FileInfo, err error) error {
-		if filepath.Ext(path) == ".go" {
-			packageFiles = append(packageFiles, path)
-		}
-		return nil
-	})
-	for _, packageFile := range packageFiles {
-		fileBytes, err := ioutil.ReadFile(packageFile)
-		if err != nil {
-			continue
-		}
-		if strings.Index(string(fileBytes), fmt.Sprintf("msgp:allocbound %s", dataType.Name())) != -1 {
-			// message pack alloc bound definition was found.
-			return true
-		}
-	}
-	return false
-}
-
 func checkBoundsLimitingTag(val reflect.Value, datapath string, structTag string) (hasAllocBound bool) {
+	if structTag == "" {
+		return
+	}
+
+	testedDatatypesForAllocBoundMu.Lock()
+	defer testedDatatypesForAllocBoundMu.Unlock()
+	// make sure we test each datatype only once.
+	if val.Type().Name() == "" {
+		if testedDatatypesForAllocBound[datapath] {
+			hasAllocBound = true
+			return
+		}
+		testedDatatypesForAllocBound[datapath] = true
+	} else {
+		if testedDatatypesForAllocBound[val.Type().Name()] {
+			hasAllocBound = true
+			return
+		}
+		testedDatatypesForAllocBound[val.Type().Name()] = true
+	}
+
 	var objType string
 	if val.Kind() == reflect.Slice {
 		objType = "slice"
@@ -167,74 +119,55 @@ func checkBoundsLimitingTag(val reflect.Value, datapath string, structTag string
 		objType = "map"
 	}
 
-	if structTag != "" {
-		tagsMap := parseStructTags(structTag)
+	tagsMap := parseStructTags(structTag)
 
-		if tagsMap["allocbound"] == "-" {
-			printWarning(fmt.Sprintf("%s %s have an unbounded allocbound defined", objType, datapath))
-			return
-		}
-
-		if _, have := tagsMap["allocbound"]; have {
-			hasAllocBound = true
-			testedDatatypesForAllocBoundMu.Lock()
-			defer testedDatatypesForAllocBoundMu.Unlock()
-			if val.Type().Name() == "" {
-				testedDatatypesForAllocBound[datapath] = true
-			} else {
-				testedDatatypesForAllocBound[val.Type().Name()] = true
-			}
-			return
-		}
+	if tagsMap["allocbound"] == "-" {
+		printWarning(fmt.Sprintf("%s %s have an unbounded allocbound defined", objType, datapath))
+		return
 	}
-	// no struct tag, or have a struct tag with no allocbound.
+	if _, have := tagsMap["allocbound"]; have {
+		hasAllocBound = true
+		return
+	}
+
 	if val.Type().Name() != "" {
-		testedDatatypesForAllocBoundMu.Lock()
-		var exists bool
-		hasAllocBound, exists = testedDatatypesForAllocBound[val.Type().Name()]
-		testedDatatypesForAllocBoundMu.Unlock()
-		if !exists {
-			// does any of the go files in the package directory has the msgp:allocbound defined for that datatype ?
-			hasAllocBound = checkMsgpAllocBoundDirective(val.Type())
-			testedDatatypesForAllocBoundMu.Lock()
-			testedDatatypesForAllocBound[val.Type().Name()] = hasAllocBound
-			testedDatatypesForAllocBoundMu.Unlock()
-			return
-		} else if hasAllocBound {
-			return
+		// does any of the go files in the package directroy has the msgp:allocbound defined for that datatype ?
+		gopath := os.Getenv("GOPATH")
+		packageFilesPath := path.Join(gopath, "src", val.Type().PkgPath())
+		packageFiles := []string{}
+		filepath.Walk(packageFilesPath, func(path string, info os.FileInfo, err error) error {
+			if filepath.Ext(path) == ".go" {
+				packageFiles = append(packageFiles, path)
+			}
+			return nil
+		})
+		for _, packageFile := range packageFiles {
+			fileBytes, err := ioutil.ReadFile(packageFile)
+			if err != nil {
+				continue
+			}
+			if strings.Index(string(fileBytes), fmt.Sprintf("msgp:allocbound %s", val.Type().Name())) != -1 {
+				// message pack alloc bound definition was found.
+				hasAllocBound = true
+				return
+			}
 		}
 	}
-
-	if val.Type().Kind() == reflect.Slice || val.Type().Kind() == reflect.Map || val.Type().Kind() == reflect.Array {
-		printWarning(fmt.Sprintf("%s %s does not have an allocbound defined for %s %s", objType, datapath, val.Type().String(), val.Type().PkgPath()))
-	}
+	printWarning(fmt.Sprintf("%s %s does not have an allocbound defined - %s", objType, datapath, val.Type().PkgPath()))
 	return
 }
 
-func randomizeValue(v reflect.Value, datapath string, tag string, remainingChanges *int, seenTypes map[reflect.Type]bool) error {
-	if *remainingChanges == 0 {
-		return nil
-	}
-	/*if oneOf(5) {
+func randomizeValue(v reflect.Value, datapath string, tag string) error {
+	if oneOf(5) {
 		// Leave zero value
 		return nil
-	}*/
-
-	/* Consider cutting off recursive structures by stopping at some datapath depth.
-
-	    if len(datapath) > 200 {
-			// Cut off recursive structures
-			return nil
-		}
-	*/
+	}
 
 	switch v.Kind() {
 	case reflect.Uint, reflect.Uintptr, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
 		v.SetUint(rand.Uint64())
-		*remainingChanges--
 	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
 		v.SetInt(int64(rand.Uint64()))
-		*remainingChanges--
 	case reflect.String:
 		var buf []byte
 		len := rand.Int() % 64
@@ -242,18 +175,10 @@ func randomizeValue(v reflect.Value, datapath string, tag string, remainingChang
 			buf = append(buf, byte(rand.Uint32()))
 		}
 		v.SetString(string(buf))
-		*remainingChanges--
 	case reflect.Struct:
 		st := v.Type()
-		if !seenTypes[st] {
-			seenTypes[st] = true
-		} else {
-			return nil
-		}
-		fieldsOrder := rand.Perm(v.NumField())
 		for i := 0; i < v.NumField(); i++ {
-			fieldIdx := fieldsOrder[i]
-			f := st.Field(fieldIdx)
+			f := st.Field(i)
 			tag := f.Tag
 
 			if f.PkgPath != "" && !f.Anonymous {
@@ -263,52 +188,34 @@ func randomizeValue(v reflect.Value, datapath string, tag string, remainingChang
 			if rawMsgpType == f.Type {
 				return errSkipRawMsgpTesting
 			}
-			err := randomizeValue(v.Field(fieldIdx), datapath+"/"+f.Name, string(tag), remainingChanges, seenTypes)
+			err := randomizeValue(v.Field(i), datapath+"/"+f.Name, string(tag))
 			if err != nil {
 				return err
 			}
-			if *remainingChanges == 0 {
-				break
-			}
-			*remainingChanges--
 		}
 	case reflect.Array:
-		indicesOrder := rand.Perm(v.Len())
 		for i := 0; i < v.Len(); i++ {
-			err := randomizeValue(v.Index(indicesOrder[i]), fmt.Sprintf("%s/%d", datapath, indicesOrder[i]), "", remainingChanges, seenTypes)
+			err := randomizeValue(v.Index(i), fmt.Sprintf("%s/%d", datapath, i), "")
 			if err != nil {
 				return err
 			}
-			if *remainingChanges == 0 {
-				break
-			}
-			*remainingChanges--
 		}
 	case reflect.Slice:
-		// we don't want to allocate a slice with size of 0. This is because decoding and encoding this slice
-		// will result in nil and not slice of size 0
-		l := rand.Int()%31 + 1
-
 		hasAllocBound := checkBoundsLimitingTag(v, datapath, tag)
+		l := rand.Int() % 32
 		if hasAllocBound {
 			l = 1
 		}
 		s := reflect.MakeSlice(v.Type(), l, l)
-		indicesOrder := rand.Perm(l)
 		for i := 0; i < l; i++ {
-			err := randomizeValue(s.Index(indicesOrder[i]), fmt.Sprintf("%s/%d", datapath, indicesOrder[i]), "", remainingChanges, seenTypes)
+			err := randomizeValue(s.Index(i), fmt.Sprintf("%s/%d", datapath, i), "")
 			if err != nil {
 				return err
 			}
-			if *remainingChanges == 0 {
-				break
-			}
 		}
 		v.Set(s)
-		*remainingChanges--
 	case reflect.Bool:
 		v.SetBool(rand.Uint32()%2 == 0)
-		*remainingChanges--
 	case reflect.Map:
 		hasAllocBound := checkBoundsLimitingTag(v, datapath, tag)
 		mt := v.Type()
@@ -317,24 +224,20 @@ func randomizeValue(v reflect.Value, datapath string, tag string, remainingChang
 		if hasAllocBound {
 			l = 1
 		}
-		indicesOrder := rand.Perm(l)
 		for i := 0; i < l; i++ {
 			mk := reflect.New(mt.Key())
-			err := randomizeValue(mk.Elem(), fmt.Sprintf("%s/%d", datapath, indicesOrder[i]), "", remainingChanges, seenTypes)
+			err := randomizeValue(mk.Elem(), fmt.Sprintf("%s/%d", datapath, i), "")
 			if err != nil {
 				return err
 			}
 
 			mv := reflect.New(mt.Elem())
-			err = randomizeValue(mv.Elem(), fmt.Sprintf("%s/%d", datapath, indicesOrder[i]), "", remainingChanges, seenTypes)
+			err = randomizeValue(mv.Elem(), fmt.Sprintf("%s/%d", datapath, i), "")
 			if err != nil {
 				return err
 			}
 
 			v.SetMapIndex(mk.Elem(), mv.Elem())
-			if *remainingChanges == 0 {
-				break
-			}
 		}
 	default:
 		return fmt.Errorf("unsupported object kind %v", v.Kind())
@@ -419,22 +322,12 @@ func EncodingTest(template msgpMarshalUnmarshal) error {
 // RunEncodingTest runs several iterations of encoding/decoding
 // consistency testing of object type specified by template.
 func RunEncodingTest(t *testing.T, template msgpMarshalUnmarshal) {
-	partitiontest.PartitionTest(t)
 	for i := 0; i < 1000; i++ {
 		err := EncodingTest(template)
 		if err == errSkipRawMsgpTesting {
 			// we want to skip the serilization test in this case.
 			t.Skip()
 			return
-		}
-		if err == nil {
-			continue
-		}
-
-		// some objects might appen to the original error additional info.
-		// we ensure that invalidObject error is not failing the test.
-		if errors.As(err, &ErrInvalidObject) {
-			continue
 		}
 		require.NoError(t, err)
 	}

@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2021 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -90,8 +90,6 @@ type wsPeerWebsocketConn interface {
 	WriteControl(int, []byte, time.Time) error
 	SetReadLimit(int64)
 	CloseWithoutFlush() error
-	SetPingHandler(h func(appData string) error)
-	SetPongHandler(h func(appData string) error)
 }
 
 type sendMessage struct {
@@ -138,7 +136,7 @@ type wsPeer struct {
 	// lastPacketTime contains the UnixNano at the last time a successful communication was made with the peer.
 	// "successful communication" above refers to either reading from or writing to a connection without receiving any
 	// error.
-	// we want this to be a 64-bit aligned for atomics support on 32bit platforms.
+	// we want this to be a 64-bit aligned for atomics.
 	lastPacketTime int64
 
 	// intermittentOutgoingMessageEnqueueTime contains the UnixNano of the message's enqueue time that is currently being written to the
@@ -202,7 +200,7 @@ type wsPeer struct {
 	// responseChannelsMutex guards the operations of responseChannels
 	responseChannelsMutex deadlock.RWMutex
 
-	// sendMessageTag is a map of allowed message to send to a peer. We don't use any synchronization on this map, and the
+	// sendMessageTag is a map of allowed message to send to a peer. We don't use any syncronization on this map, and the
 	// only gurentee is that it's being accessed only during startup and/or by the sending loop go routine.
 	sendMessageTag map[protocol.Tag]bool
 
@@ -420,7 +418,6 @@ func (wp *wsPeer) readLoop() {
 			wp.reportReadErr(err)
 			return
 		}
-
 		msg.processing = wp.processed
 		msg.Received = time.Now().UnixNano()
 		msg.Data = slurper.Bytes()
@@ -582,7 +579,7 @@ func (wp *wsPeer) writeLoopSend(msgs sendMessages) disconnectReason {
 
 func (wp *wsPeer) writeLoopSendMsg(msg sendMessage) disconnectReason {
 	if len(msg.data) > maxMessageLength {
-		wp.net.log.Errorf("trying to send a message longer than we would receive: %d > %d tag=%s", len(msg.data), maxMessageLength, string(msg.data[0:2]))
+		wp.net.log.Errorf("trying to send a message longer than we would recieve: %d > %d tag=%s", len(msg.data), maxMessageLength, string(msg.data[0:2]))
 		// just drop it, don't break the connection
 		return disconnectReasonNone
 	}
@@ -600,14 +597,12 @@ func (wp *wsPeer) writeLoopSendMsg(msg sendMessage) disconnectReason {
 	}
 
 	// check if this message was waiting in the queue for too long. If this is the case, return "true" to indicate that we want to close the connection.
-	now := time.Now()
-	msgWaitDuration := now.Sub(msg.enqueued)
+	msgWaitDuration := time.Now().Sub(msg.enqueued)
 	if msgWaitDuration > maxMessageQueueDuration {
 		wp.net.log.Warnf("peer stale enqueued message %dms", msgWaitDuration.Nanoseconds()/1000000)
 		networkConnectionsDroppedTotal.Inc(map[string]string{"reason": "stale message"})
 		return disconnectStaleWrite
 	}
-
 	atomic.StoreInt64(&wp.intermittentOutgoingMessageEnqueueTime, msg.enqueued.UnixNano())
 	defer atomic.StoreInt64(&wp.intermittentOutgoingMessageEnqueueTime, 0)
 	err := wp.conn.WriteMessage(websocket.BinaryMessage, msg.data)
@@ -754,15 +749,15 @@ func (wp *wsPeer) internalClose(reason disconnectReason) {
 	if atomic.CompareAndSwapInt32(&wp.didSignalClose, 0, 1) {
 		wp.net.peerRemoteClose(wp, reason)
 	}
-	wp.Close(time.Now().Add(peerDisconnectionAckDuration))
+	wp.Close()
 }
 
 // called either here or from above enclosing node logic
-func (wp *wsPeer) Close(deadline time.Time) {
+func (wp *wsPeer) Close() {
 	atomic.StoreInt32(&wp.didSignalClose, 1)
 	if atomic.CompareAndSwapInt32(&wp.didInnerClose, 0, 1) {
 		close(wp.closing)
-		err := wp.conn.WriteControl(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseNormalClosure, ""), deadline)
+		err := wp.conn.WriteControl(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseNormalClosure, ""), time.Now().Add(5*time.Second))
 		if err != nil {
 			wp.net.log.Infof("failed to write CloseMessage to connection for %s", wp.conn.RemoteAddr().String())
 		}
@@ -774,8 +769,8 @@ func (wp *wsPeer) Close(deadline time.Time) {
 }
 
 // CloseAndWait internally calls Close() then waits for all peer activity to stop
-func (wp *wsPeer) CloseAndWait(deadline time.Time) {
-	wp.Close(deadline)
+func (wp *wsPeer) CloseAndWait() {
+	wp.Close()
 	wp.wg.Wait()
 }
 

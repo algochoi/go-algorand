@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2021 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -29,7 +29,6 @@ import (
 	"github.com/algorand/go-deadlock"
 
 	"github.com/algorand/go-algorand/agreement"
-	"github.com/algorand/go-algorand/agreement/agreementtest"
 	"github.com/algorand/go-algorand/agreement/gossip"
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
@@ -132,8 +131,8 @@ func (n *Fuzzer) initAgreementNode(nodeID int, filters ...NetworkFilterFactory) 
 	n.agreementParams[nodeID] = agreement.Parameters{
 		Logger:                  logger,
 		Ledger:                  n.ledgers[nodeID],
-		Network:                 gossip.WrapNetwork(n.facades[nodeID], logger, config.GetDefaultLocal()),
-		KeyManager:              agreementtest.SimpleKeyManager(n.accounts[nodeID : nodeID+1]),
+		Network:                 gossip.WrapNetwork(n.facades[nodeID], logger),
+		KeyManager:              simpleKeyManager(n.accounts[nodeID : nodeID+1]),
 		BlockValidator:          n.blockValidator,
 		BlockFactory:            testBlockFactory{Owner: nodeID},
 		Clock:                   n.clocks[nodeID],
@@ -230,7 +229,7 @@ func (n *Fuzzer) initAccountsAndBalances(rootSeed []byte, onlineNodes []bool) er
 	return nil
 }
 
-// Disconnect would disconnect node diconnectingNode from node disconnectedNode ensuring that no further messages
+// Disconnect would disconnect node diconnectingNode from node disconnectedNode ensuring that no futher messages
 // from disconnectedNode would reach diconnectingNode
 func (n *Fuzzer) Disconnect(diconnectingNode, disconnectedNode int) {
 	n.disconnectMu.Lock()
@@ -577,7 +576,7 @@ func (n *Fuzzer) CrashNode(nodeID int) {
 	n.facades[nodeID].ClearHandlers()
 	n.ledgers[nodeID].ClearNotifications()
 
-	n.agreementParams[nodeID].Network = gossip.WrapNetwork(n.facades[nodeID], n.log, config.GetDefaultLocal())
+	n.agreementParams[nodeID].Network = gossip.WrapNetwork(n.facades[nodeID], n.log)
 	n.agreements[nodeID] = agreement.MakeService(n.agreementParams[nodeID])
 
 	cadaverFilename := fmt.Sprintf("%v-%v", n.networkName, nodeID)

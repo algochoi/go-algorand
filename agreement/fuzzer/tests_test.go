@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2021 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -25,7 +25,6 @@ import (
 	"math"
 	"math/rand"
 	"os"
-
 	//ossignal "os/signal"
 	"path/filepath"
 	//"runtime/pprof"
@@ -37,9 +36,7 @@ import (
 
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-deadlock"
-
 	//"github.com/algorand/go-algorand/protocol"
-	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
 func TestMain(m *testing.M) {
@@ -81,7 +78,7 @@ func printResults(t *testing.T, r *RunResult) {
 		r.PostRecoveryLowRound, r.PostRecoveryHighRound,
 	)
 	if r.PreRecoveryHighRound != r.PreRecoveryLowRound {
-		// network got disputed by the filters.
+		// network got disupted by the filters.
 		fmt.Printf("%v partitioned the network ( %d - %d ), but recovered correctly reaching round %d\n", t.Name(), r.PreRecoveryLowRound, r.PreRecoveryHighRound, r.PostRecoveryHighRound)
 	} else {
 		if r.PreRecoveryHighRound == r.StartLowRound {
@@ -107,8 +104,6 @@ func testConfig(t *testing.T, config NetworkConfig) (network *Network) {
 */
 
 func TestCircularNetworkTopology(t *testing.T) {
-	// partitiontest.PartitionTest(t)
-	// Causes double partition, so commented out on purpose
 	var nodeCounts []int
 	if testing.Short() {
 		nodeCounts = []int{4, 6}
@@ -119,7 +114,6 @@ func TestCircularNetworkTopology(t *testing.T) {
 		nodeCount := nodeCounts[i]
 		t.Run(fmt.Sprintf("TestCircularNetworkTopology-%d", nodeCount),
 			func(t *testing.T) {
-				partitiontest.PartitionTest(t) // Check if this expect test should by run, may SKIP
 				nodes := nodeCount
 				topologyConfig := TopologyFilterConfig{
 					NodesConnection: make(map[int][]int),
@@ -426,8 +420,6 @@ type FuzzerTestFile struct {
 }
 
 func TestFuzzer(t *testing.T) {
-	// partitiontest.PartitionTest(t)
-	// Causes double partition, so commented out on purpose
 	jsonFiles := make(map[string]string) // map json test to full json file name.
 	err := filepath.Walk(".", func(path string, info os.FileInfo, err error) error {
 		if strings.HasSuffix(info.Name(), ".json") {
@@ -438,7 +430,6 @@ func TestFuzzer(t *testing.T) {
 	require.NoError(t, err)
 	for testName := range jsonFiles {
 		t.Run(testName, func(t *testing.T) {
-			partitiontest.PartitionTest(t) // Check if this expect test should by run, may SKIP
 			jsonFilename := jsonFiles[testName]
 			jsonBytes, err := ioutil.ReadFile(jsonFilename)
 			require.NoError(t, err)
@@ -481,8 +472,6 @@ func TestFuzzer(t *testing.T) {
 }
 
 func TestNetworkBandwidth(t *testing.T) {
-	// partitiontest.PartitionTest(t)
-	// Causes double partition, so commented out on purpose
 	// travis rans out of memory when we get a high nodes count.. so we'll skip it for now.
 	if testing.Short() {
 		t.Skip()
@@ -504,7 +493,6 @@ func TestNetworkBandwidth(t *testing.T) {
 		nodeCount := nodeCounts[i]
 		t.Run(fmt.Sprintf("TestNetworkBandwidth-%d", nodeCount),
 			func(t *testing.T) {
-				partitiontest.PartitionTest(t) // Check if this expect test should by run, may SKIP
 				nodes := nodeCount
 				topologyConfig := TopologyFilterConfig{
 					NodesConnection: make(map[int][]int),
@@ -556,7 +544,7 @@ func TestUnstakedNetworkLinearGrowth(t *testing.T) {
 	if testing.Short() {
 		t.Skip()
 	}
-	partitiontest.PartitionTest(t) // Check if this expect test should by run, may SKIP
+
 	relayCount := 8
 	stakedNodeCount := 4
 	deadlock.Opts.Disable = true
@@ -669,7 +657,7 @@ func TestStakedNetworkQuadricGrowth(t *testing.T) {
 	if testing.Short() {
 		t.Skip()
 	}
-	partitiontest.PartitionTest(t) // Check if this expect test should by run, may SKIP
+
 	relayCount := 1
 	nodeCount := []int{4, 5, 6, 7, 8, 9, 10}
 	totalRelayedMessages := []int{}
@@ -780,7 +768,7 @@ func TestRegossipinngElimination(t *testing.T) {
 	if testing.Short() {
 		t.Skip()
 	}
-	partitiontest.PartitionTest(t) // Check if this expect test should by run, may SKIP
+
 	relayCounts := 8
 	nodeCount := 20
 	deadlock.Opts.Disable = true

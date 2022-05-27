@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2021 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -60,7 +60,7 @@ func buildTestLedger(t *testing.T, blk bookkeeping.Block) (ledger *data.Ledger, 
 	}
 
 	log := logging.TestingLog(t)
-	genBal := bookkeeping.MakeGenesisBalances(genesis, sinkAddr, poolAddr)
+	genBal := data.MakeGenesisBalances(genesis, sinkAddr, poolAddr)
 	genHash := crypto.Digest{0x42}
 	const inMem = true
 	cfg := config.GetDefaultLocal()
@@ -105,7 +105,7 @@ func buildTestLedger(t *testing.T, blk bookkeeping.Block) (ledger *data.Ledger, 
 	b.Payset = []transactions.SignedTxnInBlock{
 		txib,
 	}
-	b.TxnCommitments, err = b.PaysetCommit()
+	b.TxnRoot, err = b.PaysetCommit()
 	require.NoError(t, err)
 	require.NoError(t, ledger.AddBlock(b, agreement.Certificate{Round: next}))
 	return
@@ -116,7 +116,7 @@ func addBlocks(t *testing.T, ledger *data.Ledger, blk bookkeeping.Block, numBloc
 	for i := 0; i < numBlocks; i++ {
 		blk.BlockHeader.Round++
 		blk.BlockHeader.TimeStamp += int64(crypto.RandUint64() % 100 * 1000)
-		blk.TxnCommitments, err = blk.PaysetCommit()
+		blk.TxnRoot, err = blk.PaysetCommit()
 		require.NoError(t, err)
 
 		err := ledger.AddBlock(blk, agreement.Certificate{Round: blk.BlockHeader.Round})
@@ -232,7 +232,6 @@ type testUnicastPeer struct {
 	version          string
 	responseChannels map[uint64]chan *network.Response
 	t                *testing.T
-	responseOverride *network.Response
 }
 
 func (p *testUnicastPeer) GetAddress() string {
@@ -254,10 +253,6 @@ func (p *testUnicastPeer) Request(ctx context.Context, tag protocol.Tag, topics 
 	}
 	require.NotNil(p.t, dispather)
 	dispather.Handle(network.IncomingMessage{Tag: tag, Data: topics.MarshallTopics(), Sender: p, Net: p.gn})
-
-	if p.responseOverride != nil {
-		return p.responseOverride, nil
-	}
 
 	// wait for the channel.
 	select {
@@ -302,15 +297,10 @@ func (p *testUnicastPeer) Unicast(ctx context.Context, msg []byte, tag protocol.
 }
 
 func makeTestUnicastPeer(gn network.GossipNode, t *testing.T) network.UnicastPeer {
-	return makeTestUnicastPeerWithResponseOverride(gn, t, nil)
-}
-
-func makeTestUnicastPeerWithResponseOverride(gn network.GossipNode, t *testing.T, responseOverride *network.Response) network.UnicastPeer {
 	wsp := testUnicastPeer{}
 	wsp.gn = gn
 	wsp.t = t
 	wsp.version = network.ProtocolVersion
 	wsp.responseChannels = make(map[uint64]chan *network.Response)
-	wsp.responseOverride = responseOverride
 	return &wsp
 }

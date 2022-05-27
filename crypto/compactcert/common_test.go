@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2021 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -20,16 +20,13 @@ import (
 	"testing"
 
 	"github.com/algorand/go-algorand/crypto"
-	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
 func TestHashCoin(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	var slots [32]uint64
-	var sigcom = make(crypto.GenericDigest, HashSize)
-	var partcom = make(crypto.GenericDigest, HashSize)
-	var msgHash = make(crypto.GenericDigest, HashSize)
+	var sigcom [32]byte
+	var partcom [32]byte
+	var msgHash crypto.Digest
 
 	crypto.RandBytes(sigcom[:])
 	crypto.RandBytes(partcom[:])
@@ -64,9 +61,9 @@ func TestHashCoin(t *testing.T) {
 }
 
 func BenchmarkHashCoin(b *testing.B) {
-	var sigcom = make(crypto.GenericDigest, HashSize)
-	var partcom = make(crypto.GenericDigest, HashSize)
-	var msgHash = make(crypto.GenericDigest, HashSize)
+	var sigcom [32]byte
+	var partcom [32]byte
+	var msgHash crypto.Digest
 
 	crypto.RandBytes(sigcom[:])
 	crypto.RandBytes(partcom[:])
@@ -87,12 +84,10 @@ func BenchmarkHashCoin(b *testing.B) {
 }
 
 func TestNumReveals(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	billion := uint64(1000 * 1000 * 1000)
 	microalgo := uint64(1000 * 1000)
 	provenWeight := 2 * billion * microalgo
-	secKQ := uint64(compactCertSecKQForTests)
+	secKQ := uint64(128)
 	bound := uint64(1000)
 
 	for i := uint64(3); i < 10; i++ {
@@ -114,7 +109,7 @@ func BenchmarkNumReveals(b *testing.B) {
 	microalgo := uint64(1000 * 1000)
 	provenWeight := 100 * billion * microalgo
 	signedWeight := 110 * billion * microalgo
-	secKQ := uint64(compactCertSecKQForTests)
+	secKQ := uint64(128)
 	bound := uint64(1000)
 
 	nr, err := numReveals(signedWeight, provenWeight, secKQ, bound)

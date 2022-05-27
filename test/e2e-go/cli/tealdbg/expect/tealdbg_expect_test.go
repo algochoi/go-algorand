@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2021 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -23,9 +23,6 @@ import (
 
 // TestTealdbgWithExpect processes all expect script files with suffix Test.exp within the test/e2e-go/cli/tealdbg/expect directory
 func TestTealdbgWithExpect(t *testing.T) {
-	// partitiontest.PartitionTest(t)
-	// Causes double partition, so commented out on purpose
-	defer fixtures.ShutdownSynchronizedTest(t)
 	et := fixtures.MakeExpectTest(t)
 	et.Run()
 }

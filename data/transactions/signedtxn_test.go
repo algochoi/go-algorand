@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2021 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -23,12 +23,9 @@ import (
 
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/protocol"
-	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
 func TestEncoding(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	secrets := keypair()
 	zeroPayment := Transaction{Type: protocol.PaymentTx}
 	zeroKeyReg := Transaction{Type: protocol.KeyRegistrationTx}
@@ -63,8 +60,6 @@ func TestEncoding(t *testing.T) {
 }
 
 func TestDecodeNil(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	// This is a regression test for improper decoding of a nil SignedTxn.
 	// This is a subtle case because decoding a msgpack nil does not run
 	// SignedTxn.CodecDecodeSelf().
@@ -79,8 +74,6 @@ func TestDecodeNil(t *testing.T) {
 }
 
 func TestSignedTxnInBlockHash(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	var stib SignedTxnInBlock
 	crypto.RandBytes(stib.Txn.Sender[:])
 	require.Equal(t, crypto.HashObj(&stib), stib.Hash())

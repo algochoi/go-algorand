@@ -43,7 +43,7 @@ will also recover safely after crashes.
 # Specification
 
 The specification for the protocol implemented by this package is
-located [here](https://github.com/algorandfoundation/specs).
+located [here](https://github.com/algorand/spec).
 
 Optimizations from and other deviations from the spec will be noted
 throughout this file.

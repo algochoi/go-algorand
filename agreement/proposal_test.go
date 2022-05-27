@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2021 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -20,6 +20,7 @@ import (
 	"context"
 	"os"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 
@@ -27,7 +28,6 @@ import (
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
-	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
 func testSetup(periodCount uint64) (player, rootRouter, testAccountData, testBlockFactory, Ledger) {
@@ -46,7 +46,7 @@ func testSetup(periodCount uint64) (player, rootRouter, testAccountData, testBlo
 }
 
 func createProposalsTesting(accs testAccountData, round basics.Round, period period, factory BlockFactory, ledger Ledger) (ps []proposal, vs []vote) {
-	ve, err := factory.AssembleBlock(round)
+	ve, err := factory.AssembleBlock(round, time.Now().Add(time.Minute))
 	if err != nil {
 		logging.Base().Errorf("Could not generate a proposal for round %d: %v", round, err)
 		return nil, nil
@@ -107,8 +107,6 @@ func createProposalEvents(t *testing.T, player player, accs testAccountData, f t
 }
 
 func TestProposalCreation(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	player, router, accounts, factory, ledger := testSetup(0)
 
 	proposalVoteEventBatch, _, _ := createProposalEvents(t, player, accounts, factory, ledger)
@@ -117,12 +115,10 @@ func TestProposalCreation(t *testing.T) {
 }
 
 func TestProposalFunctions(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	player, _, accs, factory, ledger := testSetup(0)
 	round := player.Round
 	period := player.Period
-	ve, err := factory.AssembleBlock(player.Round)
+	ve, err := factory.AssembleBlock(player.Round, time.Now().Add(time.Minute))
 	require.NoError(t, err, "Could not generate a proposal for round %d: %v", round, err)
 
 	validator := testBlockValidator{}
@@ -156,13 +152,11 @@ func TestProposalFunctions(t *testing.T) {
 }
 
 func TestProposalUnauthenticated(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	player, _, accounts, factory, ledger := testSetup(0)
 
 	round := player.Round
 	period := player.Period
-	testBlockFactory, err := factory.AssembleBlock(player.Round)
+	testBlockFactory, err := factory.AssembleBlock(player.Round, time.Now().Add(time.Minute))
 	require.NoError(t, err, "Could not generate a proposal for round %d: %v", round, err)
 
 	validator := testBlockValidator{}

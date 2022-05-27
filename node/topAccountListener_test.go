@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2021 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -20,13 +20,11 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
-	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
 // errorString is a trivial implementation of error.
@@ -39,8 +37,6 @@ func (e *errorString) Error() string {
 }
 
 func TestUpdateTopAccounts(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	var topN []basics.AccountDetail
 	var input []basics.AccountDetail
 
@@ -140,8 +136,6 @@ func TestUpdateTopAccounts(t *testing.T) {
 }
 
 func TestRemoveSome(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	// Initialize slice with 100 accounts
 	var accountsSlice []basics.AccountDetail
 	for i := 0; i <= 100; i++ {
@@ -182,8 +176,6 @@ func TestRemoveSome(t *testing.T) {
 }
 
 func TestUpdate(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	listener := topAccountListener{
 		accounts:          []basics.AccountDetail{},
 		round:             1,
@@ -261,8 +253,6 @@ func TestUpdate(t *testing.T) {
 }
 
 func TestInit(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	listener := makeTopAccountListener(logging.Base())
 
 	// "init" should remove existing values before adding new ones.
@@ -285,9 +275,6 @@ func TestInit(t *testing.T) {
 
 func makeBlockWithTxnFor(senders []byte, receivers []byte) bookkeeping.Block {
 	var blk bookkeeping.Block
-	blk.BlockHeader.GenesisID = "foo"
-	crypto.RandBytes(blk.BlockHeader.GenesisHash[:])
-	blk.CurrentProtocol = protocol.ConsensusFuture
 
 	paysets := make([]transactions.SignedTxnInBlock, 0, len(receivers))
 	for i, b := range receivers {
@@ -295,9 +282,7 @@ func makeBlockWithTxnFor(senders []byte, receivers []byte) bookkeeping.Block {
 			Txn: transactions.Transaction{
 				Type: protocol.PaymentTx,
 				Header: transactions.Header{
-					Sender:      basics.Address{senders[i]},
-					GenesisID:   blk.BlockHeader.GenesisID,
-					GenesisHash: blk.BlockHeader.GenesisHash,
+					Sender: basics.Address{senders[i]},
 				},
 				PaymentTxnFields: transactions.PaymentTxnFields{
 					Receiver: basics.Address{b},

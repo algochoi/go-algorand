@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2021 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -59,10 +59,9 @@ const (
 
 // rawRequestPaths is a set of paths where the body should not be urlencoded
 var rawRequestPaths = map[string]bool{
-	"/v1/transactions":  true,
-	"/v2/teal/dryrun":   true,
-	"/v2/teal/compile":  true,
-	"/v2/participation": true,
+	"/v1/transactions": true,
+	"/v2/teal/dryrun":  true,
+	"/v2/teal/compile": true,
 }
 
 // unauthorizedRequestError is generated when we receive 401 error from the server. This error includes the inner error
@@ -76,18 +75,6 @@ type unauthorizedRequestError struct {
 // Error format an error string for the unauthorizedRequestError error.
 func (e unauthorizedRequestError) Error() string {
 	return fmt.Sprintf("Unauthorized request to `%s` when using token `%s` : %s", e.url, e.apiToken, e.errorString)
-}
-
-// HTTPError is generated when we receive an unhandled error from the server. This error contains the error string.
-type HTTPError struct {
-	StatusCode  int
-	Status      string
-	ErrorString string
-}
-
-// Error formats an error string.
-func (e HTTPError) Error() string {
-	return fmt.Sprintf("HTTP %s: %s", e.Status, e.ErrorString)
 }
 
 // RestClient manages the REST interface for a calling user.
@@ -143,7 +130,7 @@ func extractError(resp *http.Response) error {
 		return unauthorizedRequestError{errorString, apiToken, resp.Request.URL.String()}
 	}
 
-	return HTTPError{StatusCode: resp.StatusCode, Status: resp.Status, ErrorString: errorString}
+	return fmt.Errorf("HTTP %s: %s", resp.Status, errorString)
 }
 
 // stripTransaction gets a transaction of the form "tx-XXXXXXXX" and truncates the "tx-" part, if it starts with "tx-"
@@ -341,10 +328,6 @@ func (client RestClient) LedgerSupply() (response v1.Supply, err error) {
 	return
 }
 
-type pendingTransactionsByAddrParams struct {
-	Max uint64 `url:"max"`
-}
-
 type transactionsByAddrParams struct {
 	FirstRound uint64 `url:"firstRound"`
 	LastRound  uint64 `url:"lastRound"`
@@ -369,25 +352,10 @@ type rawFormat struct {
 	Format string `url:"format"`
 }
 
-type proofParams struct {
-	HashType string `url:"hashtype"`
-}
-
-type accountInformationParams struct {
-	Format  string `url:"format"`
-	Exclude string `url:"exclude"`
-}
-
 // TransactionsByAddr returns all transactions for a PK [addr] in the [first,
 // last] rounds range.
 func (client RestClient) TransactionsByAddr(addr string, first, last, max uint64) (response v1.TransactionList, err error) {
 	err = client.get(&response, fmt.Sprintf("/v1/account/%s/transactions", addr), transactionsByAddrParams{first, last, max})
-	return
-}
-
-// PendingTransactionsByAddr returns all the pending transactions for a PK [addr].
-func (client RestClient) PendingTransactionsByAddr(addr string, max uint64) (response v1.PendingTransactions, err error) {
-	err = client.get(&response, fmt.Sprintf("/v1/account/%s/transactions/pending", addr), pendingTransactionsByAddrParams{max})
 	return
 }
 
@@ -423,14 +391,8 @@ func (client RestClient) AccountInformation(address string) (response v1.Account
 }
 
 // AccountInformationV2 gets the AccountData associated with the passed address
-func (client RestClient) AccountInformationV2(address string, includeCreatables bool) (response generatedV2.Account, err error) {
-	var infoParams accountInformationParams
-	if includeCreatables {
-		infoParams = accountInformationParams{Exclude: "none", Format: "json"}
-	} else {
-		infoParams = accountInformationParams{Exclude: "all", Format: "json"}
-	}
-	err = client.get(&response, fmt.Sprintf("/v2/accounts/%s", address), infoParams)
+func (client RestClient) AccountInformationV2(address string) (response generatedV2.Account, err error) {
+	err = client.get(&response, fmt.Sprintf("/v2/accounts/%s", address), nil)
 	return
 }
 
@@ -469,42 +431,6 @@ func (client RestClient) TransactionInformation(accountAddress, transactionID st
 func (client RestClient) PendingTransactionInformation(transactionID string) (response v1.Transaction, err error) {
 	transactionID = stripTransaction(transactionID)
 	err = client.get(&response, fmt.Sprintf("/v1/transactions/pending/%s", transactionID), nil)
-	return
-}
-
-// PendingTransactionInformationV2 gets information about a recently issued transaction.
-// See PendingTransactionInformation for more details.
-func (client RestClient) PendingTransactionInformationV2(transactionID string) (response generatedV2.PendingTransactionResponse, err error) {
-	transactionID = stripTransaction(transactionID)
-	err = client.get(&response, fmt.Sprintf("/v2/transactions/pending/%s", transactionID), nil)
-	return
-}
-
-// AccountApplicationInformation gets account information about a given app.
-func (client RestClient) AccountApplicationInformation(accountAddress string, applicationID uint64) (response generatedV2.AccountApplicationResponse, err error) {
-	err = client.get(&response, fmt.Sprintf("/v2/accounts/%s/applications/%d", accountAddress, applicationID), nil)
-	return
-}
-
-// RawAccountApplicationInformation gets account information about a given app.
-func (client RestClient) RawAccountApplicationInformation(accountAddress string, applicationID uint64) (response []byte, err error) {
-	var blob Blob
-	err = client.getRaw(&blob, fmt.Sprintf("/v2/accounts/%s/applications/%d", accountAddress, applicationID), rawFormat{Format: "msgpack"})
-	response = blob
-	return
-}
-
-// AccountAssetInformation gets account information about a given app.
-func (client RestClient) AccountAssetInformation(accountAddress string, assetID uint64) (response generatedV2.AccountAssetResponse, err error) {
-	err = client.get(&response, fmt.Sprintf("/v2/accounts/%s/assets/%d", accountAddress, assetID), nil)
-	return
-}
-
-// RawAccountAssetInformation gets account information about a given app.
-func (client RestClient) RawAccountAssetInformation(accountAddress string, assetID uint64) (response []byte, err error) {
-	var blob Blob
-	err = client.getRaw(&blob, fmt.Sprintf("/v2/accounts/%s/assets/%d", accountAddress, assetID), rawFormat{Format: "msgpack"})
-	response = blob
 	return
 }
 
@@ -655,26 +581,8 @@ func (client RestClient) RawDryrun(data []byte) (response []byte, err error) {
 }
 
 // Proof gets a Merkle proof for a transaction in a block.
-func (client RestClient) Proof(txid string, round uint64, hashType crypto.HashType) (response generatedV2.ProofResponse, err error) {
+func (client RestClient) Proof(txid string, round uint64) (response generatedV2.ProofResponse, err error) {
 	txid = stripTransaction(txid)
-	err = client.get(&response, fmt.Sprintf("/v2/blocks/%d/transactions/%s/proof", round, txid), proofParams{HashType: hashType.String()})
-	return
-}
-
-// PostParticipationKey sends a key file to the node.
-func (client RestClient) PostParticipationKey(file []byte) (response generatedV2.PostParticipationResponse, err error) {
-	err = client.post(&response, "/v2/participation", file)
-	return
-}
-
-// GetParticipationKeys gets all of the participation keys
-func (client RestClient) GetParticipationKeys() (response generatedV2.ParticipationKeysResponse, err error) {
-	err = client.get(&response, "/v2/participation", nil)
-	return
-}
-
-// GetParticipationKeyByID gets a single participation key
-func (client RestClient) GetParticipationKeyByID(participationID string) (response generatedV2.ParticipationKeyResponse, err error) {
-	err = client.get(&response, fmt.Sprintf("/v2/participation/%s", participationID), nil)
+	err = client.get(&response, fmt.Sprintf("/v2/blocks/%d/transactions/%s/proof", round, txid), nil)
 	return
 }

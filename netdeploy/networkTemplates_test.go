@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2021 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -25,12 +25,9 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/config"
-	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
 func TestLoadConfig(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	a := require.New(t)
 
 	templateDir, err := filepath.Abs("../test/testdata/nettemplates")
@@ -42,8 +39,6 @@ func TestLoadConfig(t *testing.T) {
 }
 
 func TestLoadMissingConfig(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	a := require.New(t)
 
 	templateDir, err := filepath.Abs("../test/testdata/nettemplates")
@@ -53,8 +48,6 @@ func TestLoadMissingConfig(t *testing.T) {
 }
 
 func TestGenerateGenesis(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	a := require.New(t)
 
 	templateDir, _ := filepath.Abs("../test/testdata/nettemplates")
@@ -73,8 +66,6 @@ func TestGenerateGenesis(t *testing.T) {
 }
 
 func TestValidate(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	a := require.New(t)
 
 	templateDir, _ := filepath.Abs("../test/testdata/nettemplates")

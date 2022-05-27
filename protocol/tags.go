@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2021 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -23,7 +23,6 @@ type Tag string
 // Tags, in lexicographic sort order of tag values to avoid duplicates.
 // These tags must not contain a comma character because lists of tags
 // are encoded using a comma separator (see network/msgOfInterest.go).
-// The tags must be 2 bytes long.
 const (
 	UnknownMsgTag      Tag = "??"
 	AgreementVoteTag   Tag = "AV"

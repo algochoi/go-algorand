@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2021 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -19,10 +19,7 @@ package ledger
 import (
 	"testing"
 
-	"github.com/stretchr/testify/require"
-
 	"github.com/algorand/go-algorand/data/basics"
-	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
 func getEq(t *testing.T, cache *heapLRUCache, r basics.Round, expected string) {
@@ -46,8 +43,6 @@ func getNone(t *testing.T, cache *heapLRUCache, r basics.Round) {
 }
 
 func TestRoundLRUBasic(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	cache := heapLRUCache{maxEntries: 3}
 	cache.Put(1, "one")
 	cache.Put(2, "two")
@@ -63,33 +58,4 @@ func TestRoundLRUBasic(t *testing.T) {
 	getEq(t, &cache, 3, "three")
 	getNone(t, &cache, 2)
 	getNone(t, &cache, 4)
-}
-
-func TestRoundLRUReIndex(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
-	cache := heapLRUCache{
-		entries: lruHeap{
-			heap: []lruEntry{
-				{
-					useIndex: MaxInt - 2,
-				},
-				{
-					useIndex: MaxInt - 1,
-				},
-				{
-					useIndex: MaxInt - 3,
-				},
-			},
-		},
-		maxEntries:   3,
-		nextUseIndex: MaxInt - 1,
-	}
-
-	cache.inc()
-
-	require.Equal(t, 3, cache.nextUseIndex)
-	require.Equal(t, 1, cache.entries.heap[0].useIndex)
-	require.Equal(t, 2, cache.entries.heap[1].useIndex)
-	require.Equal(t, 0, cache.entries.heap[2].useIndex)
 }

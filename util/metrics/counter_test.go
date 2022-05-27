@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2021 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -22,7 +22,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/stretchr/testify/require"
 )
 
@@ -31,7 +30,6 @@ type CounterTest struct {
 }
 
 func TestMetricCounter(t *testing.T) {
-	partitiontest.PartitionTest(t)
 
 	test := &CounterTest{
 		MetricTest: NewMetricTest(),
@@ -65,8 +63,8 @@ func TestMetricCounter(t *testing.T) {
 
 	test.Lock()
 	defer test.Unlock()
-	// the the loop above we've created a single metric name with five different labels set ( host0, host1 .. host 4)
-	// let's see if we received all the 5 different labels.
+	// the the loop above we've created a single metric name with five diffrent labels set ( host0, host1 .. host 4)
+	// let's see if we received all the 5 diffrent labels.
 	require.Equal(t, 5, len(test.metrics), "Missing metric counts were reported.")
 
 	for k, v := range test.metrics {
@@ -77,8 +75,6 @@ func TestMetricCounter(t *testing.T) {
 }
 
 func TestMetricCounterFastInts(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	test := &CounterTest{
 		MetricTest: NewMetricTest(),
 	}
@@ -112,8 +108,8 @@ func TestMetricCounterFastInts(t *testing.T) {
 
 	test.Lock()
 	defer test.Unlock()
-	// the the loop above we've created a single metric name with five different labels set ( host0, host1 .. host 4)
-	// let's see if we received all the 5 different labels.
+	// the the loop above we've created a single metric name with five diffrent labels set ( host0, host1 .. host 4)
+	// let's see if we received all the 5 diffrent labels.
 	require.Equal(t, 1, len(test.metrics), "Missing metric counts were reported.")
 
 	for k, v := range test.metrics {
@@ -124,8 +120,6 @@ func TestMetricCounterFastInts(t *testing.T) {
 }
 
 func TestMetricCounterMixed(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	test := &CounterTest{
 		MetricTest: NewMetricTest(),
 	}
@@ -161,8 +155,8 @@ func TestMetricCounterMixed(t *testing.T) {
 
 	test.Lock()
 	defer test.Unlock()
-	// the the loop above we've created a single metric name with five different labels set ( host0, host1 .. host 4)
-	// let's see if we received all the 5 different labels.
+	// the the loop above we've created a single metric name with five diffrent labels set ( host0, host1 .. host 4)
+	// let's see if we received all the 5 diffrent labels.
 	require.Equal(t, 1, len(test.metrics), "Missing metric counts were reported.")
 
 	for k, v := range test.metrics {

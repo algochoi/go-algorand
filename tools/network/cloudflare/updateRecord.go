@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2021 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -90,7 +90,7 @@ func updateSRVRecordRequest(zoneID string, authEmail string, authKey string, rec
 	return request, nil
 }
 
-// parseUpdateDNSRecordResponse parses the response that was received as a result of a ListDNSRecordRequest
+// parseUpdateDNSRecordResponse parses the reponse that was received as a result of a ListDNSRecordRequest
 func parseUpdateDNSRecordResponse(response *http.Response) (*CreateDNSRecordResponse, error) {
 	return parseCreateDNSRecordResponse(response)
 }

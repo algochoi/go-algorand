@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2021 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -28,11 +28,9 @@ import (
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/protocol"
-	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
 func TestCdtSessionProto11Common(t *testing.T) {
-	partitiontest.PartitionTest(t)
 	sid := "test"
 	dbg := MockDebugControl{}
 	ch := make(chan Notification)
@@ -96,7 +94,6 @@ func TestCdtSessionProto11Common(t *testing.T) {
 }
 
 func TestCdtSessionProto11Breakpoints(t *testing.T) {
-	partitiontest.PartitionTest(t)
 	sid := "test"
 	dbg := MockDebugControl{}
 	ch := make(chan Notification)
@@ -181,7 +178,6 @@ func TestCdtSessionProto11Breakpoints(t *testing.T) {
 }
 
 func TestCdtSessionProto11Events(t *testing.T) {
-	partitiontest.PartitionTest(t)
 	sid := "test"
 	dbg := MockDebugControl{}
 	ch := make(chan Notification)
@@ -215,7 +211,6 @@ func TestCdtSessionProto11Events(t *testing.T) {
 }
 
 func TestCdtSessionProto11Controls(t *testing.T) {
-	partitiontest.PartitionTest(t)
 	sid := "test"
 	dbg := MockDebugControl{}
 	ch := make(chan Notification)
@@ -259,7 +254,6 @@ func TestCdtSessionProto11Controls(t *testing.T) {
 }
 
 func TestCdtSessionProto11Evaluate(t *testing.T) {
-	partitiontest.PartitionTest(t)
 	sid := "test"
 	dbg := MockDebugControl{}
 	ch := make(chan Notification)
@@ -298,7 +292,6 @@ func TestCdtSessionProto11Evaluate(t *testing.T) {
 }
 
 func TestCdtSessionProto11CallOnFunc(t *testing.T) {
-	partitiontest.PartitionTest(t)
 	sid := "test"
 	dbg := MockDebugControl{}
 	ch := make(chan Notification)
@@ -387,7 +380,6 @@ func TestCdtSessionProto11CallOnFunc(t *testing.T) {
 }
 
 func TestCdtSessionProto11GetProps(t *testing.T) {
-	partitiontest.PartitionTest(t)
 	sid := "test"
 	dbg := MockDebugControl{}
 	ch := make(chan Notification)
@@ -421,7 +413,6 @@ func TestCdtSessionProto11GetProps(t *testing.T) {
 }
 
 func TestCdtSessionStateToEvent(t *testing.T) {
-	partitiontest.PartitionTest(t)
 	sid := "test"
 	dbg := MockDebugControl{}
 	ch := make(chan Notification)
@@ -436,7 +427,7 @@ func TestCdtSessionStateToEvent(t *testing.T) {
 
 	// if completed and pause on competed then pause
 	state.completed.SetTo(true)
-	state.pauseOnCompleted.SetTo(true)
+	state.pauseOnCompeted.SetTo(true)
 	e = s.computeEvent(&state)
 	_, ok = (e).(cdt.DebuggerPausedEvent)
 	require.True(t, ok)
@@ -460,7 +451,6 @@ func TestCdtSessionStateToEvent(t *testing.T) {
 }
 
 func TestCdtSessionGetObjects(t *testing.T) {
-	partitiontest.PartitionTest(t)
 	sid := "test"
 	dbg := MockDebugControl{}
 	ch := make(chan Notification)
@@ -479,7 +469,7 @@ func TestCdtSessionGetObjects(t *testing.T) {
 	state := cdtState{
 		disassembly: "version 2\nint 1",
 		proto:       &proto,
-		txnGroup: transactions.WrapSignedTxnsWithAD([]transactions.SignedTxn{
+		txnGroup: []transactions.SignedTxn{
 			{
 				Txn: transactions.Transaction{
 					Type: protocol.PaymentTx,
@@ -496,7 +486,7 @@ func TestCdtSessionGetObjects(t *testing.T) {
 					},
 				},
 			},
-		}),
+		},
 		groupIndex: 0,
 		globals:    globals,
 		stack:      []basics.TealValue{{Type: basics.TealBytesType, Bytes: "test"}},
@@ -524,42 +514,6 @@ func TestCdtSessionGetObjects(t *testing.T) {
 					basics.AppIndex(1): {
 						"c": basics.TealValue{Type: basics.TealUintType, Uint: 1},
 						"b": basics.TealValue{Type: basics.TealBytesType, Bytes: "\x01\x02"},
-					},
-				},
-			},
-			logs: []string{"test log 1", "test log 2"},
-			innerTxns: []transactions.SignedTxnWithAD{
-				{
-					SignedTxn: transactions.SignedTxn{
-						Txn: transactions.Transaction{
-							Type: protocol.ApplicationCallTx,
-							ApplicationCallTxnFields: transactions.ApplicationCallTxnFields{
-								ApplicationArgs: [][]byte{{0, 1, 2, 3}},
-							},
-						},
-					},
-					ApplyData: transactions.ApplyData{
-						EvalDelta: transactions.EvalDelta{
-							InnerTxns: transactions.WrapSignedTxnsWithAD([]transactions.SignedTxn{
-								{
-									Txn: transactions.Transaction{
-										Type: protocol.PaymentTx,
-										Header: transactions.Header{
-											Sender: basics.Address{}, Fee: basics.MicroAlgos{Raw: 1000}, FirstValid: 10,
-										},
-									},
-								},
-								{
-									Txn: transactions.Transaction{
-										Type: protocol.ApplicationCallTx,
-										ApplicationCallTxnFields: transactions.ApplicationCallTxnFields{
-											ApplicationArgs: [][]byte{{0, 1, 2, 3}},
-										},
-									},
-								},
-							}),
-							Logs: []string{"test nested log"},
-						},
 					},
 				},
 			},
@@ -591,9 +545,6 @@ func TestCdtSessionGetObjects(t *testing.T) {
 		encodeAppLocalsAddr(basics.Address{}.String()),
 		encodeAppGlobalAppID("0"), encodeAppGlobalAppID("1"),
 		encodeAppLocalsAppID(basics.Address{}.String(), "1"),
-		encodeLogsID([]int{0}), encodeLogsID([]int{0, 1}),
-		encodeInnerTxnID([]int{0}), encodeInnerTxnID([]int{0, 0}),
-		encodeInnerTxnID([]int{0, 1}),
 	}
 	for _, k := range objIds {
 		req.Params = map[string]interface{}{"objectId": k, "generatePreview": true}

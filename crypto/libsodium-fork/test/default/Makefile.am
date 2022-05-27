@@ -67,8 +67,6 @@ EXTRA_DIST = \
 	secretstream.exp \
 	shorthash.exp \
 	sign.exp \
-	sign_bv_compat.exp \
-	batch.exp \
 	siphashx24.exp \
 	sodium_core.exp \
 	sodium_utils.exp \
@@ -148,8 +146,6 @@ DISTCLEANFILES = \
 	secretstream.res \
 	shorthash.res \
 	sign.res \
-	sign_bv_compat.res \
-	batch.res \
 	siphashx24.res \
 	sodium_core.res \
 	sodium_utils.res \
@@ -230,8 +226,6 @@ CLEANFILES = \
 	secretstream.final \
 	shorthash.final \
 	sign.final \
-	sign_bv_compat.final \
-	batch.final \
 	siphashx24.final \
 	sodium_core.final \
 	sodium_utils.final \
@@ -306,8 +300,6 @@ CLEANFILES = \
 	secretstream.nexe \
 	shorthash.nexe \
 	sign.nexe \
-	sign_bv_compat.nexe \
-	batch.nexe \
 	siphashx24.nexe \
 	sodium_core.nexe \
 	sodium_utils.nexe \
@@ -390,8 +382,6 @@ TESTS_TARGETS = \
 	secretstream \
 	shorthash \
 	sign \
-	sign_bv_compat \
-	batch \
 	sodium_core \
 	sodium_utils \
 	sodium_version \
@@ -605,12 +595,6 @@ shorthash_LDADD           = $(TESTS_LDADD)
 
 sign_SOURCE               = cmptest.h sign.c
 sign_LDADD                = $(TESTS_LDADD)
-
-sign_bv_compat_SOURCE               = cmptest.h sign_bv_compat.c
-sign_bv_compat_LDADD                = $(TESTS_LDADD)
-
-batch_SOURCE               = cmptest.h batch.c
-batch_LDADD                = $(TESTS_LDADD)
 
 siphashx24_SOURCE         = cmptest.h siphashx24.c
 siphashx24_LDADD          = $(TESTS_LDADD)

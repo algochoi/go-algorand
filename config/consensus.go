@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2021 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -89,7 +89,7 @@ type ConsensusParams struct {
 	// DefaultKeyDilution specifies the granularity of top-level ephemeral
 	// keys. KeyDilution is the number of second-level keys in each batch,
 	// signed by a top-level "batch" key.  The default value can be
-	// overridden in the account state.
+	// overriden in the account state.
 	DefaultKeyDilution uint64
 
 	// MinBalance specifies the minimum balance that can appear in
@@ -103,29 +103,11 @@ type ConsensusParams struct {
 	// a way of making the spender subsidize the cost of storing this transaction.
 	MinTxnFee uint64
 
-	// EnableFeePooling specifies that the sum of the fees in a
-	// group must exceed one MinTxnFee per Txn, rather than check that
-	// each Txn has a MinFee.
-	EnableFeePooling bool
-
-	// EnableAppCostPooling specifies that the sum of fees for application calls
-	// in a group is checked against the sum of the budget for application calls,
-	// rather than check each individual app call is within the budget.
-	EnableAppCostPooling bool
-
 	// RewardUnit specifies the number of MicroAlgos corresponding to one reward
 	// unit.
 	//
 	// Rewards are received by whole reward units.  Fractions of
 	// RewardUnits do not receive rewards.
-	//
-	// Ensure both considerations below  are taken into account if RewardUnit is planned for change:
-	// 1. RewardUnits should not be changed without touching all accounts to apply their rewards
-	// based on the old RewardUnits and then use the new RewardUnits for all subsequent calculations.
-	// 2. Having a consistent RewardUnit is also important for preserving
-	// a constant amount of total algos in the system:
-	// the block header tracks how many reward units worth of algos are in existence
-	// and have logically received rewards.
 	RewardUnit uint64
 
 	// RewardsRateRefreshInterval is the number of rounds after which the
@@ -160,7 +142,8 @@ type ConsensusParams struct {
 	// critical path
 	AgreementFilterTimeoutPeriod0 time.Duration
 
-	FastRecoveryLambda time.Duration // time between fast recovery attempts
+	FastRecoveryLambda    time.Duration // time between fast recovery attempts
+	FastPartitionRecovery bool          // set when fast partition recovery is enabled
 
 	// how to commit to the payset: flat or merkle tree
 	PaysetCommit PaysetCommitType
@@ -244,18 +227,9 @@ type ConsensusParams struct {
 	// max sum([len(arg) for arg in txn.ApplicationArgs])
 	MaxAppTotalArgLen int
 
-	// maximum byte len of application approval program or clear state
-	// When MaxExtraAppProgramPages > 0, this is the size of those pages.
-	// So two "extra pages" would mean 3*MaxAppProgramLen bytes are available.
+	// maximum length of application approval program or clear state
+	// program in bytes
 	MaxAppProgramLen int
-
-	// maximum total length of an application's programs (approval + clear state)
-	// When MaxExtraAppProgramPages > 0, this is the size of those pages.
-	// So two "extra pages" would mean 3*MaxAppTotalProgramLen bytes are available.
-	MaxAppTotalProgramLen int
-
-	// extra length for application program in pages. A page is MaxAppProgramLen bytes
-	MaxExtraAppProgramPages int
 
 	// maximum number of accounts in the ApplicationCall Accounts field.
 	// this determines, in part, the maximum number of balance records
@@ -272,10 +246,6 @@ type ConsensusParams struct {
 	// be read in the transaction
 	MaxAppTxnForeignAssets int
 
-	// maximum number of "foreign references" (accounts, asa, app)
-	// that can be attached to a single app call.
-	MaxAppTotalTxnReferences int
-
 	// maximum cost of application approval program or clear state program
 	MaxAppProgramCost int
 
@@ -286,23 +256,6 @@ type ConsensusParams struct {
 	// maximum length of a bytes value used in an application's global or
 	// local key/value store
 	MaxAppBytesValueLen int
-
-	// maximum sum of the lengths of the key and value of one app state entry
-	MaxAppSumKeyValueLens int
-
-	// maximum number of inner transactions that can be created by an app call.
-	// with EnableInnerTransactionPooling, limit is multiplied by MaxTxGroupSize
-	// and enforced over the whole group.
-	MaxInnerTransactions int
-
-	// should the number of inner transactions be pooled across group?
-	EnableInnerTransactionPooling bool
-
-	// provide greater isolation for clear state programs
-	IsolateClearState bool
-
-	// The minimum app version that can be called in an inner transaction
-	MinInnerApplVersion uint64
 
 	// maximum number of applications a single account can create and store
 	// AppParams for at once
@@ -407,39 +360,6 @@ type ConsensusParams struct {
 	// 5. checking that in the case of going online the VoteFirst is less or equal to the LastValid+1.
 	// 6. checking that in the case of going online the VoteFirst is less or equal to the next network round.
 	EnableKeyregCoherencyCheck bool
-
-	EnableExtraPagesOnAppUpdate bool
-
-	// MaxProposedExpiredOnlineAccounts is the maximum number of online accounts, which need
-	// to be taken offline, that would be proposed to be taken offline.
-	MaxProposedExpiredOnlineAccounts int
-
-	// EnableAccountDataResourceSeparation enables the support for extended application and asset storage
-	// in a separate table.
-	EnableAccountDataResourceSeparation bool
-
-	//EnableBatchVerification enable the use of the batch verification algorithm.
-	EnableBatchVerification bool
-
-	// When rewards rate changes, use the new value immediately.
-	RewardsCalculationFix bool
-
-	// EnableStateProofKeyregCheck enables the check for stateProof key on key registration
-	EnableStateProofKeyregCheck bool
-
-	// MaxKeyregValidPeriod defines the longest period (in rounds) allowed for a keyreg transaction.
-	// This number sets a limit to prevent the number of StateProof keys generated by the user from being too large, and also checked by the WellFormed method.
-	// The hard-limit for number of StateProof keys is derived from the maximum depth allowed for the merkle signature scheme's tree - 2^16.
-	// More keys => deeper merkle tree => longer proof required => infeasible for our SNARK.
-	MaxKeyregValidPeriod uint64
-
-	// UnifyInnerTxIDs enables a consistent, unified way of computing inner transaction IDs
-	UnifyInnerTxIDs bool
-
-	// EnableSHA256TxnCommitmentHeader enables the creation of a transaction vector commitment tree using SHA256 hash function. (vector commitment extends Merkle tree by having a position binding property).
-	// This new header is in addition to the existing SHA512_256 merkle root.
-	// It is useful for verifying transaction on different blockchains, as some may not support SHA512_256 OPCODE natively but SHA256 is common.
-	EnableSHA256TxnCommitmentHeader bool
 }
 
 // PaysetCommitType enumerates possible ways for the block header to commit to
@@ -479,13 +399,6 @@ var MaxEvalDeltaAccounts int
 // in a StateDelta, used for decoding purposes.
 var MaxStateDeltaKeys int
 
-// MaxLogCalls is the highest allowable log messages that may appear in
-// any version, used only for decoding purposes. Never decrease this value.
-var MaxLogCalls int
-
-// MaxInnerTransactionsPerDelta is the maximum number of inner transactions in one EvalDelta
-var MaxInnerTransactionsPerDelta int
-
 // MaxLogicSigMaxSize is the largest logical signature appear in any of the supported
 // protocols, used for decoding purposes.
 var MaxLogicSigMaxSize int
@@ -505,18 +418,6 @@ var MaxAppProgramLen int
 // MaxBytesKeyValueLen is a maximum length of key or value across all protocols.
 // used for decoding purposes.
 var MaxBytesKeyValueLen int
-
-// MaxExtraAppProgramLen is the maximum extra app program length supported by any
-// of the consensus protocols. used for decoding purposes.
-var MaxExtraAppProgramLen int
-
-// MaxAvailableAppProgramLen is the largest supported app program size include the extra pages
-//supported supported by any of the consensus protocols. used for decoding purposes.
-var MaxAvailableAppProgramLen int
-
-// MaxProposedExpiredOnlineAccounts is the maximum number of online accounts, which need
-// to be taken offline, that would be proposed to be taken offline.
-var MaxProposedExpiredOnlineAccounts int
 
 func checkSetMax(value int, curMax *int) {
 	if value > *curMax {
@@ -547,14 +448,6 @@ func checkSetAllocBounds(p ConsensusParams) {
 	// MaxBytesKeyValueLen is max of MaxAppKeyLen and MaxAppBytesValueLen
 	checkSetMax(p.MaxAppKeyLen, &MaxBytesKeyValueLen)
 	checkSetMax(p.MaxAppBytesValueLen, &MaxBytesKeyValueLen)
-	checkSetMax(p.MaxExtraAppProgramPages, &MaxExtraAppProgramLen)
-	// MaxAvailableAppProgramLen is the max of supported app program size
-	MaxAvailableAppProgramLen = MaxAppProgramLen * (1 + MaxExtraAppProgramLen)
-	// There is no consensus parameter for MaxLogCalls and MaxAppProgramLen as an approximation
-	// Its value is much larger than any possible reasonable MaxLogCalls value in future
-	checkSetMax(p.MaxAppProgramLen, &MaxLogCalls)
-	checkSetMax(p.MaxInnerTransactions*p.MaxTxGroupSize, &MaxInnerTransactionsPerDelta)
-	checkSetMax(p.MaxProposedExpiredOnlineAccounts, &MaxProposedExpiredOnlineAccounts)
 }
 
 // SaveConfigurableConsensus saves the configurable protocols file to the provided data directory.
@@ -621,7 +514,7 @@ func (cp ConsensusProtocols) Merge(configurableConsensus ConsensusProtocols) Con
 	return staticConsensus
 }
 
-// LoadConfigurableConsensusProtocols loads the configurable protocols from the data directory
+// LoadConfigurableConsensusProtocols loads the configurable protocols from the data directroy
 func LoadConfigurableConsensusProtocols(dataDirectory string) error {
 	newConsensus, err := PreloadConfigurableConsensusProtocols(dataDirectory)
 	if err != nil {
@@ -637,7 +530,7 @@ func LoadConfigurableConsensusProtocols(dataDirectory string) error {
 	return nil
 }
 
-// PreloadConfigurableConsensusProtocols loads the configurable protocols from the data directory
+// PreloadConfigurableConsensusProtocols loads the configurable protocols from the data directroy
 // and merge it with a copy of the Consensus map. Then, it returns it to the caller.
 func PreloadConfigurableConsensusProtocols(dataDirectory string) (ConsensusProtocols, error) {
 	consensusProtocolPath := filepath.Join(dataDirectory, ConfigurableConsensusProtocolsFilename)
@@ -753,6 +646,7 @@ func initConsensusProtocols() {
 
 	// v10 introduces fast partition recovery (and also raises NumProposers).
 	v10 := v9
+	v10.FastPartitionRecovery = true
 	v10.NumProposers = 20
 	v10.LateCommitteeSize = 500
 	v10.LateCommitteeThreshold = 320
@@ -919,10 +813,8 @@ func initConsensusProtocols() {
 	v24.MaxAppArgs = 16
 	v24.MaxAppTotalArgLen = 2048
 	v24.MaxAppProgramLen = 1024
-	v24.MaxAppTotalProgramLen = 2048 // No effect until v28, when MaxAppProgramLen increased
 	v24.MaxAppKeyLen = 64
 	v24.MaxAppBytesValueLen = 64
-	v24.MaxAppSumKeyValueLens = 128 // Set here to have no effect until MaxAppBytesValueLen increases
 
 	// 0.1 Algos (Same min balance cost as an Asset)
 	v24.AppFlatParamsMinBalance = 100000
@@ -936,11 +828,6 @@ func initConsensusProtocols() {
 
 	// Can look up 2 assets to see asset parameters
 	v24.MaxAppTxnForeignAssets = 2
-
-	// Intended to have no effect in v24 (it's set to accounts +
-	// asas + apps). In later vers, it allows increasing the
-	// individual limits while maintaining same max references.
-	v24.MaxAppTotalTxnReferences = 8
 
 	// 64 byte keys @ ~333 microAlgos/byte + delta
 	v24.SchemaMinBalancePerEntry = 25000
@@ -1012,144 +899,33 @@ func initConsensusProtocols() {
 	// a bit :
 	v26.ApprovedUpgrades[protocol.ConsensusV27] = 60000
 
-	// v28 introduces new TEAL features, larger program size, fee pooling and longer asset max URL
-	v28 := v27
-	v28.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
-
-	// Enable TEAL 4 / AVM 0.9
-	v28.LogicSigVersion = 4
-	// Enable support for larger app program size
-	v28.MaxExtraAppProgramPages = 3
-	v28.MaxAppProgramLen = 2048
-	// Increase asset URL length to allow for IPFS URLs
-	v28.MaxAssetURLBytes = 96
-	// Let the bytes value take more space. Key+Value is still limited to 128
-	v28.MaxAppBytesValueLen = 128
-
-	// Individual limits raised
-	v28.MaxAppTxnForeignApps = 8
-	v28.MaxAppTxnForeignAssets = 8
-
-	// MaxAppTxnAccounts has not been raised yet.  It is already
-	// higher (4) and there is a multiplicative effect in
-	// "reachability" between accounts and creatables, so we
-	// retain 4 x 4 as worst case.
-
-	v28.EnableFeePooling = true
-	v28.EnableKeyregCoherencyCheck = true
-
-	Consensus[protocol.ConsensusV28] = v28
-
-	// v27 can be upgraded to v28, with an update delay of 7 days ( see calculation above )
-	v27.ApprovedUpgrades[protocol.ConsensusV28] = 140000
-
-	// v29 fixes application update by using ExtraProgramPages in size calculations
-	v29 := v28
-	v29.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
-
-	// Enable ExtraProgramPages for application update
-	v29.EnableExtraPagesOnAppUpdate = true
-
-	Consensus[protocol.ConsensusV29] = v29
-
-	// v28 can be upgraded to v29, with an update delay of 3 days ( see calculation above )
-	v28.ApprovedUpgrades[protocol.ConsensusV29] = 60000
-
-	// v30 introduces AVM 1.0 and TEAL 5, increases the app opt in limit to 50,
-	// and allows costs to be pooled in grouped stateful transactions.
-	v30 := v29
-	v30.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
-
-	// Enable TEAL 5 / AVM 1.0
-	v30.LogicSigVersion = 5
-
-	// Enable App calls to pool budget in grouped transactions
-	v30.EnableAppCostPooling = true
-
-	// Enable Inner Transactions, and set maximum number. 0 value is
-	// disabled.  Value > 0 also activates storage of creatable IDs in
-	// ApplyData, as that is required to support REST API when inner
-	// transactions are activated.
-	v30.MaxInnerTransactions = 16
-
-	// Allow 50 app opt ins
-	v30.MaxAppsOptedIn = 50
-
-	Consensus[protocol.ConsensusV30] = v30
-
-	// v29 can be upgraded to v30, with an update delay of 7 days ( see calculation above )
-	v29.ApprovedUpgrades[protocol.ConsensusV30] = 140000
-
-	v31 := v30
-	v31.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
-	v31.EnableBatchVerification = true
-	v31.RewardsCalculationFix = true
-	v31.MaxProposedExpiredOnlineAccounts = 32
-
-	// Enable TEAL 6 / AVM 1.1
-	v31.LogicSigVersion = 6
-	v31.EnableInnerTransactionPooling = true
-	v31.IsolateClearState = true
-	v31.MinInnerApplVersion = 6
-
-	// stat proof key registration
-	v31.EnableStateProofKeyregCheck = true
-
-	// Maximum validity period for key registration, to prevent generating too many StateProof keys
-	v31.MaxKeyregValidPeriod = 256*(1<<16) - 1
-
-	Consensus[protocol.ConsensusV31] = v31
-
-	// v30 can be upgraded to v31, with an update delay of 7 days ( see calculation above )
-	v30.ApprovedUpgrades[protocol.ConsensusV31] = 140000
-
-	v32 := v31
-	v32.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
-
-	// Enable extended application storage; binaries that contain support for this
-	// flag would already be restructuring their internal storage for extended
-	// application storage, and therefore would not produce catchpoints and/or
-	// catchpoint labels prior to this feature being enabled.
-	v32.EnableAccountDataResourceSeparation = true
-
-	// Remove limits on MinimumBalance
-	v32.MaximumMinimumBalance = 0
-
-	// Remove limits on assets / account.
-	v32.MaxAssetsPerAccount = 0
-
-	// Remove limits on maximum number of apps a single account can create
-	v32.MaxAppsCreated = 0
-
-	// Remove limits on maximum number of apps a single account can opt into
-	v32.MaxAppsOptedIn = 0
-
-	Consensus[protocol.ConsensusV32] = v32
-
-	// v31 can be upgraded to v32, with an update delay of 7 days ( see calculation above )
-	v31.ApprovedUpgrades[protocol.ConsensusV32] = 140000
-
 	// ConsensusFuture is used to test features that are implemented
 	// but not yet released in a production protocol version.
-	vFuture := v32
+	vFuture := v27
 	vFuture.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
 
 	// FilterTimeout for period 0 should take a new optimized, configured value, need to revisit this later
 	vFuture.AgreementFilterTimeoutPeriod0 = 4 * time.Second
 
 	// Enable compact certificates.
-	vFuture.CompactCertRounds = 256
+	vFuture.CompactCertRounds = 128
 	vFuture.CompactCertTopVoters = 1024 * 1024
 	vFuture.CompactCertVotersLookback = 16
 	vFuture.CompactCertWeightThreshold = (1 << 32) * 30 / 100
 	vFuture.CompactCertSecKQ = 128
 
-	vFuture.LogicSigVersion = 7
-	vFuture.MinInnerApplVersion = 4
+	vFuture.EnableKeyregCoherencyCheck = true
 
-	vFuture.UnifyInnerTxIDs = true
+	// enable the InitialRewardsRateCalculation fix
+	vFuture.InitialRewardsRateCalculation = true
+	// Enable transaction Merkle tree.
+	vFuture.PaysetCommit = PaysetCommitMerkle
 
-	vFuture.EnableSHA256TxnCommitmentHeader = true
+	// Enable TEAL 4
+	vFuture.LogicSigVersion = 4
+
+	// Increase asset URL length to allow for IPFS URLs
+	vFuture.MaxAssetURLBytes = 96
 
 	Consensus[protocol.ConsensusFuture] = vFuture
 }

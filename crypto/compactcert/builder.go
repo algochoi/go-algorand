@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2021 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -21,7 +21,6 @@ import (
 
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/crypto/merklearray"
-	"github.com/algorand/go-algorand/crypto/merklesignature"
 	"github.com/algorand/go-algorand/data/basics"
 )
 
@@ -46,7 +45,7 @@ type Builder struct {
 	sigs          []sigslot // Indexed by pos in participants
 	sigsHasValidL bool      // The L values in sigs are consistent with weights
 	signedWeight  uint64    // Total weight of signatures so far
-	participants  []basics.Participant
+	participants  []Participant
 	parttree      *merklearray.Tree
 
 	// Cached cert, if Build() was called and no subsequent
@@ -58,7 +57,7 @@ type Builder struct {
 // to be signed, as well as other security parameters, are specified in
 // param.  The participants that will sign the message are in part and
 // parttree.
-func MkBuilder(param Params, part []basics.Participant, parttree *merklearray.Tree) (*Builder, error) {
+func MkBuilder(param Params, part []Participant, parttree *merklearray.Tree) (*Builder, error) {
 	npart := len(part)
 
 	b := &Builder{
@@ -82,7 +81,7 @@ func (b *Builder) Present(pos uint64) bool {
 // Add a signature to the set of signatures available for building a certificate.
 // verifySig should be set to true in production; setting it to false is useful
 // for benchmarking to avoid the cost of signature checks.
-func (b *Builder) Add(pos uint64, sig merklesignature.Signature, verifySig bool) error {
+func (b *Builder) Add(pos uint64, sig crypto.OneTimeSignature, verifySig bool) error {
 	if b.Present(pos) {
 		return fmt.Errorf("position %d already added", pos)
 	}
@@ -99,15 +98,14 @@ func (b *Builder) Add(pos uint64, sig merklesignature.Signature, verifySig bool)
 	}
 
 	// Check signature
-	if verifySig {
-		if err := p.PK.Verify(uint64(b.SigRound), b.Msg, sig); err != nil {
-			return err
-		}
+	ephID := basics.OneTimeIDForRound(b.SigRound, p.KeyDilution)
+	if verifySig && !p.PK.Verify(ephID, b.Msg, sig) {
+		return fmt.Errorf("signature does not verify under ID %v", ephID)
 	}
 
 	// Remember the signature
 	b.sigs[pos].Weight = p.Weight
-	b.sigs[pos].Sig.Signature = sig
+	b.sigs[pos].Sig.OneTimeSignature = sig
 	b.signedWeight += p.Weight
 	b.cert = nil
 	b.sigsHasValidL = false
@@ -122,6 +120,21 @@ func (b *Builder) Ready() bool {
 // SignedWeight returns the total weight of signatures added so far.
 func (b *Builder) SignedWeight() uint64 {
 	return b.signedWeight
+}
+
+//msgp:ignore sigsToCommit
+type sigsToCommit []sigslot
+
+func (sc sigsToCommit) Length() uint64 {
+	return uint64(len(sc))
+}
+
+func (sc sigsToCommit) GetHash(pos uint64) (crypto.Digest, error) {
+	if pos >= uint64(len(sc)) {
+		return crypto.Digest{}, fmt.Errorf("pos %d past end %d", pos, len(sc))
+	}
+
+	return crypto.HashObj(&sc[pos].sigslotCommit), nil
 }
 
 // coinIndex returns the position pos in the sigs array such that the sum
@@ -174,8 +187,7 @@ func (b *Builder) Build() (*Cert, error) {
 	}
 	b.sigsHasValidL = true
 
-	hfactory := crypto.HashFactory{HashType: HashType}
-	sigtree, err := merklearray.BuildVectorCommitmentTree(committableSignatureSlotArray(b.sigs), hfactory)
+	sigtree, err := merklearray.Build(sigsToCommit(b.sigs))
 	if err != nil {
 		return nil, err
 	}
@@ -193,7 +205,7 @@ func (b *Builder) Build() (*Cert, error) {
 	}
 
 	var proofPositions []uint64
-	msgHash := crypto.GenericHashObj(hfactory.NewHash(), b.Msg)
+	msgHash := crypto.HashObj(b.Msg)
 
 	for j := uint64(0); j < nr; j++ {
 		choice := coinChoice{
@@ -230,18 +242,15 @@ func (b *Builder) Build() (*Cert, error) {
 		proofPositions = append(proofPositions, pos)
 	}
 
-	sigProofs, err := sigtree.Prove(proofPositions)
+	c.SigProofs, err = sigtree.Prove(proofPositions)
 	if err != nil {
 		return nil, err
 	}
 
-	partProofs, err := b.parttree.Prove(proofPositions)
+	c.PartProofs, err = b.parttree.Prove(proofPositions)
 	if err != nil {
 		return nil, err
 	}
-
-	c.SigProofs = *sigProofs
-	c.PartProofs = *partProofs
 
 	return c, nil
 }

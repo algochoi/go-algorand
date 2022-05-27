@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2021 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -20,6 +20,7 @@ import (
 	"fmt"
 
 	"github.com/algorand/go-algorand/data/basics"
+	"github.com/algorand/go-algorand/logging"
 )
 
 // A proposalSeeker finds the vote with the lowest credential until freeze() is
@@ -179,7 +180,7 @@ func (t *proposalTracker) handle(r routerHandle, p player, e event) event {
 		return se
 	}
 
-	r.t.log.Panicf("proposalTracker: bad event type: observed an event of type %v", e.t())
+	logging.Base().Panicf("proposalTracker: bad event type: observed an event of type %v", e.t())
 	panic("not reached")
 }
 

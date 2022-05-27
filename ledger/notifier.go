@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2021 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -17,8 +17,6 @@
 package ledger
 
 import (
-	"context"
-	"database/sql"
 	"sync"
 
 	"github.com/algorand/go-deadlock"
@@ -87,7 +85,7 @@ func (bn *blockNotifier) close() {
 	bn.closing.Wait()
 }
 
-func (bn *blockNotifier) loadFromDisk(l ledgerForTracker, _ basics.Round) error {
+func (bn *blockNotifier) loadFromDisk(l ledgerForTracker) error {
 	bn.cond = sync.NewCond(&bn.mu)
 	bn.running = true
 	bn.pendingBlocks = nil
@@ -110,27 +108,6 @@ func (bn *blockNotifier) newBlock(blk bookkeeping.Block, delta ledgercore.StateD
 	bn.cond.Broadcast()
 }
 
-func (bn *blockNotifier) committedUpTo(rnd basics.Round) (retRound, lookback basics.Round) {
-	return rnd, basics.Round(0)
-}
-
-func (bn *blockNotifier) prepareCommit(dcc *deferredCommitContext) error {
-	return nil
-}
-
-func (bn *blockNotifier) commitRound(context.Context, *sql.Tx, *deferredCommitContext) error {
-	return nil
-}
-
-func (bn *blockNotifier) postCommit(ctx context.Context, dcc *deferredCommitContext) {
-}
-
-func (bn *blockNotifier) postCommitUnlocked(ctx context.Context, dcc *deferredCommitContext) {
-}
-
-func (bn *blockNotifier) handleUnorderedCommit(*deferredCommitContext) {
-}
-
-func (bn *blockNotifier) produceCommittingTask(committedRound basics.Round, dbRound basics.Round, dcr *deferredCommitRange) *deferredCommitRange {
-	return dcr
+func (bn *blockNotifier) committedUpTo(rnd basics.Round) basics.Round {
+	return rnd
 }

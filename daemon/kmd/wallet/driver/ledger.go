@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2021 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -22,7 +22,6 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
-	"os"
 	"sort"
 	"strings"
 
@@ -62,7 +61,6 @@ type LedgerWalletDriver struct {
 	mu      deadlock.Mutex
 	wallets map[string]*LedgerWallet
 	log     logging.Logger
-	cfg     config.LedgerWalletDriverConfig
 }
 
 // LedgerWallet represents a particular wallet under the
@@ -99,18 +97,9 @@ func (lwd *LedgerWalletDriver) FetchWallet(id []byte) (w wallet.Wallet, err erro
 // scanWalletsLocked enumerates attached ledger devices and stores them.
 // lwd.mu must be held
 func (lwd *LedgerWalletDriver) scanWalletsLocked() error {
-
-	if os.Getenv("KMD_NOUSB") != "" {
-		return nil
-	}
-
 	// Initialize wallets map
 	if lwd.wallets == nil {
 		lwd.wallets = make(map[string]*LedgerWallet)
-	}
-
-	if lwd.cfg.Disable {
-		return nil
 	}
 
 	// Enumerate attached wallet devices
@@ -145,7 +134,6 @@ func (lwd *LedgerWalletDriver) scanWalletsLocked() error {
 
 		newDevs = append(newDevs, LedgerUSB{
 			hiddev: dev,
-			info:   info,
 		})
 	}
 
@@ -185,8 +173,6 @@ func (lwd *LedgerWalletDriver) InitWithConfig(cfg config.KMDConfig, log logging.
 	defer lwd.mu.Unlock()
 
 	lwd.log = log
-	lwd.cfg = cfg.DriverConfig.LedgerWalletDriverConfig
-
 	return lwd.scanWalletsLocked()
 }
 

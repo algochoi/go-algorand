@@ -320,10 +320,6 @@ func (l logger) source() *logrus.Entry {
 	if !ok {
 		file = "<???>"
 		line = 1
-		event = event.WithFields(logrus.Fields{
-			"file": file,
-			"line": line,
-		})
 	} else {
 		// Add file name and number
 		slash := strings.LastIndex(file, "/")
@@ -392,13 +388,6 @@ func (l logger) GetTelemetrySession() string {
 		return ""
 	}
 	return l.loggerState.telemetry.telemetryConfig.SessionGUID
-}
-
-func (l logger) GetTelemetryVersion() string {
-	if !l.GetTelemetryEnabled() {
-		return ""
-	}
-	return l.loggerState.telemetry.telemetryConfig.Version
 }
 
 func (l logger) GetTelemetryHostName() string {

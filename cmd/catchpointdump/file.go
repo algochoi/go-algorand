@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2021 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -19,21 +19,21 @@ package main
 import (
 	"archive/tar"
 	"bufio"
+	"bytes"
 	"context"
 	"database/sql"
 	"encoding/json"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"os"
 	"strings"
 	"time"
 
 	"github.com/spf13/cobra"
 
-	cmdutil "github.com/algorand/go-algorand/cmd/util"
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/data/basics"
-	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/ledger"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/logging"
@@ -43,13 +43,10 @@ import (
 
 var tarFile string
 var outFileName string
-var excludedFields *cmdutil.CobraStringSliceValue = cmdutil.MakeCobraStringSliceValue(nil, []string{"version", "catchpoint"})
 
 func init() {
 	fileCmd.Flags().StringVarP(&tarFile, "tar", "t", "", "Specify the tar file to process")
 	fileCmd.Flags().StringVarP(&outFileName, "output", "o", "", "Specify an outfile for the dump ( i.e. tracker.dump.txt )")
-	fileCmd.Flags().BoolVarP(&loadOnly, "load", "l", false, "Load only, do not dump")
-	fileCmd.Flags().VarP(excludedFields, "exclude-fields", "e", "List of fields to exclude from the dump: ["+excludedFields.AllowedString()+"]")
 }
 
 var fileCmd = &cobra.Command{
@@ -62,24 +59,11 @@ var fileCmd = &cobra.Command{
 			cmd.HelpFunc()(cmd, args)
 			return
 		}
-		stats, err := os.Stat(tarFile)
-		if err != nil {
-			reportErrorf("Unable to stat '%s' : %v", tarFile, err)
+		tarFileBytes, err := ioutil.ReadFile(tarFile)
+		if err != nil || len(tarFileBytes) == 0 {
+			reportErrorf("Unable to read '%s' : %v", tarFile, err)
 		}
-
-		tarSize := stats.Size()
-		if tarSize == 0 {
-			reportErrorf("Empty file '%s' : %v", tarFile, err)
-		}
-		// TODO: store CurrentProtocol in catchpoint file header.
-		// As a temporary workaround use a current protocol version.
-		genesisInitState := ledgercore.InitState{
-			Block: bookkeeping.Block{BlockHeader: bookkeeping.BlockHeader{
-				UpgradeState: bookkeeping.UpgradeState{
-					CurrentProtocol: protocol.ConsensusCurrentVersion,
-				},
-			}},
-		}
+		genesisInitState := ledger.InitState{}
 		cfg := config.GetDefaultLocal()
 		l, err := ledger.OpenLedger(logging.Base(), "./ledger", false, genesisInitState, cfg)
 		if err != nil {
@@ -89,11 +73,9 @@ var fileCmd = &cobra.Command{
 		defer os.Remove("./ledger.block.sqlite")
 		defer os.Remove("./ledger.block.sqlite-shm")
 		defer os.Remove("./ledger.block.sqlite-wal")
-		if !loadOnly {
-			defer os.Remove("./ledger.tracker.sqlite")
-			defer os.Remove("./ledger.tracker.sqlite-shm")
-			defer os.Remove("./ledger.tracker.sqlite-wal")
-		}
+		defer os.Remove("./ledger.tracker.sqlite")
+		defer os.Remove("./ledger.tracker.sqlite-shm")
+		defer os.Remove("./ledger.tracker.sqlite-wal")
 		defer l.Close()
 
 		catchupAccessor := ledger.MakeCatchpointCatchupAccessor(l, logging.Base())
@@ -102,32 +84,23 @@ var fileCmd = &cobra.Command{
 			reportErrorf("Unable to initialize catchup database : %v", err)
 		}
 		var fileHeader ledger.CatchpointFileHeader
-
-		reader, err := os.Open(tarFile)
-		if err != nil {
-			reportErrorf("Unable to read '%s' : %v", tarFile, err)
-		}
-		defer reader.Close()
-
-		fileHeader, err = loadCatchpointIntoDatabase(context.Background(), catchupAccessor, reader, tarSize)
+		fileHeader, err = loadCatchpointIntoDatabase(context.Background(), catchupAccessor, tarFileBytes)
 		if err != nil {
 			reportErrorf("Unable to load catchpoint file into in-memory database : %v", err)
 		}
 
-		if !loadOnly {
-			outFile := os.Stdout
-			if outFileName != "" {
-				outFile, err = os.OpenFile(outFileName, os.O_RDWR|os.O_TRUNC|os.O_CREATE, 0755)
-				if err != nil {
-					reportErrorf("Unable to create file '%s' : %v", outFileName, err)
-				}
-				defer outFile.Close()
-			}
-
-			err = printAccountsDatabase("./ledger.tracker.sqlite", fileHeader, outFile, excludedFields.GetSlice())
+		outFile := os.Stdout
+		if outFileName != "" {
+			outFile, err = os.OpenFile(outFileName, os.O_RDWR|os.O_TRUNC|os.O_CREATE, 0755)
 			if err != nil {
-				reportErrorf("Unable to print account database : %v", err)
+				reportErrorf("Unable to create file '%s' : %v", outFileName, err)
 			}
+			defer outFile.Close()
+		}
+
+		err = printAccountsDatabase("./ledger.tracker.sqlite", fileHeader, outFile)
+		if err != nil {
+			reportErrorf("Unable to print account database : %v", err)
 		}
 	},
 }
@@ -142,14 +115,15 @@ func printLoadCatchpointProgressLine(progress int, barLength int, dld int64) {
 	fmt.Printf(escapeCursorUp+escapeDeleteLine+outString+" %s\n", formatSize(dld))
 }
 
-func loadCatchpointIntoDatabase(ctx context.Context, catchupAccessor ledger.CatchpointCatchupAccessor, tarFile io.Reader, tarSize int64) (fileHeader ledger.CatchpointFileHeader, err error) {
+func loadCatchpointIntoDatabase(ctx context.Context, catchupAccessor ledger.CatchpointCatchupAccessor, fileBytes []byte) (fileHeader ledger.CatchpointFileHeader, err error) {
 	fmt.Printf("\n")
 	printLoadCatchpointProgressLine(0, 50, 0)
 	lastProgressUpdate := time.Now()
 	progress := uint64(0)
 	defer printLoadCatchpointProgressLine(0, 0, 0)
 
-	tarReader := tar.NewReader(tarFile)
+	reader := bytes.NewReader(fileBytes)
+	tarReader := tar.NewReader(reader)
 	var downloadProgress ledger.CatchpointCatchupAccessorProgress
 	for {
 		header, err := tarReader.Next()
@@ -184,9 +158,9 @@ func loadCatchpointIntoDatabase(ctx context.Context, catchupAccessor ledger.Catc
 			// we already know it's valid, since we validated that above.
 			protocol.Decode(balancesBlockBytes, &fileHeader)
 		}
-		if time.Since(lastProgressUpdate) > 50*time.Millisecond && tarSize > 0 {
+		if time.Now().Sub(lastProgressUpdate) > 50*time.Millisecond && len(fileBytes) > 0 {
 			lastProgressUpdate = time.Now()
-			printLoadCatchpointProgressLine(int(float64(progress)*50.0/float64(tarSize)), 50, int64(progress))
+			printLoadCatchpointProgressLine(int(float64(progress)*50.0/float64(len(fileBytes))), 50, int64(progress))
 		}
 	}
 }
@@ -204,7 +178,7 @@ func printDumpingCatchpointProgressLine(progress int, barLength int, dld int64) 
 	fmt.Printf(escapeCursorUp + escapeDeleteLine + outString + "\n")
 }
 
-func printAccountsDatabase(databaseName string, fileHeader ledger.CatchpointFileHeader, outFile *os.File, excludeFields []string) error {
+func printAccountsDatabase(databaseName string, fileHeader ledger.CatchpointFileHeader, outFile *os.File) error {
 	lastProgressUpdate := time.Now()
 	progress := uint64(0)
 	defer printDumpingCatchpointProgressLine(0, 0, 0)
@@ -217,54 +191,14 @@ func printAccountsDatabase(databaseName string, fileHeader ledger.CatchpointFile
 		return err
 	}
 	if fileHeader.Version != 0 {
-		var headerFields = []string{
-			"Version: %d",
-			"Balances Round: %d",
-			"Block Round: %d",
-			"Block Header Digest: %s",
-			"Catchpoint: %s",
-			"Total Accounts: %d",
-			"Total Chunks: %d",
-		}
-		var headerValues = []interface{}{
+		fmt.Fprintf(fileWriter, "Version: %d\nBalances Round: %d\nBlock Round: %d\nBlock Header Digest: %s\nCatchpoint: %s\nTotal Accounts: %d\nTotal Chunks: %d\n",
 			fileHeader.Version,
 			fileHeader.BalancesRound,
 			fileHeader.BlocksRound,
 			fileHeader.BlockHeaderDigest.String(),
 			fileHeader.Catchpoint,
 			fileHeader.TotalAccounts,
-			fileHeader.TotalChunks,
-		}
-		// safety check
-		if len(headerFields) != len(headerValues) {
-			return fmt.Errorf("printing failed: header formatting mismatch")
-		}
-
-		var actualFields []string
-		var actualValues []interface{}
-		if len(excludeFields) == 0 {
-			actualFields = headerFields
-			actualValues = headerValues
-		} else {
-			actualFields = make([]string, 0, len(headerFields)-len(excludeFields))
-			actualValues = make([]interface{}, 0, len(headerFields)-len(excludeFields))
-			for i, field := range headerFields {
-				lower := strings.ToLower(field)
-				excluded := false
-				for _, filter := range excludeFields {
-					if strings.HasPrefix(lower, filter) {
-						excluded = true
-						break
-					}
-				}
-				if !excluded {
-					actualFields = append(actualFields, field)
-					actualValues = append(actualValues, headerValues[i])
-				}
-			}
-		}
-
-		fmt.Fprintf(fileWriter, strings.Join(actualFields, "\n")+"\n", actualValues...)
+			fileHeader.TotalChunks)
 
 		totals := fileHeader.Totals
 		fmt.Fprintf(fileWriter, "AccountTotals - Online Money: %d\nAccountTotals - Online RewardUnits : %d\nAccountTotals - Offline Money: %d\nAccountTotals - Offline RewardUnits : %d\nAccountTotals - Not Participating Money: %d\nAccountTotals - Not Participating Money RewardUnits: %d\nAccountTotals - Rewards Level: %d\n",
@@ -296,10 +230,8 @@ func printAccountsDatabase(databaseName string, fileHeader ledger.CatchpointFile
 		}
 
 		balancesTable := "accountbase"
-		resourcesTable := "resources"
 		if fileHeader.Version != 0 {
 			balancesTable = "catchpointbalances"
-			resourcesTable = "catchpointresources"
 		}
 
 		var rowsCount int64
@@ -308,7 +240,32 @@ func printAccountsDatabase(databaseName string, fileHeader ledger.CatchpointFile
 			return
 		}
 
-		printer := func(addr basics.Address, data interface{}, progress uint64) (err error) {
+		rows, err := tx.Query(fmt.Sprintf("SELECT address, data FROM %s order by address", balancesTable))
+		if err != nil {
+			return
+		}
+		defer rows.Close()
+
+		for rows.Next() {
+			var addrbuf []byte
+			var buf []byte
+			err = rows.Scan(&addrbuf, &buf)
+			if err != nil {
+				return
+			}
+
+			var data basics.AccountData
+			err = protocol.Decode(buf, &data)
+			if err != nil {
+				return
+			}
+
+			var addr basics.Address
+			if len(addrbuf) != len(addr) {
+				err = fmt.Errorf("Account DB address length mismatch: %d != %d", len(addrbuf), len(addr))
+				return
+			}
+			copy(addr[:], addrbuf)
 			jsonData, err := json.Marshal(data)
 			if err != nil {
 				return err
@@ -316,71 +273,16 @@ func printAccountsDatabase(databaseName string, fileHeader ledger.CatchpointFile
 
 			fmt.Fprintf(fileWriter, "%v : %s\n", addr, string(jsonData))
 
-			if time.Since(lastProgressUpdate) > 50*time.Millisecond && rowsCount > 0 {
+			if time.Now().Sub(lastProgressUpdate) > 50*time.Millisecond && rowsCount > 0 {
 				lastProgressUpdate = time.Now()
 				printDumpingCatchpointProgressLine(int(float64(progress)*50.0/float64(rowsCount)), 50, int64(progress))
 			}
-			return nil
+			progress++
 		}
 
-		if fileHeader.Version < ledger.CatchpointFileVersionV6 {
-			var rows *sql.Rows
-			rows, err = tx.Query(fmt.Sprintf("SELECT address, data FROM %s order by address", balancesTable))
-			if err != nil {
-				return
-			}
-			defer rows.Close()
-
-			for rows.Next() {
-				var addrbuf []byte
-				var buf []byte
-				err = rows.Scan(&addrbuf, &buf)
-				if err != nil {
-					return
-				}
-
-				var addr basics.Address
-				if len(addrbuf) != len(addr) {
-					err = fmt.Errorf("account DB address length mismatch: %d != %d", len(addrbuf), len(addr))
-					return
-				}
-				copy(addr[:], addrbuf)
-
-				var data basics.AccountData
-				err = protocol.Decode(buf, &data)
-				if err != nil {
-					return
-				}
-
-				err = printer(addr, data, progress)
-				if err != nil {
-					return
-				}
-
-				progress++
-			}
-			err = rows.Err()
-		} else {
-			acctCount := 0
-			acctCb := func(addr basics.Address, data basics.AccountData) {
-				err = printer(addr, data, progress)
-				if err != nil {
-					return
-				}
-				progress++
-				acctCount++
-			}
-			_, err = ledger.LoadAllFullAccounts(context.Background(), tx, balancesTable, resourcesTable, acctCb)
-			if err != nil {
-				return
-			}
-			if acctCount != int(rowsCount) {
-				return fmt.Errorf("expected %d accounts but got only %d", rowsCount, acctCount)
-			}
-		}
-
+		err = rows.Err()
 		// increase the deadline warning to disable the warning message.
 		db.ResetTransactionWarnDeadline(ctx, tx, time.Now().Add(5*time.Second))
-		return err
+		return nil
 	})
 }

@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2021 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -19,7 +19,6 @@ package transactions
 import (
 	"testing"
 
-	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/stretchr/testify/require"
 )
 
@@ -36,8 +35,6 @@ func preparePayset(txnCount, acctCount int) Payset {
 	return Payset(stxnb)
 }
 func TestPaysetCommitsToTxnOrder(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	payset := preparePayset(50, 50)
 	commit1 := payset.CommitFlat()
 	payset[0], payset[1] = payset[1], payset[0]
@@ -46,8 +43,6 @@ func TestPaysetCommitsToTxnOrder(t *testing.T) {
 }
 
 func TestEmptyPaysetCommitment(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	const nilFlatPaysetHash = "WRS2VL2OQ5LPWBYLNBCZV3MEQ4DACSRDES6IUKHGOWYQERJRWC5A"
 	const emptyFlatPaysetHash = "E54GFMNS2LISPG5VUGOQ3B2RR7TRKAHRE24LUM3HOW6TJGQ6PNZQ"
 	const merklePaysetHash = "4OYMIQUY7QOBJGX36TEJS35ZEQT24QPEMSNZGTFESWMRW6CSXBKQ"

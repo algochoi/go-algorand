@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2021 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -31,7 +31,7 @@ import (
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/crypto/passphrase"
-	generatedV2 "github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated"
+	"github.com/algorand/go-algorand/daemon/algod/api/spec/v1"
 	algodAcct "github.com/algorand/go-algorand/data/account"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
@@ -59,12 +59,10 @@ var (
 	partKeyOutDir      string
 	partKeyFile        string
 	partKeyDeleteInput bool
-	partkeyCompat      bool
 	importDefault      bool
 	mnemonic           string
 	dumpOutFile        string
 	listAccountInfo    bool
-	onlyShowAssetIds   bool
 )
 
 func init() {
@@ -127,7 +125,6 @@ func init() {
 	// Info flags
 	infoCmd.Flags().StringVarP(&accountAddress, "address", "a", "", "Account address to look up (required)")
 	infoCmd.MarkFlagRequired("address")
-	infoCmd.Flags().BoolVar(&onlyShowAssetIds, "onlyShowAssetIds", false, "Only show ASA IDs and not pull asset metadata")
 
 	// Balance flags
 	balanceCmd.Flags().StringVarP(&accountAddress, "address", "a", "", "Account address to retrieve balance (required)")
@@ -161,18 +158,12 @@ func init() {
 	addParticipationKeyCmd.Flags().Uint64VarP(&roundLastValid, "roundLastValid", "", 0, "The last round for which the generated partkey will be valid")
 	addParticipationKeyCmd.MarkFlagRequired("roundLastValid")
 	addParticipationKeyCmd.Flags().StringVarP(&partKeyOutDir, "outdir", "o", "", "Save participation key file to specified output directory to (for offline creation)")
-	addParticipationKeyCmd.Flags().Uint64VarP(&keyDilution, "keyDilution", "", 0, "Key dilution for two-level participation keys (defaults to sqrt of validity window)")
+	addParticipationKeyCmd.Flags().Uint64VarP(&keyDilution, "keyDilution", "", 0, "Key dilution for two-level participation keys")
 
 	// installParticipationKey flags
 	installParticipationKeyCmd.Flags().StringVar(&partKeyFile, "partkey", "", "Participation key file to install")
 	installParticipationKeyCmd.MarkFlagRequired("partkey")
 	installParticipationKeyCmd.Flags().BoolVar(&partKeyDeleteInput, "delete-input", false, "Acknowledge that installpartkey will delete the input key file")
-
-	// listpartkey flags
-	listParticipationKeysCmd.Flags().BoolVarP(&partkeyCompat, "compatibility", "c", false, "Print output in compatibility mode. This option will be removed in a future release, please use REST API for tooling.")
-
-	// partkeyinfo flags
-	partkeyInfoCmd.Flags().BoolVarP(&partkeyCompat, "compatibility", "c", false, "Print output in compatibility mode. This option will be removed in a future release, please use REST API for tooling.")
 
 	// import flags
 	importCmd.Flags().BoolVarP(&importDefault, "default", "f", false, "Set this account as the default one")
@@ -396,7 +387,7 @@ var newMultisigCmd = &cobra.Command{
 			}
 		}
 		if duplicatesDetected {
-			reportWarnRawln(warnMultisigDuplicatesDetected)
+			reportWarnln(warnMultisigDuplicatesDetected)
 		}
 		// Generate a new address in the default wallet
 		addr, err := client.CreateMultisigAccount(wh, threshold, args)
@@ -485,7 +476,7 @@ var listCmd = &cobra.Command{
 
 		// For each address, request information about it from algod
 		for _, addr := range addrs {
-			response, _ := client.AccountInformationV2(addr.Addr, true)
+			response, _ := client.AccountInformation(addr.Addr)
 			// it's okay to proceed without algod info
 
 			// Display this information to the user
@@ -502,7 +493,7 @@ var listCmd = &cobra.Command{
 			}
 
 			if listAccountInfo {
-				hasError := printAccountInfo(client, addr.Addr, false, response)
+				hasError := printAccountInfo(client, addr.Addr, response)
 				accountInfoError = accountInfoError || hasError
 			}
 		}
@@ -521,62 +512,48 @@ var infoCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		dataDir := ensureSingleDataDir()
 		client := ensureAlgodClient(dataDir)
-		response, err := client.AccountInformationV2(accountAddress, true)
+		response, err := client.AccountInformation(accountAddress)
 		if err != nil {
 			reportErrorf(errorRequestFail, err)
 		}
 
-		hasError := printAccountInfo(client, accountAddress, onlyShowAssetIds, response)
+		hasError := printAccountInfo(client, accountAddress, response)
 		if hasError {
 			os.Exit(1)
 		}
 	},
 }
 
-func printAccountInfo(client libgoal.Client, address string, onlyShowAssetIds bool, account generatedV2.Account) bool {
-	var createdAssets []generatedV2.Asset
-	if account.CreatedAssets != nil {
-		createdAssets = make([]generatedV2.Asset, len(*account.CreatedAssets))
-		for i, asset := range *account.CreatedAssets {
-			createdAssets[i] = asset
-		}
-		sort.Slice(createdAssets, func(i, j int) bool {
-			return createdAssets[i].Index < createdAssets[j].Index
-		})
-	}
+func sortUint64Slice(slice []uint64) {
+	sort.Slice(slice, func(i, j int) bool {
+		return slice[i] < slice[j]
+	})
+}
 
-	var heldAssets []generatedV2.AssetHolding
-	if account.Assets != nil {
-		heldAssets = make([]generatedV2.AssetHolding, len(*account.Assets))
-		for i, assetHolding := range *account.Assets {
-			heldAssets[i] = assetHolding
-		}
-		sort.Slice(heldAssets, func(i, j int) bool {
-			return heldAssets[i].AssetId < heldAssets[j].AssetId
-		})
+func printAccountInfo(client libgoal.Client, address string, account v1.Account) bool {
+	createdAssets := []uint64{}
+	for id := range account.AssetParams {
+		createdAssets = append(createdAssets, id)
 	}
+	sortUint64Slice(createdAssets)
 
-	var createdApps []generatedV2.Application
-	if account.CreatedApps != nil {
-		createdApps = make([]generatedV2.Application, len(*account.CreatedApps))
-		for i, app := range *account.CreatedApps {
-			createdApps[i] = app
-		}
-		sort.Slice(createdApps, func(i, j int) bool {
-			return createdApps[i].Id < createdApps[j].Id
-		})
+	heldAssets := []uint64{}
+	for id := range account.Assets {
+		heldAssets = append(heldAssets, id)
 	}
+	sortUint64Slice(heldAssets)
 
-	var optedInApps []generatedV2.ApplicationLocalState
-	if account.AppsLocalState != nil {
-		optedInApps = make([]generatedV2.ApplicationLocalState, len(*account.AppsLocalState))
-		for i, appLocalState := range *account.AppsLocalState {
-			optedInApps[i] = appLocalState
-		}
-		sort.Slice(optedInApps, func(i, j int) bool {
-			return optedInApps[i].Id < optedInApps[j].Id
-		})
+	createdApps := []uint64{}
+	for id := range account.AppParams {
+		createdApps = append(createdApps, id)
 	}
+	sortUint64Slice(createdApps)
+
+	optedInApps := []uint64{}
+	for id := range account.AppLocalStates {
+		optedInApps = append(optedInApps, id)
+	}
+	sortUint64Slice(optedInApps)
 
 	report := &strings.Builder{}
 	errorReport := &strings.Builder{}
@@ -586,123 +563,98 @@ func printAccountInfo(client libgoal.Client, address string, onlyShowAssetIds bo
 	if len(createdAssets) == 0 {
 		fmt.Fprintln(report, "\t<none>")
 	}
-	for _, createdAsset := range createdAssets {
-		name := "<unnamed>"
-		if createdAsset.Params.Name != nil {
-			_, name = unicodePrintable(*createdAsset.Params.Name)
+	for _, id := range createdAssets {
+		assetParams := account.AssetParams[id]
+
+		name := assetParams.AssetName
+		if len(name) == 0 {
+			name = "<unnamed>"
 		}
-
-		units := "units"
-		if createdAsset.Params.UnitName != nil {
-			_, units = unicodePrintable(*createdAsset.Params.UnitName)
+		_, name = unicodePrintable(name)
+		units := assetParams.UnitName
+		if len(units) == 0 {
+			units = "units"
 		}
-
-		total := assetDecimalsFmt(createdAsset.Params.Total, uint32(createdAsset.Params.Decimals))
-
+		_, units = unicodePrintable(units)
+		total := assetDecimalsFmt(assetParams.Total, assetParams.Decimals)
 		url := ""
-		if createdAsset.Params.Url != nil {
-			_, safeURL := unicodePrintable(*createdAsset.Params.Url)
-			url = fmt.Sprintf(", %s", safeURL)
+		if len(assetParams.URL) != 0 {
+			url = fmt.Sprintf(", %s", assetParams.URL)
 		}
 
-		fmt.Fprintf(report, "\tID %d, %s, supply %s %s%s\n", createdAsset.Index, name, total, units, url)
+		fmt.Fprintf(report, "\tID %d, %s, supply %s %s%s\n", id, name, total, units, url)
 	}
 
 	fmt.Fprintln(report, "Held Assets:")
 	if len(heldAssets) == 0 {
 		fmt.Fprintln(report, "\t<none>")
 	}
-	for _, assetHolding := range heldAssets {
-		if onlyShowAssetIds {
-			fmt.Fprintf(report, "\tID %d\n", assetHolding.AssetId)
-			continue
-		}
-		assetParams, err := client.AssetInformationV2(assetHolding.AssetId)
+	for _, id := range heldAssets {
+		assetHolding := account.Assets[id]
+		assetParams, err := client.AssetInformation(id)
 		if err != nil {
 			hasError = true
-			fmt.Fprintf(errorReport, "Error: Unable to retrieve asset information for asset %d referred to by account %s: %v\n", assetHolding.AssetId, address, err)
-			fmt.Fprintf(report, "\tID %d, error\n", assetHolding.AssetId)
+			fmt.Fprintf(errorReport, "Error: Unable to retrieve asset information for asset %d referred to by account %s: %v\n", id, address, err)
+			fmt.Fprintf(report, "\tID %d, error\n", id)
 		}
 
-		amount := assetDecimalsFmt(assetHolding.Amount, uint32(assetParams.Params.Decimals))
+		amount := assetDecimalsFmt(assetHolding.Amount, assetParams.Decimals)
 
-		assetName := "<unnamed>"
-		if assetParams.Params.Name != nil {
-			_, assetName = unicodePrintable(*assetParams.Params.Name)
+		assetName := assetParams.AssetName
+		if len(assetName) == 0 {
+			assetName = "<unnamed>"
 		}
+		_, assetName = unicodePrintable(assetName)
 
-		unitName := "units"
-		if assetParams.Params.UnitName != nil {
-			_, unitName = unicodePrintable(*assetParams.Params.UnitName)
+		unitName := assetParams.UnitName
+		if len(unitName) == 0 {
+			unitName = "units"
 		}
+		_, unitName = unicodePrintable(unitName)
 
 		frozen := ""
-		if assetHolding.IsFrozen {
+		if assetHolding.Frozen {
 			frozen = " (frozen)"
 		}
 
-		fmt.Fprintf(report, "\tID %d, %s, balance %s %s%s\n", assetHolding.AssetId, assetName, amount, unitName, frozen)
+		fmt.Fprintf(report, "\tID %d, %s, balance %s %s%s\n", id, assetName, amount, unitName, frozen)
 	}
 
 	fmt.Fprintln(report, "Created Apps:")
 	if len(createdApps) == 0 {
 		fmt.Fprintln(report, "\t<none>")
 	}
-	for _, app := range createdApps {
-		allocatedInts := uint64(0)
-		allocatedBytes := uint64(0)
-		if app.Params.GlobalStateSchema != nil {
-			allocatedInts = app.Params.GlobalStateSchema.NumUint
-			allocatedBytes = app.Params.GlobalStateSchema.NumByteSlice
-		}
-
-		usedInts := uint64(0)
-		usedBytes := uint64(0)
-		if app.Params.GlobalState != nil {
-			for _, value := range *app.Params.GlobalState {
-				if basics.TealType(value.Value.Type) == basics.TealUintType {
-					usedInts++
-				} else {
-					usedBytes++
-				}
+	for _, id := range createdApps {
+		appParams := account.AppParams[id]
+		usedInts := 0
+		usedBytes := 0
+		for _, value := range appParams.GlobalState {
+			if value.Type == "u" {
+				usedInts++
+			} else {
+				usedBytes++
 			}
 		}
-
-		extraPages := ""
-		if app.Params.ExtraProgramPages != nil && *app.Params.ExtraProgramPages != 0 {
-			plural := ""
-			if *app.Params.ExtraProgramPages != 1 {
-				plural = "s"
-			}
-			extraPages = fmt.Sprintf(", %d extra page%s", *app.Params.ExtraProgramPages, plural)
-		}
-
-		fmt.Fprintf(report, "\tID %d%s, global state used %d/%d uints, %d/%d byte slices\n", app.Id, extraPages, usedInts, allocatedInts, usedBytes, allocatedBytes)
+		fmt.Fprintf(report, "\tID %d, global state used %d/%d uints, %d/%d byte slices\n", id, usedInts, appParams.GlobalStateSchema.NumUint, usedBytes, appParams.GlobalStateSchema.NumByteSlice)
 	}
 
 	fmt.Fprintln(report, "Opted In Apps:")
 	if len(optedInApps) == 0 {
 		fmt.Fprintln(report, "\t<none>")
 	}
-	for _, localState := range optedInApps {
-		allocatedInts := localState.Schema.NumUint
-		allocatedBytes := localState.Schema.NumByteSlice
-
-		usedInts := uint64(0)
-		usedBytes := uint64(0)
-		if localState.KeyValue != nil {
-			for _, value := range *localState.KeyValue {
-				if basics.TealType(value.Value.Type) == basics.TealUintType {
-					usedInts++
-				} else {
-					usedBytes++
-				}
+	for _, id := range optedInApps {
+		localState := account.AppLocalStates[id]
+		usedInts := 0
+		usedBytes := 0
+		for _, value := range localState.KeyValue {
+			if value.Type == "u" {
+				usedInts++
+			} else {
+				usedBytes++
 			}
 		}
-		fmt.Fprintf(report, "\tID %d, local state used %d/%d uints, %d/%d byte slices\n", localState.Id, usedInts, allocatedInts, usedBytes, allocatedBytes)
+		fmt.Fprintf(report, "\tID %d, local state used %d/%d uints, %d/%d byte slices\n", id, usedInts, localState.Schema.NumUint, usedBytes, localState.Schema.NumByteSlice)
 	}
-
-	fmt.Fprintf(report, "Minimum Balance:\t%v microAlgos\n", account.MinBalance)
 
 	if hasError {
 		fmt.Fprint(os.Stderr, errorReport.String())
@@ -719,7 +671,7 @@ var balanceCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		dataDir := ensureSingleDataDir()
 		client := ensureAlgodClient(dataDir)
-		response, err := client.AccountInformationV2(accountAddress, false)
+		response, err := client.AccountInformation(accountAddress)
 		if err != nil {
 			reportErrorf(errorRequestFail, err)
 		}
@@ -764,7 +716,7 @@ var rewardsCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		dataDir := ensureSingleDataDir()
 		client := ensureAlgodClient(dataDir)
-		response, err := client.AccountInformationV2(accountAddress, false)
+		response, err := client.AccountInformation(accountAddress)
 		if err != nil {
 			reportErrorf(errorRequestFail, err)
 		}
@@ -792,13 +744,7 @@ var changeOnlineCmd = &cobra.Command{
 		}
 
 		dataDir := ensureSingleDataDir()
-		var client libgoal.Client
-		if statusChangeTxFile != "" {
-			// writing out a txn, don't need kmd
-			client = ensureAlgodClient(dataDir)
-		} else {
-			client = ensureFullClient(dataDir)
-		}
+		client := ensureFullClient(dataDir)
 
 		var part *algodAcct.Participation
 		if partKeyFile != "" {
@@ -883,19 +829,11 @@ var addParticipationKeyCmd = &cobra.Command{
 		// Generate a participation keys database and install it
 		client := ensureFullClient(dataDir)
 
-		reportInfof("Please stand by while generating keys. This might take a few minutes...")
-
-		var err error
-		participationGen := func() {
-			_, _, err = client.GenParticipationKeysTo(accountAddress, roundFirstValid, roundLastValid, keyDilution, partKeyOutDir)
-		}
-
-		util.RunFuncWithSpinningCursor(participationGen)
+		_, _, err := client.GenParticipationKeysTo(accountAddress, roundFirstValid, roundLastValid, keyDilution, partKeyOutDir)
 		if err != nil {
 			reportErrorf(errorRequestFail, err)
 		}
-
-		reportInfof("Participation key generation successful")
+		fmt.Println("Participation key generation successful")
 	},
 }
 
@@ -954,10 +892,9 @@ var renewParticipationKeyCmd = &cobra.Command{
 		if roundLastValid <= (currentRound + proto.MaxTxnLife) {
 			reportErrorf(errLastRoundInvalid, currentRound)
 		}
-		txRoundLastValid := currentRound + proto.MaxTxnLife
 
 		// Make sure we don't already have a partkey valid for (or after) specified roundLastValid
-		parts, err := client.ListParticipationKeyFiles()
+		parts, err := client.ListParticipationKeys()
 		if err != nil {
 			reportErrorf(errorRequestFail, err)
 		}
@@ -969,35 +906,25 @@ var renewParticipationKeyCmd = &cobra.Command{
 			}
 		}
 
-		err = generateAndRegisterPartKey(accountAddress, currentRound, roundLastValid, txRoundLastValid, transactionFee, scLeaseBytes(cmd), keyDilution, walletName, dataDir, client)
+		err = generateAndRegisterPartKey(accountAddress, currentRound, roundLastValid, transactionFee, scLeaseBytes(cmd), keyDilution, walletName, dataDir, client)
 		if err != nil {
 			reportErrorf(err.Error())
 		}
 	},
 }
 
-func generateAndRegisterPartKey(address string, currentRound, keyLastValidRound, txLastValidRound uint64, fee uint64, leaseBytes [32]byte, dilution uint64, wallet string, dataDir string, client libgoal.Client) error {
+func generateAndRegisterPartKey(address string, currentRound, lastValidRound uint64, fee uint64, leaseBytes [32]byte, dilution uint64, wallet string, dataDir string, client libgoal.Client) error {
 	// Generate a participation keys database and install it
-	var part algodAcct.Participation
-	var keyPath string
-	var err error
-	genFunc := func() {
-		part, keyPath, err = client.GenParticipationKeysTo(address, currentRound, keyLastValidRound, dilution, "")
-		if err != nil {
-			err = fmt.Errorf(errorRequestFail, err)
-		}
-		fmt.Println("Participation key generation successful")
-	}
-	fmt.Println("Please stand by while generating keys. This might take a few minutes...")
-	util.RunFuncWithSpinningCursor(genFunc)
+	part, keyPath, err := client.GenParticipationKeysTo(address, currentRound, lastValidRound, dilution, "")
 	if err != nil {
-		return err
+		return fmt.Errorf(errorRequestFail, err)
 	}
+	fmt.Printf("  Generated participation key for %s (Valid %d - %d)\n", address, currentRound, lastValidRound)
 
 	// Now register it as our new online participation key
 	goOnline := true
 	txFile := ""
-	err = changeAccountOnlineStatus(address, &part, goOnline, txFile, wallet, currentRound, txLastValidRound, fee, leaseBytes, dataDir, client)
+	err = changeAccountOnlineStatus(address, &part, goOnline, txFile, wallet, currentRound, lastValidRound, fee, leaseBytes, dataDir, client)
 	if err != nil {
 		os.Remove(keyPath)
 		fmt.Fprintf(os.Stderr, "  Error registering keys - deleting newly-generated key file: %s\n", keyPath)
@@ -1025,7 +952,7 @@ func renewPartKeysInDir(dataDir string, lastValidRound uint64, fee uint64, lease
 	client := ensureAlgodClient(dataDir)
 
 	// Build list of accounts to renew from all accounts with part keys present
-	parts, err := client.ListParticipationKeyFiles()
+	parts, err := client.ListParticipationKeys()
 	if err != nil {
 		return fmt.Errorf(errorRequestFail, err)
 	}
@@ -1054,7 +981,6 @@ func renewPartKeysInDir(dataDir string, lastValidRound uint64, fee uint64, lease
 	if lastValidRound <= (currentRound + proto.MaxTxnLife) {
 		return fmt.Errorf(errLastRoundInvalid, currentRound)
 	}
-	txLastValidRound := currentRound + proto.MaxTxnLife
 
 	var anyErrors bool
 
@@ -1074,7 +1000,7 @@ func renewPartKeysInDir(dataDir string, lastValidRound uint64, fee uint64, lease
 		}
 
 		address := renewPart.Address().String()
-		err = generateAndRegisterPartKey(address, currentRound, lastValidRound, txLastValidRound, fee, leaseBytes, dilution, wallet, dataDir, client)
+		err = generateAndRegisterPartKey(address, currentRound, lastValidRound, fee, leaseBytes, dilution, wallet, dataDir, client)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "  Error renewing part key for account %s: %v\n", address, err)
 			anyErrors = true
@@ -1086,74 +1012,12 @@ func renewPartKeysInDir(dataDir string, lastValidRound uint64, fee uint64, lease
 	return nil
 }
 
-func maxRound(current uint64, next *uint64) uint64 {
-	if next != nil && *next > current {
-		return *next
-	}
-	return current
-}
-
-func uintToStr(number uint64) string {
-	return fmt.Sprintf("%d", number)
-}
-
-// legacyListParticipationKeysCommand prints key information in the same
-// format as earlier versions of goal. Some users are using this information
-// in scripts and need some extra time to migrate to the REST API.
-// DEPRECATED
-func legacyListParticipationKeysCommand() {
-	dataDir := ensureSingleDataDir()
-
-	client := ensureGoalClient(dataDir, libgoal.DynamicClient)
-	parts, err := client.ListParticipationKeyFiles()
-	if err != nil {
-		reportErrorf(errorRequestFail, err)
-	}
-
-	var filenames []string
-	for fn := range parts {
-		filenames = append(filenames, fn)
-	}
-	sort.Strings(filenames)
-
-	rowFormat := "%-10s\t%-80s\t%-60s\t%12s\t%12s\t%12s\n"
-	fmt.Printf(rowFormat, "Registered", "Filename", "Parent address", "First round", "Last round", "First key")
-	for _, fn := range filenames {
-		onlineInfoStr := "unknown"
-		onlineAccountInfo, err := client.AccountInformation(parts[fn].Address().GetUserAddress())
-		if err == nil {
-			votingBytes := parts[fn].Voting.OneTimeSignatureVerifier
-			vrfBytes := parts[fn].VRF.PK
-			if onlineAccountInfo.Participation != nil &&
-				(string(onlineAccountInfo.Participation.ParticipationPK) == string(votingBytes[:])) &&
-				(string(onlineAccountInfo.Participation.VRFPK) == string(vrfBytes[:])) &&
-				(onlineAccountInfo.Participation.VoteFirst == uint64(parts[fn].FirstValid)) &&
-				(onlineAccountInfo.Participation.VoteLast == uint64(parts[fn].LastValid)) &&
-				(onlineAccountInfo.Participation.VoteKeyDilution == parts[fn].KeyDilution) {
-				onlineInfoStr = "yes"
-			} else {
-				onlineInfoStr = "no"
-			}
-		}
-		// it's okay to proceed without algod info
-		first, last := parts[fn].ValidInterval()
-		fmt.Printf(rowFormat, onlineInfoStr, fn, parts[fn].Address().GetUserAddress(),
-			fmt.Sprintf("%d", first),
-			fmt.Sprintf("%d", last),
-			fmt.Sprintf("%d.%d", parts[fn].Voting.FirstBatch, parts[fn].Voting.FirstOffset))
-	}
-}
-
 var listParticipationKeysCmd = &cobra.Command{
 	Use:   "listpartkeys",
-	Short: "List participation keys summary",
-	Long:  `List all participation keys tracked by algod along with summary of additional information. For detailed key information use 'partkeyinfo'.`,
+	Short: "List participation keys",
+	Long:  `List all participation keys tracked by algod, with additional information such as key validity period.`,
 	Args:  validateNoPosArgsFn,
 	Run: func(cmd *cobra.Command, args []string) {
-		if partkeyCompat {
-			legacyListParticipationKeysCommand()
-			return
-		}
 		dataDir := ensureSingleDataDir()
 
 		client := ensureGoalClient(dataDir, libgoal.DynamicClient)
@@ -1162,53 +1026,37 @@ var listParticipationKeysCmd = &cobra.Command{
 			reportErrorf(errorRequestFail, err)
 		}
 
-		// Squeezed this into 77 characters.
-		rowFormat := "%-10s  %-11s  %-15s  %10s  %11s  %10s\n"
-		fmt.Printf(rowFormat, "Registered", "Account", "ParticipationID", "Last Used", "First round", "Last round")
-		for _, part := range parts {
+		var filenames []string
+		for fn := range parts {
+			filenames = append(filenames, fn)
+		}
+		sort.Strings(filenames)
+
+		rowFormat := "%-10s\t%-80s\t%-60s\t%12s\t%12s\t%12s\n"
+		fmt.Printf(rowFormat, "Registered", "Filename", "Parent address", "First round", "Last round", "First key")
+		for _, fn := range filenames {
 			onlineInfoStr := "unknown"
-			onlineAccountInfo, err := client.AccountInformation(part.Address)
+			onlineAccountInfo, err := client.AccountInformation(parts[fn].Address().GetUserAddress())
 			if err == nil {
-				votingBytes := part.Key.VoteParticipationKey
-				vrfBytes := part.Key.SelectionParticipationKey
+				votingBytes := parts[fn].Voting.OneTimeSignatureVerifier
+				vrfBytes := parts[fn].VRF.PK
 				if onlineAccountInfo.Participation != nil &&
 					(string(onlineAccountInfo.Participation.ParticipationPK) == string(votingBytes[:])) &&
 					(string(onlineAccountInfo.Participation.VRFPK) == string(vrfBytes[:])) &&
-					(onlineAccountInfo.Participation.VoteFirst == part.Key.VoteFirstValid) &&
-					(onlineAccountInfo.Participation.VoteLast == part.Key.VoteLastValid) &&
-					(onlineAccountInfo.Participation.VoteKeyDilution == part.Key.VoteKeyDilution) {
+					(onlineAccountInfo.Participation.VoteFirst == uint64(parts[fn].FirstValid)) &&
+					(onlineAccountInfo.Participation.VoteLast == uint64(parts[fn].LastValid)) &&
+					(onlineAccountInfo.Participation.VoteKeyDilution == parts[fn].KeyDilution) {
 					onlineInfoStr = "yes"
 				} else {
 					onlineInfoStr = "no"
 				}
-
-				/*
-					// PKI TODO: We could avoid querying the account with something like this.
-					//       One problem is that it doesn't account for multiple keys on the same
-					//       account, so we'd still need to query the round.
-					if part.EffectiveFirstValid != nil && part.EffectiveLastValid < currentRound {
-						onlineInfoStr = "yes"
-					} else {
-						onlineInfoStr = "no"
-					}
-				*/
-
-				// it's okay to proceed without algod info
-				lastUsed := maxRound(0, part.LastVote)
-				lastUsed = maxRound(lastUsed, part.LastBlockProposal)
-				lastUsed = maxRound(lastUsed, part.LastStateProof)
-				lastUsedString := "N/A"
-				if lastUsed != 0 {
-					lastUsedString = uintToStr(lastUsed)
-				}
-				fmt.Printf(rowFormat,
-					onlineInfoStr,
-					fmt.Sprintf("%s...%s", part.Address[:4], part.Address[len(part.Address)-4:]),
-					fmt.Sprintf("%s...", part.Id[:8]),
-					lastUsedString,
-					uintToStr(part.Key.VoteFirstValid),
-					uintToStr(part.Key.VoteLastValid))
 			}
+			// it's okay to proceed without algod info
+			first, last := parts[fn].ValidInterval()
+			fmt.Printf(rowFormat, onlineInfoStr, fn, parts[fn].Address().GetUserAddress(),
+				fmt.Sprintf("%d", first),
+				fmt.Sprintf("%d", last),
+				fmt.Sprintf("%d.%d", parts[fn].Voting.FirstBatch, parts[fn].Voting.FirstOffset))
 		}
 	},
 }
@@ -1341,6 +1189,7 @@ var importRootKeysCmd = &cobra.Command{
 			handle, err = db.MakeErasableAccessor(filepath.Join(keyDir, filename))
 			if err != nil {
 				// Couldn't open it, skip it
+				err = nil
 				continue
 			}
 
@@ -1349,6 +1198,7 @@ var importRootKeysCmd = &cobra.Command{
 			handle.Close()
 			if err != nil {
 				// Couldn't read it, skip it
+				err = nil
 				continue
 			}
 
@@ -1389,52 +1239,14 @@ var importRootKeysCmd = &cobra.Command{
 	},
 }
 
-func strOrNA(value *uint64) string {
-	if value == nil {
-		return "N/A"
-	}
-	return uintToStr(*value)
-}
-
-// legacyPartkeyInfoCommand prints key information in the same
-// format as earlier versions of goal. Some users are using this information
-// in scripts and need some extra time to migrate to alternatives.
-// DEPRECATED
-func legacyPartkeyInfoCommand() {
-	type partkeyInfo struct {
-		_struct         struct{}                        `codec:",omitempty,omitemptyarray"`
-		Address         string                          `codec:"acct"`
-		FirstValid      basics.Round                    `codec:"first"`
-		LastValid       basics.Round                    `codec:"last"`
-		VoteID          crypto.OneTimeSignatureVerifier `codec:"vote"`
-		SelectionID     crypto.VRFVerifier              `codec:"sel"`
-		VoteKeyDilution uint64                          `codec:"voteKD"`
-	}
-
-	onDataDirs(func(dataDir string) {
-		fmt.Printf("Dumping participation key info from %s...\n", dataDir)
-		client := ensureGoalClient(dataDir, libgoal.DynamicClient)
-
-		// Make sure we don't already have a partkey valid for (or after) specified roundLastValid
-		parts, err := client.ListParticipationKeyFiles()
-		if err != nil {
-			reportErrorf(errorRequestFail, err)
-		}
-
-		for filename, part := range parts {
-			fmt.Println("------------------------------------------------------------------")
-			info := partkeyInfo{
-				Address:         part.Address().String(),
-				FirstValid:      part.FirstValid,
-				LastValid:       part.LastValid,
-				VoteID:          part.VotingSecrets().OneTimeSignatureVerifier,
-				SelectionID:     part.VRFSecrets().PK,
-				VoteKeyDilution: part.KeyDilution,
-			}
-			infoString := protocol.EncodeJSON(&info)
-			fmt.Printf("File: %s\n%s\n", filename, string(infoString))
-		}
-	})
+type partkeyInfo struct {
+	_struct         struct{}                        `codec:",omitempty,omitemptyarray"`
+	Address         string                          `codec:"acct"`
+	FirstValid      basics.Round                    `codec:"first"`
+	LastValid       basics.Round                    `codec:"last"`
+	VoteID          crypto.OneTimeSignatureVerifier `codec:"vote"`
+	SelectionID     crypto.VRFVerifier              `codec:"sel"`
+	VoteKeyDilution uint64                          `codec:"voteKD"`
 }
 
 var partkeyInfoCmd = &cobra.Command{
@@ -1443,14 +1255,10 @@ var partkeyInfoCmd = &cobra.Command{
 	Long:  `Output details about all available part keys in the specified data directory(ies), such as key validity period.`,
 	Args:  validateNoPosArgsFn,
 	Run: func(cmd *cobra.Command, args []string) {
-		if partkeyCompat {
-			legacyPartkeyInfoCommand()
-			return
-		}
 
 		onDataDirs(func(dataDir string) {
 			fmt.Printf("Dumping participation key info from %s...\n", dataDir)
-			client := ensureAlgodClient(dataDir)
+			client := ensureGoalClient(dataDir, libgoal.DynamicClient)
 
 			// Make sure we don't already have a partkey valid for (or after) specified roundLastValid
 			parts, err := client.ListParticipationKeys()
@@ -1458,24 +1266,18 @@ var partkeyInfoCmd = &cobra.Command{
 				reportErrorf(errorRequestFail, err)
 			}
 
-			for _, part := range parts {
-				fmt.Println()
-				fmt.Printf("Participation ID:          %s\n", part.Id)
-				fmt.Printf("Parent address:            %s\n", part.Address)
-				fmt.Printf("Last vote round:           %s\n", strOrNA(part.LastVote))
-				fmt.Printf("Last block proposal round: %s\n", strOrNA(part.LastBlockProposal))
-				// PKI TODO: enable with state proof support.
-				//fmt.Printf("Last state proof round:    %s\n", strOrNA(part.LastStateProof))
-				fmt.Printf("Effective first round:     %s\n", strOrNA(part.EffectiveFirstValid))
-				fmt.Printf("Effective last round:      %s\n", strOrNA(part.EffectiveLastValid))
-				fmt.Printf("First round:               %d\n", part.Key.VoteFirstValid)
-				fmt.Printf("Last round:                %d\n", part.Key.VoteLastValid)
-				fmt.Printf("Key dilution:              %d\n", part.Key.VoteKeyDilution)
-				fmt.Printf("Selection key:             %s\n", base64.StdEncoding.EncodeToString(part.Key.SelectionParticipationKey))
-				fmt.Printf("Voting key:                %s\n", base64.StdEncoding.EncodeToString(part.Key.VoteParticipationKey))
-				if part.Key.StateProofKey != nil {
-					fmt.Printf("State proof key:           %s\n", base64.StdEncoding.EncodeToString(*part.Key.StateProofKey))
+			for filename, part := range parts {
+				fmt.Println("------------------------------------------------------------------")
+				info := partkeyInfo{
+					Address:         part.Address().String(),
+					FirstValid:      part.FirstValid,
+					LastValid:       part.LastValid,
+					VoteID:          part.VotingSecrets().OneTimeSignatureVerifier,
+					SelectionID:     part.VRFSecrets().PK,
+					VoteKeyDilution: part.KeyDilution,
 				}
+				infoString := protocol.EncodeJSON(&info)
+				fmt.Printf("File: %s\n%s\n", filename, string(infoString))
 			}
 		})
 	},

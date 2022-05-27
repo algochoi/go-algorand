@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2021 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -17,15 +17,13 @@
 package logic
 
 import (
+	"bytes"
 	"encoding/hex"
 	"fmt"
 	"strings"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-
-	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
 // used by TestAssemble and others, see UPDATE PROCEDURE in TestAssemble()
@@ -134,7 +132,7 @@ intc 1
 mulw
 `
 
-const v2Nonsense = v1Nonsense + `
+const v2Nonsense = `
 dup2
 pop
 pop
@@ -146,7 +144,6 @@ substring 42 99
 intc 0
 intc 1
 substring3
-#pragma typetrack false
 bz there2
 b there2
 there2:
@@ -220,7 +217,7 @@ txn FreezeAssetAccount
 txn FreezeAssetFrozen
 `
 
-const v3Nonsense = v2Nonsense + `
+const v3Nonsense = `
 assert
 min_balance
 int 0x031337			// get bit 1, negate it, put it back
@@ -249,7 +246,7 @@ pushbytes "john"
 
 // Keep in mind, only use existing int and byte constants, or else use
 // push* instead.  The idea is to not cause the *cblocks to change.
-const v4Nonsense = v3Nonsense + `
+const v4Nonsense = `
 int 1
 pushint 2000
 int 0
@@ -288,118 +285,20 @@ b^
 b~
 int 2
 bzero
-gload 0 0
-gloads 0
-gaid 0
-gaids
-int 100
 `
-
-const v5Nonsense = v4Nonsense + `
-app_params_get AppExtraProgramPages
-cover 1
-uncover 1
-byte 0x0123456789abcd
-extract 0 8
-int 0
-int 8
-extract3
-int 0
-extract_uint64
-int 0
-extract_uint32
-int 0
-extract_uint16
-log
-txn Nonparticipation
-gtxn 0 Nonparticipation
-itxn_begin
-itxn_field Sender
-itxn_submit
-int 1
-txnas ApplicationArgs
-int 0
-gtxnas 0 ApplicationArgs
-int 0
-int 0
-gtxnsas ApplicationArgs
-int 0
-args
-int 0
-loads
-int 0
-stores
-int 32
-bzero
-ecdsa_pk_decompress Secp256k1
-byte 0x0123456789abcd
-dup
-dup
-ecdsa_verify Secp256k1
-byte 0x0123456789abcd
-dup
-dup
-ecdsa_pk_recover Secp256k1
-itxna Logs 3
-`
-
-const v6Nonsense = v5Nonsense + `
-itxn_next
-gitxn 4 CreatedAssetID
-gitxna 3 Logs 12
-int 0
-dup
-gloadss
-byte 0x0123456789abcd
-bsqrt
-txn Sender
-acct_params_get AcctBalance
-pushint 8; pushint 8; pushint 32; divw // use pushint to prevent changes to intcblock choices
-pushint 1
-itxnas Logs
-pushint 1
-gitxnas 0 Logs
-`
-
-const v7Nonsense = v6Nonsense + `
-base64_decode URLEncoding
-json_ref JSONUint64
-pushint 32
-bzero
-ecdsa_pk_decompress Secp256r1
-pushbytes 0x0123456789abcd
-dup
-dup
-ecdsa_verify Secp256r1
-sha3_256
-pushbytes 0x012345
-dup
-dup
-ed25519verify_bare
-`
-
-const v6Compiled = "2004010002b7a60c26050242420c68656c6c6f20776f726c6421070123456789abcd208dae2087fbba51304eb02b91f656948397a7946390e8cb70fc9ea4d95f92251d047465737400320032013202320380021234292929292b0431003101310231043105310731083109310a310b310c310d310e310f3111311231133114311533000033000133000233000433000533000733000833000933000a33000b33000c33000d33000e33000f3300113300123300133300143300152d2e01022581f8acd19181cf959a1281f8acd19181cf951a81f8acd19181cf1581f8acd191810f082209240a220b230c240d250e230f23102311231223132314181b1c28171615400003290349483403350222231d4a484848482b50512a632223524100034200004322602261222704634848222862482864286548482228246628226723286828692322700048482371004848361c0037001a0031183119311b311d311e311f312023221e312131223123312431253126312731283129312a312b312c312d312e312f447825225314225427042455220824564c4d4b0222382124391c0081e80780046a6f686e2281d00f23241f880003420001892224902291922494249593a0a1a2a3a4a5a6a7a8a9aaabacadae24af3a00003b003c003d816472064e014f012a57000823810858235b235a2359b03139330039b1b200b322c01a23c1001a2323c21a23c3233e233f8120af06002a494905002a49490700b53a03b6b7043cb8033a0c2349c42a9631007300810881088120978101c53a8101c6003a"
-
-const v7Compiled = v6Compiled + "5c005d018120af060180070123456789abcd49490501988003012345494984"
 
 var nonsense = map[uint64]string{
 	1: v1Nonsense,
-	2: v2Nonsense,
-	3: v3Nonsense,
-	4: v4Nonsense,
-	5: v5Nonsense,
-	6: v6Nonsense,
-	7: v7Nonsense,
+	2: v1Nonsense + v2Nonsense,
+	3: v1Nonsense + v2Nonsense + v3Nonsense,
+	4: v1Nonsense + v2Nonsense + v3Nonsense + v4Nonsense,
 }
 
 var compiled = map[uint64]string{
 	1: "012008b7a60cf8acd19181cf959a12f8acd19181cf951af8acd19181cf15f8acd191810f01020026050212340c68656c6c6f20776f726c6421208dae2087fbba51304eb02b91f656948397a7946390e8cb70fc9ea4d95f92251d024242047465737400320032013202320328292929292a0431003101310231043105310731083109310a310b310c310d310e310f3111311231133114311533000033000133000233000433000533000733000833000933000a33000b33000c33000d33000e33000f3300113300123300133300143300152d2e0102222324252104082209240a220b230c240d250e230f23102311231223132314181b1c2b1716154000032903494",
 	2: "022008b7a60cf8acd19181cf959a12f8acd19181cf951af8acd19181cf15f8acd191810f01020026050212340c68656c6c6f20776f726c6421208dae2087fbba51304eb02b91f656948397a7946390e8cb70fc9ea4d95f92251d024242047465737400320032013202320328292929292a0431003101310231043105310731083109310a310b310c310d310e310f3111311231133114311533000033000133000233000433000533000733000833000933000a33000b33000c33000d33000e33000f3300113300123300133300143300152d2e0102222324252104082209240a220b230c240d250e230f23102311231223132314181b1c2b171615400003290349483403350222231d4a484848482a50512a63222352410003420000432105602105612105270463484821052b62482b642b65484821052b2106662b21056721072b682b692107210570004848210771004848361c0037001a0031183119311b311d311e311f3120210721051e312131223123312431253126312731283129312a312b312c312d312e312f",
 	3: "032008b7a60cf8acd19181cf959a12f8acd19181cf951af8acd19181cf15f8acd191810f01020026050212340c68656c6c6f20776f726c6421208dae2087fbba51304eb02b91f656948397a7946390e8cb70fc9ea4d95f92251d024242047465737400320032013202320328292929292a0431003101310231043105310731083109310a310b310c310d310e310f3111311231133114311533000033000133000233000433000533000733000833000933000a33000b33000c33000d33000e33000f3300113300123300133300143300152d2e0102222324252104082209240a220b230c240d250e230f23102311231223132314181b1c2b171615400003290349483403350222231d4a484848482a50512a63222352410003420000432105602105612105270463484821052b62482b642b65484821052b2106662b21056721072b682b692107210570004848210771004848361c0037001a0031183119311b311d311e311f3120210721051e312131223123312431253126312731283129312a312b312c312d312e312f4478222105531421055427042106552105082106564c4d4b02210538212106391c0081e80780046a6f686e",
-	4: "042004010200b7a60c26040242420c68656c6c6f20776f726c6421208dae2087fbba51304eb02b91f656948397a7946390e8cb70fc9ea4d95f92251d047465737400320032013202320380021234292929292a0431003101310231043105310731083109310a310b310c310d310e310f3111311231133114311533000033000133000233000433000533000733000833000933000a33000b33000c33000d33000e33000f3300113300123300133300143300152d2e01022581f8acd19181cf959a1281f8acd19181cf951a81f8acd19181cf1581f8acd191810f082209240a220b230c240d250e230f23102311231223132314181b1c28171615400003290349483403350222231d4a484848482a50512a632223524100034200004322602261222b634848222862482864286548482228236628226724286828692422700048482471004848361c0037001a0031183119311b311d311e311f312024221e312131223123312431253126312731283129312a312b312c312d312e312f44782522531422542b2355220823564c4d4b0222382123391c0081e80780046a6f686e2281d00f24231f880003420001892223902291922394239593a0a1a2a3a4a5a6a7a8a9aaabacadae23af3a00003b003c003d8164",
-	5: "052004010002b7a60c26050242420c68656c6c6f20776f726c6421070123456789abcd208dae2087fbba51304eb02b91f656948397a7946390e8cb70fc9ea4d95f92251d047465737400320032013202320380021234292929292b0431003101310231043105310731083109310a310b310c310d310e310f3111311231133114311533000033000133000233000433000533000733000833000933000a33000b33000c33000d33000e33000f3300113300123300133300143300152d2e01022581f8acd19181cf959a1281f8acd19181cf951a81f8acd19181cf1581f8acd191810f082209240a220b230c240d250e230f23102311231223132314181b1c28171615400003290349483403350222231d4a484848482b50512a632223524100034200004322602261222704634848222862482864286548482228246628226723286828692322700048482371004848361c0037001a0031183119311b311d311e311f312023221e312131223123312431253126312731283129312a312b312c312d312e312f447825225314225427042455220824564c4d4b0222382124391c0081e80780046a6f686e2281d00f23241f880003420001892224902291922494249593a0a1a2a3a4a5a6a7a8a9aaabacadae24af3a00003b003c003d816472064e014f012a57000823810858235b235a2359b03139330039b1b200b322c01a23c1001a2323c21a23c3233e233f8120af06002a494905002a49490700b53a03",
-	6: "06" + v6Compiled,
-	7: "07" + v7Compiled,
+	4: "042008b7a60cf8acd19181cf959a12f8acd19181cf951af8acd19181cf15f8acd191810f01020026050212340c68656c6c6f20776f726c6421208dae2087fbba51304eb02b91f656948397a7946390e8cb70fc9ea4d95f92251d024242047465737400320032013202320328292929292a0431003101310231043105310731083109310a310b310c310d310e310f3111311231133114311533000033000133000233000433000533000733000833000933000a33000b33000c33000d33000e33000f3300113300123300133300143300152d2e0102222324252104082209240a220b230c240d250e230f23102311231223132314181b1c2b171615400003290349483403350222231d4a484848482a50512a63222352410003420000432105602105612105270463484821052b62482b642b65484821052b2106662b21056721072b682b692107210570004848210771004848361c0037001a0031183119311b311d311e311f3120210721051e312131223123312431253126312731283129312a312b312c312d312e312f4478222105531421055427042106552105082106564c4d4b02210538212106391c0081e80780046a6f686e210581d00f210721061f8800034200018921052106902105919221069421069593a0a1a2a3a4a5a6a7a8a9aaabacadae2106af",
 }
 
 func pseudoOp(opcode string) bool {
@@ -413,8 +312,6 @@ func pseudoOp(opcode string) bool {
 
 // Check that assembly output is stable across time.
 func TestAssemble(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	// UPDATE PROCEDURE:
 	// Run test. It should pass. If test is not passing, do not change this test, fix the assembler first.
 	// Extend this test program text. Append instructions to the end so that the program byte hex is visually similar and also simply extended by some new bytes,
@@ -425,7 +322,6 @@ func TestAssemble(t *testing.T) {
 	// This doesn't have to be a sensible program to run, it just has to compile.
 
 	t.Parallel()
-	require.Equal(t, LogicVersion, len(nonsense))
 	for v := uint64(2); v <= AssemblerMaxVersion; v++ {
 		t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
 			for _, spec := range OpSpecs {
@@ -441,117 +337,89 @@ func TestAssemble(t *testing.T) {
 			// time. we must assemble to the same bytes
 			// this month that we did last month.
 			expectedBytes, _ := hex.DecodeString(compiled[v])
-			// the hex is for convenience if the program has been changed. the
-			// hex string can be copy pasted back in as a new expected result.
-			require.Equal(t, expectedBytes, ops.Program, hex.EncodeToString(ops.Program))
+			if bytes.Compare(expectedBytes, ops.Program) != 0 {
+				// this print is for convenience if
+				// the program has been changed. the
+				// hex string can be copy pasted back
+				// in as a new expected result.
+				t.Log(hex.EncodeToString(ops.Program))
+			}
+			require.Equal(t, expectedBytes, ops.Program)
 		})
 	}
 }
 
 func TestAssembleAlias(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	t.Parallel()
 	source1 := `txn Accounts 0  // alias to txna
 pop
-gtxn 0 ApplicationArgs 0 // alias to gtxna
+gtxn 0 ApplicationArgs 0 // alias to gtxn
 pop
 `
-	ops1 := testProg(t, source1, AssemblerMaxVersion)
-	ops2 := testProg(t, strings.Replace(source1, "txn", "txna", -1), AssemblerMaxVersion)
+	ops1, err := AssembleStringWithVersion(source1, AssemblerMaxVersion)
+	require.NoError(t, err)
+
+	source2 := `txna Accounts 0
+pop
+gtxna 0 ApplicationArgs 0
+pop
+`
+	ops2, err := AssembleStringWithVersion(source2, AssemblerMaxVersion)
+	require.NoError(t, err)
 
 	require.Equal(t, ops1.Program, ops2.Program)
 }
 
-type Expect struct {
+type expect struct {
 	l int
 	s string
 }
 
-func testMatch(t testing.TB, actual, expected string) bool {
-	t.Helper()
+func testMatch(t *testing.T, actual, expected string) {
 	if strings.HasPrefix(expected, "...") && strings.HasSuffix(expected, "...") {
-		return assert.Contains(t, actual, expected[3:len(expected)-3])
+		require.Contains(t, actual, expected[3:len(expected)-3])
 	} else if strings.HasPrefix(expected, "...") {
-		return assert.Contains(t, actual+"^", expected[3:]+"^")
+		require.Contains(t, actual+"^", expected[3:]+"^")
 	} else if strings.HasSuffix(expected, "...") {
-		return assert.Contains(t, "^"+actual, "^"+expected[:len(expected)-3])
+		require.Contains(t, "^"+actual, "^"+expected[:len(expected)-3])
 	} else {
-		return assert.Equal(t, expected, actual)
+		require.Equal(t, expected, actual)
 	}
 }
 
-func assemblyTrace(text string, ver uint64) string {
-	ops := newOpStream(ver)
-	ops.Trace = &strings.Builder{}
-	ops.assemble(text)
-	return ops.Trace.String()
-}
-
-func testProg(t testing.TB, source string, ver uint64, expected ...Expect) *OpStream {
-	t.Helper()
+func testProg(t *testing.T, source string, ver uint64, expected ...expect) *OpStream {
 	program := strings.ReplaceAll(source, ";", "\n")
 	ops, err := AssembleStringWithVersion(program, ver)
 	if len(expected) == 0 {
 		if len(ops.Errors) > 0 || err != nil || ops == nil || ops.Program == nil {
-			t.Log(assemblyTrace(program, ver))
+			t.Log(program)
 		}
 		require.Empty(t, ops.Errors)
 		require.NoError(t, err)
 		require.NotNil(t, ops)
 		require.NotNil(t, ops.Program)
-		// It should always be possible to Disassemble
-		dis, err := Disassemble(ops.Program)
-		require.NoError(t, err, program)
-		// And, while the disassembly may not match input
-		// exactly, the assembly of the disassembly should
-		// give the same bytecode
-		ops2, err := AssembleStringWithVersion(notrack(dis), ver)
-		if len(ops2.Errors) > 0 || err != nil || ops2 == nil || ops2.Program == nil {
-			t.Log(program)
-			t.Log(dis)
-		}
-		require.Empty(t, ops2.Errors)
-		require.NoError(t, err)
-		require.Equal(t, ops.Program, ops2.Program)
 	} else {
-		if err == nil {
-			t.Log(program)
-		}
 		require.Error(t, err)
 		errors := ops.Errors
 		for _, exp := range expected {
 			if exp.l == 0 {
 				// line 0 means: "must match all"
 				require.Len(t, expected, 1)
-				fail := false
 				for _, err := range errors {
 					msg := err.Unwrap().Error()
-					if !testMatch(t, msg, exp.s) {
-						fail = true
-					}
-				}
-				if fail {
-					t.Log(assemblyTrace(program, ver))
-					t.FailNow()
+					testMatch(t, msg, exp.s)
 				}
 			} else {
 				var found *lineError
 				for _, err := range errors {
 					if err.Line == exp.l {
-						found = &err
+						found = err
 						break
 					}
 				}
-				if found == nil {
-					t.Log(fmt.Sprintf("Errors: %v", errors))
-				}
-				require.NotNil(t, found, "Error %s was not found on line %d", exp.s, exp.l)
+				require.NotNil(t, found, "No error on line %d", exp.l)
 				msg := found.Unwrap().Error()
-				if !testMatch(t, msg, exp.s) {
-					t.Log(assemblyTrace(program, ver))
-					t.FailNow()
-				}
+				testMatch(t, msg, exp.s)
 			}
 		}
 		require.Nil(t, ops.Program)
@@ -560,7 +428,6 @@ func testProg(t testing.TB, source string, ver uint64, expected ...Expect) *OpSt
 }
 
 func testLine(t *testing.T, line string, ver uint64, expected string) {
-	t.Helper()
 	// By embedding the source line between two other lines, the
 	// test for the correct line number in the error is more
 	// meaningful.
@@ -569,63 +436,48 @@ func testLine(t *testing.T, line string, ver uint64, expected string) {
 		testProg(t, source, ver)
 		return
 	}
-	testProg(t, source, ver, Expect{2, expected})
+	testProg(t, source, ver, expect{2, expected})
 }
-
 func TestAssembleTxna(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
-	testLine(t, "txna Accounts 256", AssemblerMaxVersion, "txna i beyond 255: 256")
-	testLine(t, "txna ApplicationArgs 256", AssemblerMaxVersion, "txna i beyond 255: 256")
+	testLine(t, "txna Accounts 256", AssemblerMaxVersion, "txna array index beyond 255: 256")
+	testLine(t, "txna ApplicationArgs 256", AssemblerMaxVersion, "txna array index beyond 255: 256")
 	testLine(t, "txna Sender 256", AssemblerMaxVersion, "txna unknown field: \"Sender\"")
-	testLine(t, "gtxna 0 Accounts 256", AssemblerMaxVersion, "gtxna i beyond 255: 256")
-	testLine(t, "gtxna 0 ApplicationArgs 256", AssemblerMaxVersion, "gtxna i beyond 255: 256")
-	testLine(t, "gtxna 256 Accounts 0", AssemblerMaxVersion, "gtxna t beyond 255: 256")
+	testLine(t, "gtxna 0 Accounts 256", AssemblerMaxVersion, "gtxna array index beyond 255: 256")
+	testLine(t, "gtxna 0 ApplicationArgs 256", AssemblerMaxVersion, "gtxna array index beyond 255: 256")
+	testLine(t, "gtxna 256 Accounts 0", AssemblerMaxVersion, "gtxna group index beyond 255: 256")
 	testLine(t, "gtxna 0 Sender 256", AssemblerMaxVersion, "gtxna unknown field: \"Sender\"")
-	testLine(t, "txn Accounts 0", 1, "txn expects 1 immediate argument")
-	testLine(t, "txn Accounts 0 1", 2, "txn expects 1 or 2 immediate arguments")
-	testLine(t, "txna Accounts 0 1", AssemblerMaxVersion, "txna expects 2 immediate arguments")
-	testLine(t, "txnas Accounts 1", AssemblerMaxVersion, "txnas expects 1 immediate argument")
-	testLine(t, "txna Accounts a", AssemblerMaxVersion, "txna unable to parse...")
-	testLine(t, "gtxn 0 Sender 0", 1, "gtxn expects 2 immediate arguments")
-	testLine(t, "gtxn 0 Sender 1 2", 2, "gtxn expects 2 or 3 immediate arguments")
-	testLine(t, "gtxna 0 Accounts 1 2", AssemblerMaxVersion, "gtxna expects 3 immediate arguments")
-	testLine(t, "gtxna a Accounts 0", AssemblerMaxVersion, "gtxna unable to parse...")
-	testLine(t, "gtxna 0 Accounts a", AssemblerMaxVersion, "gtxna unable to parse...")
-	testLine(t, "gtxnas Accounts 1 2", AssemblerMaxVersion, "gtxnas expects 2 immediate arguments")
+	testLine(t, "txn Accounts 0", 1, "txn expects one argument")
+	testLine(t, "txn Accounts 0 1", 2, "txn expects one or two arguments")
+	testLine(t, "txna Accounts 0 1", AssemblerMaxVersion, "txna expects two arguments")
+	testLine(t, "txna Accounts a", AssemblerMaxVersion, "strconv.ParseUint...")
+	testLine(t, "gtxn 0 Sender 0", 1, "gtxn expects two arguments")
+	testLine(t, "gtxn 0 Sender 1 2", 2, "gtxn expects two or three arguments")
+	testLine(t, "gtxna 0 Accounts 1 2", AssemblerMaxVersion, "gtxna expects three arguments")
+	testLine(t, "gtxna a Accounts 0", AssemblerMaxVersion, "strconv.ParseUint...")
+	testLine(t, "gtxna 0 Accounts a", AssemblerMaxVersion, "strconv.ParseUint...")
 	testLine(t, "txn ABC", 2, "txn unknown field: \"ABC\"")
 	testLine(t, "gtxn 0 ABC", 2, "gtxn unknown field: \"ABC\"")
-	testLine(t, "gtxn a ABC", 2, "gtxn unable to parse...")
-	testLine(t, "txn Accounts", 1, "txn unknown field: \"Accounts\"")
-	testLine(t, "txn Accounts", AssemblerMaxVersion, "txn unknown field: \"Accounts\"")
+	testLine(t, "gtxn a ABC", 2, "strconv.ParseUint...")
+	testLine(t, "txn Accounts", AssemblerMaxVersion, "found array field \"Accounts\" in txn op")
+	testLine(t, "txn Accounts", 1, "found array field \"Accounts\" in txn op")
 	testLine(t, "txn Accounts 0", AssemblerMaxVersion, "")
-	testLine(t, "gtxn 0 Accounts", AssemblerMaxVersion, "gtxn unknown field: \"Accounts\"...")
-	testLine(t, "gtxn 0 Accounts", 1, "gtxn unknown field: \"Accounts\"")
+	testLine(t, "gtxn 0 Accounts", AssemblerMaxVersion, "found array field \"Accounts\" in gtxn op")
+	testLine(t, "gtxn 0 Accounts", 1, "found array field \"Accounts\" in gtxn op")
 	testLine(t, "gtxn 0 Accounts 1", AssemblerMaxVersion, "")
 }
 
 func TestAssembleGlobal(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
-	testLine(t, "global", AssemblerMaxVersion, "global expects 1 immediate argument")
+	testLine(t, "global", AssemblerMaxVersion, "global expects one argument")
 	testLine(t, "global a", AssemblerMaxVersion, "global unknown field: \"a\"")
-	testProg(t, "global MinTxnFee; int 2; +", AssemblerMaxVersion)
-	testProg(t, "global ZeroAddress; byte 0x12; concat; len", AssemblerMaxVersion)
-	testProg(t, "global MinTxnFee; byte 0x12; concat", AssemblerMaxVersion,
-		Expect{3, "concat arg 0 wanted type []byte..."})
-	testProg(t, "int 2; global ZeroAddress; +", AssemblerMaxVersion,
-		Expect{3, "+ arg 1 wanted type uint64..."})
 }
 
 func TestAssembleDefault(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	source := `byte 0x1122334455
 int 1
 +
 // comment
 `
-	testProg(t, source, AssemblerMaxVersion, Expect{3, "+ arg 0 wanted type uint64 got []byte"})
+	testProg(t, source, AssemblerMaxVersion, expect{3, "+ arg 0 wanted type uint64 got []byte"})
 }
 
 // mutateProgVersion replaces version (first two symbols) in hex-encoded program
@@ -634,11 +486,9 @@ func mutateProgVersion(version uint64, prog string) string {
 }
 
 func TestOpUint(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	for v := uint64(1); v <= AssemblerMaxVersion; v++ {
 		t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
-			ops := newOpStream(v)
+			ops := OpStream{Version: v}
 			ops.Uint(0xcafebabe)
 			prog := ops.prependCBlocks()
 			require.NotNil(t, prog)
@@ -650,13 +500,11 @@ func TestOpUint(t *testing.T) {
 }
 
 func TestOpUint64(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	t.Parallel()
 	for v := uint64(1); v <= AssemblerMaxVersion; v++ {
 		t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
 			t.Parallel()
-			ops := newOpStream(v)
+			ops := OpStream{Version: v}
 			ops.Uint(0xcafebabecafebabe)
 			prog := ops.prependCBlocks()
 			require.NotNil(t, prog)
@@ -667,12 +515,10 @@ func TestOpUint64(t *testing.T) {
 }
 
 func TestOpBytes(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	t.Parallel()
 	for v := uint64(1); v <= AssemblerMaxVersion; v++ {
 		t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
-			ops := newOpStream(v)
+			ops := OpStream{Version: v}
 			ops.ByteLiteral([]byte("abcdef"))
 			prog := ops.prependCBlocks()
 			require.NotNil(t, prog)
@@ -683,24 +529,14 @@ func TestOpBytes(t *testing.T) {
 }
 
 func TestAssembleInt(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	t.Parallel()
-
-	expectedDefaultConsts := "012001bef5fad70c22"
-	expectedOptimizedConsts := "0181bef5fad70c"
-
 	for v := uint64(1); v <= AssemblerMaxVersion; v++ {
 		t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
-			expected := expectedDefaultConsts
-			if v >= optimizeConstantsEnabledVersion {
-				expected = expectedOptimizedConsts
-			}
-
 			text := "int 0xcafebabe"
-			ops := testProg(t, text, v)
+			ops, err := AssembleStringWithVersion(text, v)
+			require.NoError(t, err)
 			s := hex.EncodeToString(ops.Program)
-			require.Equal(t, mutateProgVersion(v, expected), s)
+			require.Equal(t, mutateProgVersion(v, "012001bef5fad70c22"), s)
 		})
 	}
 }
@@ -716,13 +552,10 @@ base64.b16encode(raw.encode())
 */
 
 func TestAssembleBytes(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	t.Parallel()
 	variations := []string{
 		"byte b32 MFRGGZDFMY",
 		"byte base32 MFRGGZDFMY",
-		"byte base32  MFRGGZDFMY",
 		"byte base32(MFRGGZDFMY)",
 		"byte b32(MFRGGZDFMY)",
 		"byte b32 MFRGGZDFMY======",
@@ -737,46 +570,20 @@ func TestAssembleBytes(t *testing.T) {
 		`byte "\x61\x62\x63\x64\x65\x66"`,
 		`byte "abcdef"`,
 	}
-
-	expectedDefaultConsts := "0126010661626364656628"
-	expectedOptimizedConsts := "018006616263646566"
-
-	bad := [][]string{
-		{"byte", "...operation needs byte literal argument"},
-		{`byte "john" "doe"`, "...operation with extraneous argument"},
-	}
-
 	for v := uint64(1); v <= AssemblerMaxVersion; v++ {
 		t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
-			expected := expectedDefaultConsts
-			if v >= optimizeConstantsEnabledVersion {
-				expected = expectedOptimizedConsts
-			}
-
 			for _, vi := range variations {
-				ops := testProg(t, vi, v)
+				ops, err := AssembleStringWithVersion(vi, v)
+				require.NoError(t, err)
 				s := hex.EncodeToString(ops.Program)
-				require.Equal(t, mutateProgVersion(v, expected), s)
-				// pushbytes should take the same input
-				if v >= 3 {
-					testProg(t, strings.Replace(vi, "byte", "pushbytes", 1), v)
-				}
+				require.Equal(t, mutateProgVersion(v, "0126010661626364656628"), s)
 			}
 
-			for _, b := range bad {
-				testProg(t, b[0], v, Expect{1, b[1]})
-				// pushbytes should produce the same errors
-				if v >= 3 {
-					testProg(t, strings.Replace(b[0], "byte", "pushbytes", 1), v, Expect{1, b[1]})
-				}
-			}
 		})
 	}
 }
 
 func TestAssembleBytesString(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	for v := uint64(1); v <= AssemblerMaxVersion; v++ {
 		t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
 			testLine(t, `byte "foo bar"`, v, "")
@@ -785,242 +592,7 @@ func TestAssembleBytesString(t *testing.T) {
 	}
 }
 
-func TestAssembleOptimizedConstants(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
-	t.Parallel()
-
-	t.Run("Bytes", func(t *testing.T) {
-		t.Parallel()
-
-		program := `
-byte 0x0102
-byte base64(AQI=) // 0x0102
-byte base32(AEBA====) // 0x0102
-byte "test"
-byte base32(ORSXG5A=) // "test"
-addr WSJHNPJ6YCLX5K4GUMQ4ISPK3ABMS3AL3F6CSVQTCUI5F4I65PWEMCWT3M
-byte 0x0103
-byte base64(AQM=) // 0x0103
-byte base32(AEBQ====) // 0x0103
-`
-		// 0x0102 and 0x0103 are tied for most frequent bytes, but 0x0102 should win because it appears first
-		expected := `
-bytecblock 0x0102 0x0103 0x74657374
-bytec_0 // 0x0102
-bytec_0 // 0x0102
-bytec_0 // 0x0102
-bytec_2 // "test"
-bytec_2 // "test"
-pushbytes 0xb49276bd3ec0977eab86a321c449ead802c96c0bd97c2956131511d2f11eebec // addr WSJHNPJ6YCLX5K4GUMQ4ISPK3ABMS3AL3F6CSVQTCUI5F4I65PWEMCWT3M
-bytec_1 // 0x0103
-bytec_1 // 0x0103
-bytec_1 // 0x0103
-`
-		for v := uint64(optimizeConstantsEnabledVersion); v <= AssemblerMaxVersion; v++ {
-			t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
-				expectedOps := testProg(t, expected, v)
-				expectedHex := hex.EncodeToString(expectedOps.Program)
-
-				actualOps := testProg(t, program, v)
-				actualHex := hex.EncodeToString(actualOps.Program)
-
-				require.Equal(t, expectedHex, actualHex)
-			})
-		}
-	})
-
-	t.Run("Ints", func(t *testing.T) {
-		t.Parallel()
-
-		program := `
-int 1
-int OptIn // 1
-int 2
-int 3
-int 4
-int ClearState // 3
-int 4
-int 3
-int 4
-`
-		// 3 and 4 are tied for most frequent int, but 3 should win because it appears first
-		expected := `
-intcblock 3 4 1
-intc_2 // 1
-intc_2 // 1
-pushint 2
-intc_0 // 3
-intc_1 // 4
-intc_0 // 3
-intc_1 // 4
-intc_0 // 3
-intc_1 // 4
-`
-		for v := uint64(optimizeConstantsEnabledVersion); v <= AssemblerMaxVersion; v++ {
-			t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
-				expectedOps := testProg(t, expected, v)
-				expectedHex := hex.EncodeToString(expectedOps.Program)
-
-				actualOps := testProg(t, program, v)
-				actualHex := hex.EncodeToString(actualOps.Program)
-
-				require.Equal(t, expectedHex, actualHex)
-			})
-		}
-	})
-
-	t.Run("All", func(t *testing.T) {
-		t.Parallel()
-
-		program := `
-int 1
-byte 0x0102
-int OptIn // 1
-byte base64(AQI=) // 0x0102
-int 2
-byte base32(AEBA====) // 0x0102
-int 3
-byte "test"
-int 4
-byte base32(ORSXG5A=) // "test"
-int ClearState // 3
-addr WSJHNPJ6YCLX5K4GUMQ4ISPK3ABMS3AL3F6CSVQTCUI5F4I65PWEMCWT3M
-int 4
-byte 0x0103
-int 3
-byte base64(AQM=) // 0x0103
-int 4
-byte base32(AEBQ====) // 0x0103
-`
-		// interleaving of previous tests
-		expected := `
-intcblock 3 4 1
-bytecblock 0x0102 0x0103 0x74657374
-intc_2 // 1
-bytec_0 // 0x0102
-intc_2 // 1
-bytec_0 // 0x0102
-pushint 2
-bytec_0 // 0x0102
-intc_0 // 3
-bytec_2 // "test"
-intc_1 // 4
-bytec_2 // "test"
-intc_0 // 3
-pushbytes 0xb49276bd3ec0977eab86a321c449ead802c96c0bd97c2956131511d2f11eebec // addr WSJHNPJ6YCLX5K4GUMQ4ISPK3ABMS3AL3F6CSVQTCUI5F4I65PWEMCWT3M
-intc_1 // 4
-bytec_1 // 0x0103
-intc_0 // 3
-bytec_1 // 0x0103
-intc_1 // 4
-bytec_1 // 0x0103
-`
-		for v := uint64(optimizeConstantsEnabledVersion); v <= AssemblerMaxVersion; v++ {
-			t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
-				expectedOps := testProg(t, expected, v)
-				expectedHex := hex.EncodeToString(expectedOps.Program)
-
-				actualOps := testProg(t, program, v)
-				actualHex := hex.EncodeToString(actualOps.Program)
-
-				require.Equal(t, expectedHex, actualHex)
-			})
-		}
-	})
-
-	t.Run("Back jumps", func(t *testing.T) {
-		t.Parallel()
-
-		program := `
-int 1
-byte 0x0102
-int OptIn // 1
-byte base64(AQI=) // 0x0102
-int 2
-byte base32(AEBA====) // 0x0102
-int 3
-byte "test"
-target:
-retsub
-int 4
-byte base32(ORSXG5A=) // "test"
-int ClearState // 3
-addr WSJHNPJ6YCLX5K4GUMQ4ISPK3ABMS3AL3F6CSVQTCUI5F4I65PWEMCWT3M
-int 4
-byte 0x0103
-int 3
-byte base64(AQM=) // 0x0103
-int 4
-callsub target
-byte base32(AEBQ====) // 0x0103
-`
-		expected := `
-intcblock 3 4 1
-bytecblock 0x0102 0x0103 0x74657374
-intc_2 // 1
-bytec_0 // 0x0102
-intc_2 // 1
-bytec_0 // 0x0102
-pushint 2
-bytec_0 // 0x0102
-intc_0 // 3
-bytec_2 // "test"
-target:
-retsub
-intc_1 // 4
-bytec_2 // "test"
-intc_0 // 3
-pushbytes 0xb49276bd3ec0977eab86a321c449ead802c96c0bd97c2956131511d2f11eebec // addr WSJHNPJ6YCLX5K4GUMQ4ISPK3ABMS3AL3F6CSVQTCUI5F4I65PWEMCWT3M
-intc_1 // 4
-bytec_1 // 0x0103
-intc_0 // 3
-bytec_1 // 0x0103
-intc_1 // 4
-callsub target
-bytec_1 // 0x0103
-`
-		for v := uint64(optimizeConstantsEnabledVersion); v <= AssemblerMaxVersion; v++ {
-			t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
-				expectedOps := testProg(t, expected, v)
-				expectedHex := hex.EncodeToString(expectedOps.Program)
-
-				actualOps := testProg(t, program, v)
-				actualHex := hex.EncodeToString(actualOps.Program)
-
-				require.Equal(t, expectedHex, actualHex)
-			})
-		}
-	})
-}
-
-func TestAssembleOptimizedUint(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
-	t.Parallel()
-
-	program := `
-int 1
-int OptIn
-int 2
-int 3
-int 3
-int ClearState
-`
-	expected := "042002030123238102222222"
-
-	for v := uint64(optimizeConstantsEnabledVersion); v <= AssemblerMaxVersion; v++ {
-		t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
-			ops := testProg(t, program, v)
-			s := hex.EncodeToString(ops.Program)
-			require.Equal(t, mutateProgVersion(v, expected), s)
-		})
-	}
-}
-
 func TestFieldsFromLine(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	line := "op arg"
 	fields := fieldsFromLine(line)
 	require.Equal(t, 2, len(fields))
@@ -1227,8 +799,6 @@ func TestFieldsFromLine(t *testing.T) {
 }
 
 func TestAssembleRejectNegJump(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	t.Parallel()
 	source := `wat:
 int 1
@@ -1236,7 +806,7 @@ bnz wat
 int 2`
 	for v := uint64(1); v < backBranchEnabledVersion; v++ {
 		t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
-			testProg(t, source, v, Expect{3, "label \"wat\" is a back reference..."})
+			testProg(t, source, v, expect{3, "label \"wat\" is a back reference..."})
 		})
 	}
 	for v := uint64(backBranchEnabledVersion); v <= AssemblerMaxVersion; v++ {
@@ -1247,8 +817,6 @@ int 2`
 }
 
 func TestAssembleBase64(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	t.Parallel()
 	text := `byte base64 //GWRM+yy3BCavBDXO/FYTNZ6o2Jai5edsMCBdDEz+0=
 byte base64 avGWRM+yy3BCavBDXO/FYTNZ6o2Jai5edsMCBdDEz//=
@@ -1263,48 +831,36 @@ byte b64 //GWRM+yy3BCavBDXO/FYTNZ6o2Jai5edsMCBdDEz+8=
 byte b64 avGWRM+yy3BCavBDXO/FYTNZ6o2Jai5edsMCBdDEz//=
 ==
 ||`
-
-	expectedDefaultConsts := "01200101260320fff19644cfb2cb70426af0435cefc5613359ea8d896a2e5e76c30205d0c4cfed206af19644cfb2cb70426af0435cefc5613359ea8d896a2e5e76c30205d0c4cfff20fff19644cfb2cb70426af0435cefc5613359ea8d896a2e5e76c30205d0c4cfef282912221022122a291211"
-	expectedOptimizedConsts := "012001012601206af19644cfb2cb70426af0435cefc5613359ea8d896a2e5e76c30205d0c4cfff8020fff19644cfb2cb70426af0435cefc5613359ea8d896a2e5e76c30205d0c4cfed2812221022128020fff19644cfb2cb70426af0435cefc5613359ea8d896a2e5e76c30205d0c4cfef281211"
-
 	for v := uint64(1); v <= AssemblerMaxVersion; v++ {
 		t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
-			expected := expectedDefaultConsts
-			if v >= optimizeConstantsEnabledVersion {
-				expected = expectedOptimizedConsts
-			}
-
 			ops := testProg(t, text, v)
 			s := hex.EncodeToString(ops.Program)
-			require.Equal(t, mutateProgVersion(v, expected), s)
+			require.Equal(t, mutateProgVersion(v, "01200101260320fff19644cfb2cb70426af0435cefc5613359ea8d896a2e5e76c30205d0c4cfed206af19644cfb2cb70426af0435cefc5613359ea8d896a2e5e76c30205d0c4cfff20fff19644cfb2cb70426af0435cefc5613359ea8d896a2e5e76c30205d0c4cfef282912221022122a291211"), s)
 		})
 	}
 }
 
 func TestAssembleRejectUnkLabel(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	t.Parallel()
 	source := `int 1
 bnz nowhere
 int 2`
 	for v := uint64(1); v <= AssemblerMaxVersion; v++ {
 		t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
-			testProg(t, source, v, Expect{2, "reference to undefined label \"nowhere\""})
+			testProg(t, source, v, expect{2, "reference to undefined label \"nowhere\""})
 		})
 	}
 }
 
 func TestAssembleJumpToTheEnd(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	t.Parallel()
 	source := `intcblock 1
 intc 0
 intc 0
 bnz done
 done:`
-	ops := testProg(t, source, AssemblerMaxVersion)
+	ops, err := AssembleStringWithVersion(source, AssemblerMaxVersion)
+	require.NoError(t, err)
 	require.Equal(t, 9, len(ops.Program))
 	expectedProgBytes := []byte("\x01\x20\x01\x01\x22\x22\x40\x00\x00")
 	expectedProgBytes[0] = byte(AssemblerMaxVersion)
@@ -1312,8 +868,6 @@ done:`
 }
 
 func TestMultipleErrors(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	t.Parallel()
 	source := `int 1
 bnz nowhere
@@ -1323,15 +877,13 @@ int 2`
 	for v := uint64(1); v <= AssemblerMaxVersion; v++ {
 		t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
 			testProg(t, source, v,
-				Expect{2, "reference to undefined label \"nowhere\""},
-				Expect{4, "txn unknown field: \"XYZ\""})
+				expect{2, "reference to undefined label \"nowhere\""},
+				expect{4, "txn unknown field: \"XYZ\""})
 		})
 	}
 }
 
 func TestAssembleDisassemble(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	// Specifically constructed program text that should be recreated by Disassemble()
 	t.Parallel()
 	text := fmt.Sprintf(`#pragma version %d
@@ -1368,10 +920,6 @@ global Round
 global LatestTimestamp
 global CurrentApplicationID
 global CreatorAddress
-global GroupID
-global OpcodeBudget
-global CallerApplicationID
-global CallerApplicationAddress
 txn Sender
 txn Fee
 bnz label1
@@ -1384,7 +932,6 @@ label1:
 txn CloseRemainderTo
 txn VotePK
 txn SelectionPK
-txn StateProofPK
 txn VoteFirst
 txn VoteLast
 txn FirstValidTime
@@ -1432,14 +979,6 @@ txn GlobalNumByteSlice
 txn LocalNumUint
 txn LocalNumByteSlice
 gtxn 12 Fee
-txn ExtraProgramPages
-txn Nonparticipation
-global CurrentApplicationAddress
-itxna Logs 1
-itxn NumLogs
-itxn CreatedAssetID
-itxn CreatedApplicationID
-itxn LastLog
 `, AssemblerMaxVersion)
 	for _, globalField := range GlobalFieldNames {
 		if !strings.Contains(text, globalField) {
@@ -1458,11 +997,15 @@ itxn LastLog
 }
 
 func TestAssembleDisassembleCycle(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	// Test that disassembly re-assembles to the same program bytes.
 	// Disassembly won't necessarily perfectly recreate the source text, but assembling the result of Disassemble() should be the same program bytes.
 	t.Parallel()
+
+	tests := map[uint64]string{
+		1: v1Nonsense,
+		2: v1Nonsense + v2Nonsense,
+		3: v1Nonsense + v2Nonsense + v3Nonsense,
+	}
 
 	// This confirms that each program compiles to the same bytes
 	// (except the leading version indicator), when compiled under
@@ -1472,73 +1015,51 @@ func TestAssembleDisassembleCycle(t *testing.T) {
 	// optimizations in later versions that change the bytecode
 	// emitted. But currently it is, so we test it for now to
 	// catch any suprises.
-	require.Equal(t, LogicVersion, len(nonsense))
-	for v, source := range nonsense {
+	for v, source := range tests {
 		t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
 			ops := testProg(t, source, v)
 			t2, err := Disassemble(ops.Program)
 			require.NoError(t, err)
-			none := testProg(t, notrack(t2), assemblerNoVersion)
+			none := testProg(t, t2, assemblerNoVersion)
 			require.Equal(t, ops.Program[1:], none.Program[1:])
 			t3 := "// " + t2 // This comments out the #pragma version
-			current := testProg(t, notrack(t3), AssemblerMaxVersion)
+			current := testProg(t, t3, AssemblerMaxVersion)
 			require.Equal(t, ops.Program[1:], current.Program[1:])
 		})
 	}
 }
 
 func TestConstantDisassembly(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	t.Parallel()
 
 	ops := testProg(t, "int 47", AssemblerMaxVersion)
 	out, err := Disassemble(ops.Program)
 	require.NoError(t, err)
-	require.Contains(t, out, "pushint 47")
+	require.Contains(t, out, "// 47")
 
 	ops = testProg(t, "byte \"john\"", AssemblerMaxVersion)
 	out, err = Disassemble(ops.Program)
 	require.NoError(t, err)
-	require.Contains(t, out, "pushbytes 0x6a6f686e // \"john\"")
+	require.Contains(t, out, "// \"john\"")
 
 	ops = testProg(t, "byte \"!&~\"", AssemblerMaxVersion)
 	out, err = Disassemble(ops.Program)
 	require.NoError(t, err)
-	require.Contains(t, out, "pushbytes 0x21267e // \"!&~\"")
+	require.Contains(t, out, "// \"!&~\"")
 
 	ops = testProg(t, "byte 0x010720", AssemblerMaxVersion)
 	out, err = Disassemble(ops.Program)
 	require.NoError(t, err)
-	require.Contains(t, out, "pushbytes 0x010720 // 0x010720")
+	require.Contains(t, out, "// 0x010720")
 
 	ops = testProg(t, "addr AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAY5HFKQ", AssemblerMaxVersion)
 	out, err = Disassemble(ops.Program)
 	require.NoError(t, err)
-	require.Contains(t, out, "pushbytes 0x0000000000000000000000000000000000000000000000000000000000000000 // addr AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAY5HFKQ")
-
-}
-
-func TestConstantArgs(t *testing.T) {
-	partitiontest.PartitionTest(t)
-	t.Parallel()
-	for v := uint64(1); v <= AssemblerMaxVersion; v++ {
-		testProg(t, "int", v, Expect{1, "int needs one argument"})
-		testProg(t, "intc", v, Expect{1, "intc operation needs one argument"})
-		testProg(t, "byte", v, Expect{1, "byte operation needs byte literal argument"})
-		testProg(t, "bytec", v, Expect{1, "bytec operation needs one argument"})
-		testProg(t, "addr", v, Expect{1, "addr operation needs one argument"})
-	}
-	for v := uint64(3); v <= AssemblerMaxVersion; v++ {
-		testProg(t, "pushint", v, Expect{1, "pushint needs one argument"})
-		testProg(t, "pushbytes", v, Expect{1, "pushbytes operation needs byte literal argument"})
-	}
+	require.Contains(t, out, "// addr AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAY5HFKQ")
 
 }
 
 func TestAssembleDisassembleErrors(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	t.Parallel()
 
 	source := `txn Sender`
@@ -1547,7 +1068,7 @@ func TestAssembleDisassembleErrors(t *testing.T) {
 	ops.Program[2] = 0x50 // txn field
 	_, err = Disassemble(ops.Program)
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "invalid immediate f for txn")
+	require.Contains(t, err.Error(), "invalid txn arg index")
 
 	source = `txna Accounts 0`
 	ops, err = AssembleStringWithVersion(source, AssemblerMaxVersion)
@@ -1555,7 +1076,7 @@ func TestAssembleDisassembleErrors(t *testing.T) {
 	ops.Program[2] = 0x50 // txn field
 	_, err = Disassemble(ops.Program)
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "invalid immediate f for txna")
+	require.Contains(t, err.Error(), "invalid txn arg index")
 
 	source = `gtxn 0 Sender`
 	ops, err = AssembleStringWithVersion(source, AssemblerMaxVersion)
@@ -1563,7 +1084,7 @@ func TestAssembleDisassembleErrors(t *testing.T) {
 	ops.Program[3] = 0x50 // txn field
 	_, err = Disassemble(ops.Program)
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "invalid immediate f for gtxn")
+	require.Contains(t, err.Error(), "invalid txn arg index")
 
 	source = `gtxna 0 Accounts 0`
 	ops, err = AssembleStringWithVersion(source, AssemblerMaxVersion)
@@ -1571,7 +1092,7 @@ func TestAssembleDisassembleErrors(t *testing.T) {
 	ops.Program[3] = 0x50 // txn field
 	_, err = Disassemble(ops.Program)
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "invalid immediate f for gtxna")
+	require.Contains(t, err.Error(), "invalid txn arg index")
 
 	source = `global MinTxnFee`
 	ops, err = AssembleStringWithVersion(source, AssemblerMaxVersion)
@@ -1579,7 +1100,7 @@ func TestAssembleDisassembleErrors(t *testing.T) {
 	ops.Program[2] = 0x50 // txn field
 	_, err = Disassemble(ops.Program)
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "invalid immediate f for global")
+	require.Contains(t, err.Error(), "invalid global arg index")
 
 	ops.Program[0] = 0x11 // version
 	out, err := Disassemble(ops.Program)
@@ -1598,15 +1119,15 @@ func TestAssembleDisassembleErrors(t *testing.T) {
 	ops.Program[7] = 0x50 // holding field
 	_, err = Disassemble(ops.Program)
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "invalid immediate f for asset_holding_get")
+	require.Contains(t, err.Error(), "invalid asset holding arg index")
 
 	source = "int 0\nasset_params_get AssetTotal"
 	ops, err = AssembleStringWithVersion(source, AssemblerMaxVersion)
 	require.NoError(t, err)
-	ops.Program[4] = 0x50 // params field
+	ops.Program[6] = 0x50 // params field
 	_, err = Disassemble(ops.Program)
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "invalid immediate f for asset_params_get")
+	require.Contains(t, err.Error(), "invalid asset params arg index")
 
 	source = "int 0\nasset_params_get AssetTotal"
 	ops, err = AssembleStringWithVersion(source, AssemblerMaxVersion)
@@ -1616,22 +1137,17 @@ func TestAssembleDisassembleErrors(t *testing.T) {
 	ops.Program = ops.Program[0 : len(ops.Program)-1]
 	_, err = Disassemble(ops.Program)
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "program end while reading immediate f for asset_params_get")
+	require.Contains(t, err.Error(), "unexpected asset_params_get opcode end: missing 1 bytes")
 
 	source = "gtxna 0 Accounts 0"
 	ops, err = AssembleStringWithVersion(source, AssemblerMaxVersion)
 	require.NoError(t, err)
 	_, err = Disassemble(ops.Program)
 	require.NoError(t, err)
-	_, err = Disassemble(ops.Program[0 : len(ops.Program)-1])
+	ops.Program = ops.Program[0 : len(ops.Program)-2]
+	_, err = Disassemble(ops.Program)
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "program end while reading immediate i for gtxna")
-	_, err = Disassemble(ops.Program[0 : len(ops.Program)-2])
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "program end while reading immediate f for gtxna")
-	_, err = Disassemble(ops.Program[0 : len(ops.Program)-3])
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "program end while reading immediate t for gtxna")
+	require.Contains(t, err.Error(), "unexpected gtxna opcode end: missing 2 bytes")
 
 	source = "txna Accounts 0"
 	ops, err = AssembleStringWithVersion(source, AssemblerMaxVersion)
@@ -1641,7 +1157,7 @@ func TestAssembleDisassembleErrors(t *testing.T) {
 	ops.Program = ops.Program[0 : len(ops.Program)-1]
 	_, err = Disassemble(ops.Program)
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "program end while reading immediate i for txna")
+	require.Contains(t, err.Error(), "unexpected txna opcode end: missing 1 bytes")
 
 	source = "byte 0x4141\nsubstring 0 1"
 	ops, err = AssembleStringWithVersion(source, AssemblerMaxVersion)
@@ -1651,12 +1167,10 @@ func TestAssembleDisassembleErrors(t *testing.T) {
 	ops.Program = ops.Program[0 : len(ops.Program)-1]
 	_, err = Disassemble(ops.Program)
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "program end while reading immediate e for substring")
+	require.Contains(t, err.Error(), "unexpected substring opcode end: missing 1 bytes")
 }
 
 func TestAssembleVersions(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	t.Parallel()
 	testLine(t, "txna Accounts 0", AssemblerMaxVersion, "")
 	testLine(t, "txna Accounts 0", 2, "")
@@ -1664,72 +1178,37 @@ func TestAssembleVersions(t *testing.T) {
 }
 
 func TestAssembleBalance(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	t.Parallel()
 
 	source := `byte 0x00
 balance
 int 1
 ==`
-	for v := uint64(2); v < directRefEnabledVersion; v++ {
-		testProg(t, source, v, Expect{2, "balance arg 0 wanted type uint64 got []byte"})
-	}
-	for v := uint64(directRefEnabledVersion); v <= AssemblerMaxVersion; v++ {
-		testProg(t, source, v)
-	}
-}
-
-func TestAssembleMinBalance(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
-	t.Parallel()
-
-	source := `byte 0x00
-min_balance
-int 1
-==`
-	for v := uint64(3); v < directRefEnabledVersion; v++ {
-		testProg(t, source, v, Expect{2, "min_balance arg 0 wanted type uint64 got []byte"})
-	}
-	for v := uint64(directRefEnabledVersion); v <= AssemblerMaxVersion; v++ {
-		testProg(t, source, v)
-	}
+	testProg(t, source, AssemblerMaxVersion, expect{2, "balance arg 0 wanted type uint64 got []byte"})
 }
 
 func TestAssembleAsset(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	t.Parallel()
-	for v := uint64(2); v <= AssemblerMaxVersion; v++ {
+	introduction := OpsByName[LogicVersion]["asset_holding_get"].Version
+	for v := introduction; v <= AssemblerMaxVersion; v++ {
 		testProg(t, "asset_holding_get ABC 1", v,
-			Expect{1, "asset_holding_get ABC 1 expects 2 stack arguments..."})
+			expect{1, "asset_holding_get arg 1..."})
 		testProg(t, "int 1; asset_holding_get ABC 1", v,
-			Expect{2, "asset_holding_get ABC 1 expects 2 stack arguments..."})
+			expect{2, "asset_holding_get arg 0..."})
 		testProg(t, "int 1; int 1; asset_holding_get ABC 1", v,
-			Expect{3, "asset_holding_get expects 1 immediate argument"})
+			expect{3, "asset_holding_get expects one argument"})
 		testProg(t, "int 1; int 1; asset_holding_get ABC", v,
-			Expect{3, "asset_holding_get unknown field: \"ABC\""})
+			expect{3, "asset_holding_get unknown arg: \"ABC\""})
 
 		testProg(t, "byte 0x1234; asset_params_get ABC 1", v,
-			Expect{2, "asset_params_get ABC 1 arg 0 wanted type uint64..."})
+			expect{2, "asset_params_get arg 0 wanted type uint64..."})
 
-		// Test that AssetUnitName is known to return bytes
-		testProg(t, "int 1; asset_params_get AssetUnitName; pop; int 1; +", v,
-			Expect{5, "+ arg 0 wanted type uint64..."})
-
-		// Test that AssetTotal is known to return uint64
-		testProg(t, "int 1; asset_params_get AssetTotal; pop; byte 0x12; concat", v,
-			Expect{5, "concat arg 0 wanted type []byte..."})
-
-		testLine(t, "asset_params_get ABC 1", v, "asset_params_get expects 1 immediate argument")
-		testLine(t, "asset_params_get ABC", v, "asset_params_get unknown field: \"ABC\"")
+		testLine(t, "asset_params_get ABC 1", v, "asset_params_get expects one argument")
+		testLine(t, "asset_params_get ABC", v, "asset_params_get unknown arg: \"ABC\"")
 	}
 }
 
 func TestDisassembleSingleOp(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	t.Parallel()
 
 	for v := uint64(1); v <= AssemblerMaxVersion; v++ {
@@ -1745,10 +1224,8 @@ func TestDisassembleSingleOp(t *testing.T) {
 }
 
 func TestDisassembleInt(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	t.Parallel()
-	txnSample := fmt.Sprintf("#pragma version %d\nint 17\nint 27\nint 37\nint 47\nint 5\nint 17\n", AssemblerMaxVersion)
+	txnSample := fmt.Sprintf("#pragma version %d\nint 17\nint 27\nint 37\nint 47\nint 5\n", AssemblerMaxVersion)
 	ops := testProg(t, txnSample, AssemblerMaxVersion)
 	disassembled, err := Disassemble(ops.Program)
 	require.NoError(t, err)
@@ -1756,15 +1233,13 @@ func TestDisassembleInt(t *testing.T) {
 	// disassembled output in the right order, but I don't want to
 	// hardcode checks that they are in certain intc slots.
 	require.Contains(t, disassembled, "// 17")
-	require.Contains(t, disassembled, "pushint 27")
-	require.Contains(t, disassembled, "pushint 37")
-	require.Contains(t, disassembled, "pushint 47")
-	require.Contains(t, disassembled, "pushint 5")
+	require.Contains(t, disassembled, "// 27")
+	require.Contains(t, disassembled, "// 37")
+	require.Contains(t, disassembled, "// 47")
+	require.Contains(t, disassembled, "// 5")
 }
 
 func TestDisassembleTxna(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	t.Parallel()
 	// txn was 1, but this tests both
 	introduction := OpsByName[LogicVersion]["gtxna"].Version
@@ -1792,8 +1267,6 @@ func TestDisassembleTxna(t *testing.T) {
 }
 
 func TestDisassembleGtxna(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	t.Parallel()
 	// check gtxn and gtxna are properly disassembled
 
@@ -1821,38 +1294,24 @@ func TestDisassembleGtxna(t *testing.T) {
 }
 
 func TestDisassemblePushConst(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	t.Parallel()
 	// check pushint and pushbytes are properly disassembled
 	intSample := fmt.Sprintf("#pragma version %d\npushint 1\n", AssemblerMaxVersion)
-	expectedIntSample := intSample
 	ops, err := AssembleStringWithVersion(intSample, AssemblerMaxVersion)
 	require.NoError(t, err)
 	disassembled, err := Disassemble(ops.Program)
 	require.NoError(t, err)
-	require.Equal(t, expectedIntSample, disassembled)
+	require.Equal(t, intSample, disassembled)
 
-	hexBytesSample := fmt.Sprintf("#pragma version %d\npushbytes 0x01\n", AssemblerMaxVersion)
-	expectedHexBytesSample := fmt.Sprintf("#pragma version %d\npushbytes 0x01 // 0x01\n", AssemblerMaxVersion)
-	ops, err = AssembleStringWithVersion(hexBytesSample, AssemblerMaxVersion)
+	bytesSample := fmt.Sprintf("#pragma version %d\npushbytes 0x01\n", AssemblerMaxVersion)
+	ops, err = AssembleStringWithVersion(bytesSample, AssemblerMaxVersion)
 	require.NoError(t, err)
 	disassembled, err = Disassemble(ops.Program)
 	require.NoError(t, err)
-	require.Equal(t, expectedHexBytesSample, disassembled)
-
-	stringBytesSample := fmt.Sprintf("#pragma version %d\npushbytes \"a\"\n", AssemblerMaxVersion)
-	expectedStringBytesSample := fmt.Sprintf("#pragma version %d\npushbytes 0x61 // \"a\"\n", AssemblerMaxVersion)
-	ops, err = AssembleStringWithVersion(stringBytesSample, AssemblerMaxVersion)
-	require.NoError(t, err)
-	disassembled, err = Disassemble(ops.Program)
-	require.NoError(t, err)
-	require.Equal(t, expectedStringBytesSample, disassembled)
+	require.Equal(t, bytesSample, disassembled)
 }
 
 func TestDisassembleLastLabel(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	t.Parallel()
 
 	// starting from TEAL v2 branching to the last line are legal
@@ -1874,8 +1333,6 @@ label1:
 }
 
 func TestAssembleOffsets(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	t.Parallel()
 	source := "err"
 	ops := testProg(t, source, AssemblerMaxVersion)
@@ -1948,34 +1405,28 @@ err
 	require.True(t, ok)
 	require.Equal(t, 4, line)
 
-	source = `pushint 0
+	source = `int 0
 // comment
 !
 `
 	ops = testProg(t, source, AssemblerMaxVersion)
-	require.Equal(t, 4, len(ops.Program))
+	require.Equal(t, 6, len(ops.Program))
 	require.Equal(t, 2, len(ops.OffsetToLine))
 	// vlen
 	line, ok = ops.OffsetToLine[0]
 	require.False(t, ok)
 	require.Equal(t, 0, line)
-	// pushint
-	line, ok = ops.OffsetToLine[1]
+	// int 0
+	line, ok = ops.OffsetToLine[4]
 	require.True(t, ok)
 	require.Equal(t, 0, line)
-	// pushint byte 1
-	line, ok = ops.OffsetToLine[2]
-	require.False(t, ok)
-	require.Equal(t, 0, line)
 	// !
-	line, ok = ops.OffsetToLine[3]
+	line, ok = ops.OffsetToLine[5]
 	require.True(t, ok)
 	require.Equal(t, 2, line)
 }
 
 func TestHasStatefulOps(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	t.Parallel()
 	source := "int 1"
 	ops, err := AssembleStringWithVersion(source, AssemblerMaxVersion)
@@ -1997,8 +1448,6 @@ err
 }
 
 func TestStringLiteralParsing(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	t.Parallel()
 	s := `"test"`
 	e := []byte(`test`)
@@ -2094,8 +1543,6 @@ func TestStringLiteralParsing(t *testing.T) {
 }
 
 func TestPragmas(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	t.Parallel()
 	for v := uint64(1); v <= AssemblerMaxVersion; v++ {
 		text := fmt.Sprintf("#pragma version %d", v)
@@ -2104,18 +1551,19 @@ func TestPragmas(t *testing.T) {
 	}
 
 	testProg(t, `#pragma version 100`, assemblerNoVersion,
-		Expect{1, "unsupported version: 100"})
+		expect{1, "unsupported version: 100"})
 
-	testProg(t, `int 1`, 99, Expect{0, "Can not assemble version 99"})
+	ops, err := AssembleStringWithVersion(`int 1`, 99)
+	require.Error(t, err)
 
-	// Allow this on the off chance someone needs to reassemble an old logigsig
-	testProg(t, `#pragma version 0`, assemblerNoVersion)
+	testProg(t, `#pragma version 0`, assemblerNoVersion,
+		expect{1, "unsupported version: 0"})
 
 	testProg(t, `#pragma version a`, assemblerNoVersion,
-		Expect{1, `bad #pragma version: "a"`})
+		expect{1, `bad #pragma version: "a"`})
 
 	// will default to 1
-	ops := testProg(t, "int 3", assemblerNoVersion)
+	ops = testProg(t, "int 3", assemblerNoVersion)
 	require.Equal(t, uint64(1), ops.Version)
 	require.Equal(t, uint8(1), ops.Program[0])
 
@@ -2126,24 +1574,24 @@ func TestPragmas(t *testing.T) {
 	require.Equal(t, uint64(2), ops.Version)
 
 	// changing version is not allowed
-	testProg(t, "#pragma version 1", 2, Expect{1, "version mismatch..."})
-	testProg(t, "#pragma version 2", 1, Expect{1, "version mismatch..."})
+	testProg(t, "#pragma version 1", 2, expect{1, "version mismatch..."})
+	testProg(t, "#pragma version 2", 1, expect{1, "version mismatch..."})
 
-	testProg(t, "#pragma version 2\n#pragma version 1", assemblerNoVersion,
-		Expect{2, "version mismatch..."})
+	ops = testProg(t, "#pragma version 2\n#pragma version 1", assemblerNoVersion,
+		expect{2, "version mismatch..."})
 
 	// repetitive, but fine
 	ops = testProg(t, "#pragma version 2\n#pragma version 2", assemblerNoVersion)
 	require.Equal(t, uint64(2), ops.Version)
 
 	testProg(t, "\nint 1\n#pragma version 2", assemblerNoVersion,
-		Expect{3, "#pragma version is only allowed before instructions"})
+		expect{3, "#pragma version is only allowed before instructions"})
 
 	testProg(t, "#pragma run-mode 2", assemblerNoVersion,
-		Expect{1, `unsupported pragma directive: "run-mode"`})
+		expect{1, `unsupported pragma directive: "run-mode"`})
 
 	testProg(t, "#pragma versions", assemblerNoVersion,
-		Expect{1, `unsupported pragma directive: "versions"`})
+		expect{1, `unsupported pragma directive: "versions"`})
 
 	ops = testProg(t, "#pragma version 1", assemblerNoVersion)
 	require.Equal(t, uint64(1), ops.Version)
@@ -2151,18 +1599,13 @@ func TestPragmas(t *testing.T) {
 	ops = testProg(t, "\n#pragma version 1", assemblerNoVersion)
 	require.Equal(t, uint64(1), ops.Version)
 
-	testProg(t, "#pragma", assemblerNoVersion, Expect{1, "empty pragma"})
+	testProg(t, "#pragma", assemblerNoVersion, expect{1, "empty pragma"})
 
 	testProg(t, "#pragma version", assemblerNoVersion,
-		Expect{1, "no version value"})
-
-	ops = testProg(t, "    #pragma version 5     ", assemblerNoVersion)
-	require.Equal(t, uint64(5), ops.Version)
+		expect{1, "no version value"})
 }
 
 func TestAssemblePragmaVersion(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	t.Parallel()
 	text := `#pragma version 1
 int 1
@@ -2173,8 +1616,8 @@ int 1
 	require.NoError(t, err)
 	require.Equal(t, ops1.Program, ops.Program)
 
-	testProg(t, text, 0, Expect{1, "version mismatch..."})
-	testProg(t, text, 2, Expect{1, "version mismatch..."})
+	testProg(t, text, 0, expect{1, "version mismatch..."})
+	testProg(t, text, 2, expect{1, "version mismatch..."})
 	testProg(t, text, assemblerNoVersion)
 
 	ops, err = AssembleStringWithVersion(text, assemblerNoVersion)
@@ -2190,8 +1633,8 @@ int 1
 	require.NoError(t, err)
 	require.Equal(t, ops2.Program, ops.Program)
 
-	testProg(t, text, 0, Expect{1, "version mismatch..."})
-	testProg(t, text, 1, Expect{1, "version mismatch..."})
+	testProg(t, text, 0, expect{1, "version mismatch..."})
+	testProg(t, text, 1, expect{1, "version mismatch..."})
 
 	ops, err = AssembleStringWithVersion(text, assemblerNoVersion)
 	require.NoError(t, err)
@@ -2211,12 +1654,10 @@ len
 	require.Equal(t, ops2.Program, ops.Program)
 
 	testProg(t, "#pragma unk", assemblerNoVersion,
-		Expect{1, `unsupported pragma directive: "unk"`})
+		expect{1, `unsupported pragma directive: "unk"`})
 }
 
 func TestAssembleConstants(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	t.Parallel()
 	for v := uint64(1); v <= AssemblerMaxVersion; v++ {
 		t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
@@ -2230,69 +1671,19 @@ func TestAssembleConstants(t *testing.T) {
 }
 
 func TestErrShortBytecblock(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	text := `intcblock 0x1234567812345678 0x1234567812345671 0x1234567812345672 0x1234567812345673 4 5 6 7 8`
 	ops, err := AssembleStringWithVersion(text, 1)
 	require.NoError(t, err)
-	_, _, err = parseIntcblock(ops.Program, 1)
+	_, _, err = parseIntcblock(ops.Program, 0)
 	require.Equal(t, err, errShortIntcblock)
 
-	var cx EvalContext
+	var cx evalContext
 	cx.program = ops.Program
 	err = checkIntConstBlock(&cx)
 	require.Equal(t, err, errShortIntcblock)
 }
 
-func TestMethodWarning(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
-	tests := []struct {
-		method string
-		pass   bool
-	}{
-		{
-			method: "abc(uint64)void",
-			pass:   true,
-		},
-		{
-			method: "abc(uint64)",
-			pass:   false,
-		},
-		{
-			method: "abc(uint65)void",
-			pass:   false,
-		},
-		{
-			method: "(uint64)void",
-			pass:   false,
-		},
-		{
-			method: "abc(uint65,void",
-			pass:   false,
-		},
-	}
-
-	for _, test := range tests {
-		for v := uint64(1); v <= AssemblerMaxVersion; v++ {
-			src := fmt.Sprintf("method \"%s\"\nint 1", test.method)
-			ops, err := AssembleStringWithVersion(src, v)
-			require.NoError(t, err)
-
-			if test.pass {
-				require.Len(t, ops.Warnings, 0)
-				continue
-			}
-
-			require.Len(t, ops.Warnings, 1)
-			require.Contains(t, ops.Warnings[0].Error(), "Invalid ARC-4 ABI method signature for method op")
-		}
-	}
-}
-
 func TestBranchAssemblyTypeCheck(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	text := `
 	int 0             // current app id  [0]
 	int 1             // key  [1, 0]
@@ -2302,8 +1693,9 @@ func TestBranchAssemblyTypeCheck(t *testing.T) {
 	btoi              // [n]
 `
 
-	ops := newOpStream(AssemblerMaxVersion)
-	err := ops.assemble(text)
+	sr := strings.NewReader(text)
+	ops := OpStream{Version: AssemblerMaxVersion}
+	err := ops.assemble(sr)
 	require.NoError(t, err)
 	require.Empty(t, ops.Warnings)
 
@@ -2317,211 +1709,9 @@ flip:                 // [x]
 	btoi              // [n]
 `
 
-	ops = newOpStream(AssemblerMaxVersion)
-	err = ops.assemble(text)
+	sr = strings.NewReader(text)
+	ops = OpStream{Version: AssemblerMaxVersion}
+	err = ops.assemble(sr)
 	require.NoError(t, err)
 	require.Empty(t, ops.Warnings)
-}
-
-func TestSwapTypeCheck(t *testing.T) {
-	partitiontest.PartitionTest(t)
-	t.Parallel()
-	/* reconfirm that we detect this type error */
-	testProg(t, "int 1; byte 0x1234; +", AssemblerMaxVersion, Expect{3, "+ arg 1..."})
-	/* despite swap, we track types */
-	testProg(t, "int 1; byte 0x1234; swap; +", AssemblerMaxVersion, Expect{4, "+ arg 0..."})
-	testProg(t, "byte 0x1234; int 1; swap; +", AssemblerMaxVersion, Expect{4, "+ arg 1..."})
-}
-
-func TestDigAsm(t *testing.T) {
-	partitiontest.PartitionTest(t)
-	t.Parallel()
-	testProg(t, "int 1; dig; +", AssemblerMaxVersion, Expect{2, "dig expects 1 immediate..."})
-	testProg(t, "int 1; dig junk; +", AssemblerMaxVersion, Expect{2, "dig unable to parse..."})
-
-	testProg(t, "int 1; byte 0x1234; int 2; dig 2; +", AssemblerMaxVersion)
-	testProg(t, "byte 0x32; byte 0x1234; int 2; dig 2; +", AssemblerMaxVersion,
-		Expect{5, "+ arg 1..."})
-	testProg(t, "byte 0x32; byte 0x1234; int 2; dig 3; +", AssemblerMaxVersion,
-		Expect{4, "dig 3 expects 4..."})
-	testProg(t, "int 1; byte 0x1234; int 2; dig 12; +", AssemblerMaxVersion,
-		Expect{4, "dig 12 expects 13..."})
-
-	// Confirm that digging something out does not ruin our knowledge about the types in the middle
-	testProg(t, "int 1; byte 0x1234; byte 0x1234; dig 2; dig 3; +; pop; +", AssemblerMaxVersion,
-		Expect{8, "+ arg 1..."})
-	testProg(t, "int 3; pushbytes \"123456\"; int 1; dig 2; substring3", AssemblerMaxVersion)
-
-}
-
-func TestEqualsTypeCheck(t *testing.T) {
-	partitiontest.PartitionTest(t)
-	t.Parallel()
-	testProg(t, "int 1; byte 0x1234; ==", AssemblerMaxVersion, Expect{3, "== arg 0..."})
-	testProg(t, "int 1; byte 0x1234; !=", AssemblerMaxVersion, Expect{3, "!= arg 0..."})
-	testProg(t, "byte 0x1234; int 1; ==", AssemblerMaxVersion, Expect{3, "== arg 0..."})
-	testProg(t, "byte 0x1234; int 1; !=", AssemblerMaxVersion, Expect{3, "!= arg 0..."})
-}
-
-func TestDupTypeCheck(t *testing.T) {
-	partitiontest.PartitionTest(t)
-	t.Parallel()
-	testProg(t, "byte 0x1234; dup; int 1; +", AssemblerMaxVersion, Expect{4, "+ arg 0..."})
-	testProg(t, "byte 0x1234; int 1; dup; +", AssemblerMaxVersion)
-	testProg(t, "byte 0x1234; int 1; dup2; +", AssemblerMaxVersion, Expect{4, "+ arg 0..."})
-	testProg(t, "int 1; byte 0x1234; dup2; +", AssemblerMaxVersion, Expect{4, "+ arg 1..."})
-
-	testProg(t, "byte 0x1234; int 1; dup; dig 1; len", AssemblerMaxVersion, Expect{5, "len arg 0..."})
-	testProg(t, "int 1; byte 0x1234; dup; dig 1; !", AssemblerMaxVersion, Expect{5, "! arg 0..."})
-
-	testProg(t, "byte 0x1234; int 1; dup2; dig 2; len", AssemblerMaxVersion, Expect{5, "len arg 0..."})
-	testProg(t, "int 1; byte 0x1234; dup2; dig 2; !", AssemblerMaxVersion, Expect{5, "! arg 0..."})
-}
-
-func TestSelectTypeCheck(t *testing.T) {
-	partitiontest.PartitionTest(t)
-	t.Parallel()
-	testProg(t, "int 1; int 2; int 3; select; len", AssemblerMaxVersion, Expect{5, "len arg 0..."})
-	testProg(t, "byte 0x1234; byte 0x5678; int 3; select; !", AssemblerMaxVersion, Expect{5, "! arg 0..."})
-}
-
-func TestSetBitTypeCheck(t *testing.T) {
-	partitiontest.PartitionTest(t)
-	t.Parallel()
-	testProg(t, "int 1; int 2; int 3; setbit; len", AssemblerMaxVersion, Expect{5, "len arg 0..."})
-	testProg(t, "byte 0x1234; int 2; int 3; setbit; !", AssemblerMaxVersion, Expect{5, "! arg 0..."})
-}
-
-func TestCoverAsm(t *testing.T) {
-	partitiontest.PartitionTest(t)
-	t.Parallel()
-	testProg(t, `int 4; byte "john"; int 5; cover 2; pop; +`, AssemblerMaxVersion)
-	testProg(t, `int 4; byte "ayush"; int 5; cover 1; pop; +`, AssemblerMaxVersion)
-	testProg(t, `int 4; byte "john"; int 5; cover 2; +`, AssemblerMaxVersion, Expect{5, "+ arg 1..."})
-
-	testProg(t, `int 4; cover junk`, AssemblerMaxVersion, Expect{2, "cover unable to parse n ..."})
-}
-
-func TestUncoverAsm(t *testing.T) {
-	partitiontest.PartitionTest(t)
-	t.Parallel()
-	testProg(t, `int 4; byte "john"; int 5; uncover 2; +`, AssemblerMaxVersion)
-	testProg(t, `int 4; byte "ayush"; int 5; uncover 1; pop; +`, AssemblerMaxVersion)
-	testProg(t, `int 1; byte "jj"; byte "ayush"; byte "john"; int 5; uncover 4; +`, AssemblerMaxVersion)
-	testProg(t, `int 4; byte "ayush"; int 5; uncover 1; +`, AssemblerMaxVersion, Expect{5, "+ arg 1..."})
-}
-
-func TestTxTypes(t *testing.T) {
-	partitiontest.PartitionTest(t)
-	t.Parallel()
-	testProg(t, "itxn_begin; itxn_field Sender", 5, Expect{2, "itxn_field Sender expects 1 stack argument..."})
-	testProg(t, "itxn_begin; int 1; itxn_field Sender", 5, Expect{3, "...wanted type []byte got uint64"})
-	testProg(t, "itxn_begin; byte 0x56127823; itxn_field Sender", 5)
-
-	testProg(t, "itxn_begin; itxn_field Amount", 5, Expect{2, "itxn_field Amount expects 1 stack argument..."})
-	testProg(t, "itxn_begin; byte 0x87123376; itxn_field Amount", 5, Expect{3, "...wanted type uint64 got []byte"})
-	testProg(t, "itxn_begin; int 1; itxn_field Amount", 5)
-}
-
-func TestBadInnerFields(t *testing.T) {
-	testProg(t, "itxn_begin; int 1000; itxn_field FirstValid", 5, Expect{3, "...is not allowed."})
-	testProg(t, "itxn_begin; int 1000; itxn_field FirstValidTime", 5, Expect{3, "...is not allowed."})
-	testProg(t, "itxn_begin; int 1000; itxn_field LastValid", 5, Expect{3, "...is not allowed."})
-	testProg(t, "itxn_begin; int 32; bzero; itxn_field Lease", 5, Expect{4, "...is not allowed."})
-	testProg(t, "itxn_begin; byte 0x7263; itxn_field Note", 5, Expect{3, "...Note field was introduced in TEAL v6..."})
-	testProg(t, "itxn_begin; byte 0x7263; itxn_field VotePK", 5, Expect{3, "...VotePK field was introduced in TEAL v6..."})
-	testProg(t, "itxn_begin; int 32; bzero; itxn_field TxID", 5, Expect{4, "...is not allowed."})
-
-	testProg(t, "itxn_begin; int 1000; itxn_field FirstValid", 6, Expect{3, "...is not allowed."})
-	testProg(t, "itxn_begin; int 1000; itxn_field LastValid", 6, Expect{3, "...is not allowed."})
-	testProg(t, "itxn_begin; int 32; bzero; itxn_field Lease", 6, Expect{4, "...is not allowed."})
-	testProg(t, "itxn_begin; byte 0x7263; itxn_field Note", 6)
-	testProg(t, "itxn_begin; byte 0x7263; itxn_field VotePK", 6)
-	testProg(t, "itxn_begin; int 32; bzero; itxn_field TxID", 6, Expect{4, "...is not allowed."})
-}
-
-func TestTypeTracking(t *testing.T) {
-	partitiontest.PartitionTest(t)
-	t.Parallel()
-	testProg(t, "+", LogicVersion, Expect{1, "+ expects 2 stack arguments..."})
-
-	// hitting a label in deadcode starts analyzing again, with unknown stack
-	testProg(t, "b end; label: +; end: b label", LogicVersion)
-
-	// callsub also wipes our stack knowledge, this tests shows why: it's properly typed
-	testProg(t, "callsub A; +; return; A: int 1; int 2; retsub", LogicVersion)
-
-	// but we do want to ensure we're not just treating the code after callsub as dead
-	testProg(t, "callsub A; int 1; concat; return; A: int 1; int 2; retsub", LogicVersion,
-		Expect{3, "concat arg 1 wanted..."})
-
-	// retsub deadens code, like any unconditional branch
-	testProg(t, "callsub A; +; return; A: int 1; int 2; retsub; concat", LogicVersion)
-
-	// Branching would have confused the old analysis, but the problem is local
-	// to a basic block, so it makes sense to report it.
-	testProg(t, `
- int 1
- b confusion
-label:
- byte "john"					// detectable mistake
- int 2
- +
-confusion:
- b label
-`, LogicVersion, Expect{7, "+ arg 0 wanted type uint64..."})
-
-	// Unless that same error is in dead code.
-	testProg(t, `
- int 1
- b confusion
-label:
- err							// deadens the apparent error at +
- byte "john"
- int 2
- +
-confusion:
- b label
-`, LogicVersion)
-
-	// Unconditional branches also deaden
-	testProg(t, `
- int 1
- b confusion
-label:
- b done							// deadens the apparent error at +
- byte "john"
- int 2
- +
-confusion:
- b label
-done:
-`, LogicVersion)
-
-	// Turning type tracking off and then back on, allows any follow-on code.
-	testProg(t, `
- int 1
- int 2
-#pragma typetrack false
- concat
-`, LogicVersion)
-
-	testProg(t, `
- int 1
- int 2
-#pragma typetrack false
- concat
-#pragma typetrack true
- concat
-`, LogicVersion)
-
-	// Declaring type tracking on consecutively does _not_ reset type tracking state.
-	testProg(t, `
- int 1
- int 2
-#pragma typetrack true
- concat
-#pragma typetrack true
- concat
-`, LogicVersion, Expect{5, "concat arg 1 wanted type []byte..."})
 }

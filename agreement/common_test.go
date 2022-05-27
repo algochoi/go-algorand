@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2021 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"math/rand"
 	"testing"
+	"time"
 
 	"github.com/algorand/go-deadlock"
 	"github.com/stretchr/testify/require"
@@ -179,7 +180,7 @@ type testBlockFactory struct {
 	Owner int
 }
 
-func (f testBlockFactory) AssembleBlock(r basics.Round) (ValidatedBlock, error) {
+func (f testBlockFactory) AssembleBlock(r basics.Round, deadline time.Time) (ValidatedBlock, error) {
 	return testValidatedBlock{Inside: bookkeeping.Block{BlockHeader: bookkeeping.BlockHeader{Round: r}}}, nil
 }
 
@@ -319,7 +320,7 @@ func (l *testLedger) LookupDigest(r basics.Round) (crypto.Digest, error) {
 	return l.entries[r].Digest(), nil
 }
 
-func (l *testLedger) LookupAgreement(r basics.Round, a basics.Address) (basics.OnlineAccountData, error) {
+func (l *testLedger) Lookup(r basics.Round, a basics.Address) (basics.AccountData, error) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 
@@ -329,10 +330,10 @@ func (l *testLedger) LookupAgreement(r basics.Round, a basics.Address) (basics.O
 	}
 
 	if l.maxNumBlocks != 0 && r+round(l.maxNumBlocks) < l.nextRound {
-		return basics.OnlineAccountData{}, &LedgerDroppedRoundError{}
+		return basics.AccountData{}, &LedgerDroppedRoundError{}
 	}
 
-	return l.state[a].OnlineAccountData(), nil
+	return l.state[a], nil
 }
 
 func (l *testLedger) Circulation(r basics.Round) (basics.MicroAlgos, error) {
@@ -347,7 +348,7 @@ func (l *testLedger) Circulation(r basics.Round) (basics.MicroAlgos, error) {
 	var sum basics.MicroAlgos
 	var overflowed bool
 	for _, rec := range l.state {
-		sum, overflowed = basics.OAddA(sum, rec.OnlineAccountData().VotingStake())
+		sum, overflowed = basics.OAddA(sum, rec.VotingStake())
 		if overflowed {
 			panic("circulation computation overflowed")
 		}
@@ -421,7 +422,7 @@ type testAccountData struct {
 }
 
 func makeProposalsTesting(accs testAccountData, round basics.Round, period period, factory BlockFactory, ledger Ledger) (ps []proposal, vs []vote) {
-	ve, err := factory.AssembleBlock(round)
+	ve, err := factory.AssembleBlock(round, time.Now().Add(time.Minute))
 	if err != nil {
 		logging.Base().Errorf("Could not generate a proposal for round %d: %v", round, err)
 		return nil, nil
@@ -533,7 +534,7 @@ func (v *voteMakerHelper) MakeRandomProposalValue() *proposalValue {
 
 func (v *voteMakerHelper) MakeRandomProposalPayload(t *testing.T, r round) (*proposal, *proposalValue) {
 	f := testBlockFactory{Owner: 1}
-	ve, err := f.AssembleBlock(r)
+	ve, err := f.AssembleBlock(r, time.Now().Add(time.Minute))
 	require.NoError(t, err)
 
 	var payload unauthenticatedProposal

@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2021 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -21,13 +21,10 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/stretchr/testify/require"
 )
 
 func TestGetS3UploadBucket(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	tests := []struct {
 		name           string
 		getDefault     bool
@@ -53,8 +50,6 @@ func TestGetS3UploadBucket(t *testing.T) {
 }
 
 func TestGetS3ReleaseBucket(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	tests := []struct {
 		name           string
 		getDefault     bool
@@ -80,8 +75,6 @@ func TestGetS3ReleaseBucket(t *testing.T) {
 }
 
 func Test_getS3Region(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	tests := []struct {
 		name       string
 		getDefault bool
@@ -107,8 +100,6 @@ func Test_getS3Region(t *testing.T) {
 }
 
 func TestMakeS3SessionForUploadWithBucket(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	const bucket1 = "test-bucket"
 	const publicUploadBucket = "algorand-uploads"
 	const emptyBucket = ""
@@ -151,8 +142,6 @@ func TestMakeS3SessionForUploadWithBucket(t *testing.T) {
 }
 
 func TestMakeS3SessionForDownloadWithBucket(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	const bucket1 = "test-bucket"
 	const publicReleaseBucket = "algorand-releases"
 	const emptyBucket = ""
@@ -195,8 +184,6 @@ func TestMakeS3SessionForDownloadWithBucket(t *testing.T) {
 }
 
 func TestGetVersionFromName(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	type args struct {
 		name     string
 		version  string
@@ -219,8 +206,6 @@ func TestGetVersionFromName(t *testing.T) {
 }
 
 func TestGetPartsFromVersion(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	type args struct {
 		name     string
 		version  uint64

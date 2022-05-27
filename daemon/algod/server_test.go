@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2021 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -23,7 +23,6 @@ import (
 	"net"
 	"testing"
 
-	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/stretchr/testify/require"
 )
 
@@ -35,8 +34,6 @@ func isTCPPortAvailable(host string, port int) bool {
 	return err == nil
 }
 func TestFirstListenerSetupGetsPort8080WhenPassedPortZero(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	// this test will fail if there is already a listener on the testing machine's port 8080
 	// (except if a dev has a node running on port 8080 and runs the test; in that case, we can't run this test.)
 	targetPort := 8080
@@ -54,8 +51,6 @@ func TestFirstListenerSetupGetsPort8080WhenPassedPortZero(t *testing.T) {
 }
 
 func TestSecondListenerSetupGetsAnotherPortWhen8080IsBusy(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	defaultAddr := "127.0.0.1:0"
 	unexpectedAddr := "127.0.0.1:8080"
 	makeListener(defaultAddr)
@@ -66,8 +61,6 @@ func TestSecondListenerSetupGetsAnotherPortWhen8080IsBusy(t *testing.T) {
 }
 
 func TestFirstListenerSetupGetsPassedPortWhenPassedPortNonZero(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	expectedAddr := "127.0.0.1:8081"
 	listener, err := makeListener(expectedAddr)
 	require.NoError(t, err)

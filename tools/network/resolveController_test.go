@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2021 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -25,13 +25,10 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/logging"
-	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/algorand/go-algorand/tools/network/dnssec"
 )
 
 func TestSystemResolver(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	a := require.New(t)
 	log := logging.Base()
 
@@ -46,8 +43,6 @@ func TestSystemResolver(t *testing.T) {
 }
 
 func TestFallbackResolver(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	a := require.New(t)
 	log := logging.Base()
 
@@ -63,8 +58,6 @@ func TestFallbackResolver(t *testing.T) {
 }
 
 func TestDefaultResolver(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	a := require.New(t)
 	log := logging.Base()
 
@@ -80,8 +73,6 @@ func TestDefaultResolver(t *testing.T) {
 }
 
 func TestRealNamesWithResolver(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	t.Skip() // skip real network tests in autotest
 	a := require.New(t)
 	log := logging.Base()

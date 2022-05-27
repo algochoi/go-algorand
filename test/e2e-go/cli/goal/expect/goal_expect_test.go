@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2021 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -24,9 +24,7 @@ import (
 
 // TestGoalWithExpect Process all expect script files with suffix Test.exp within the test/e2e-go/cli/goal/expect directory
 func TestGoalWithExpect(t *testing.T) {
-	// partitiontest.PartitionTest(t)
-	// Causes double partition, so commented out on purpose
-	defer fixtures.ShutdownSynchronizedTest(t)
+	t.Skip("goal expect test are disabled due to flakiness")
 	et := fixtures.MakeExpectTest(t)
 	et.Run()
 }

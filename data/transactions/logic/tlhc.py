@@ -69,11 +69,11 @@ def main():
     out.write(code)
     try:
         out.close()
-    except Exception as e:
+    except Exeption as e:
         print(e)
     try:
         secretout.close()
-    except Exception as e:
+    except Exeption as e:
         print(e)
     return
 

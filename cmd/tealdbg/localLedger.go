@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2021 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -32,7 +32,6 @@ import (
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/ledger"
 	"github.com/algorand/go-algorand/ledger/apply"
-	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/protocol"
 )
 
@@ -188,13 +187,10 @@ func getAppCreatorFromIndexer(indexerURL string, indexerToken string, app basics
 	queryString := fmt.Sprintf("%s/v2/applications/%d", indexerURL, app)
 	client := &http.Client{}
 	request, err := http.NewRequest("GET", queryString, nil)
-	if err != nil {
-		return basics.Address{}, fmt.Errorf("application request error: %w", err)
-	}
 	request.Header.Set("X-Indexer-API-Token", indexerToken)
 	resp, err := client.Do(request)
 	if err != nil {
-		return basics.Address{}, fmt.Errorf("application request error: %w", err)
+		return basics.Address{}, fmt.Errorf("application request error: %s", err)
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != 200 {
@@ -204,13 +200,13 @@ func getAppCreatorFromIndexer(indexerURL string, indexerToken string, app basics
 	var appResp ApplicationIndexerResponse
 	err = json.NewDecoder(resp.Body).Decode(&appResp)
 	if err != nil {
-		return basics.Address{}, fmt.Errorf("application response decode error: %w", err)
+		return basics.Address{}, fmt.Errorf("application response decode error: %s", err)
 	}
 
 	creator, err := basics.UnmarshalChecksumAddress(appResp.Application.Params.Creator)
 
 	if err != nil {
-		return basics.Address{}, fmt.Errorf("UnmarshalChecksumAddress error: %w", err)
+		return basics.Address{}, fmt.Errorf("UnmarshalChecksumAddress error: %s", err)
 	}
 	return creator, nil
 }
@@ -219,13 +215,10 @@ func getBalanceFromIndexer(indexerURL string, indexerToken string, account basic
 	queryString := fmt.Sprintf("%s/v2/accounts/%s?round=%d", indexerURL, account, round)
 	client := &http.Client{}
 	request, err := http.NewRequest("GET", queryString, nil)
-	if err != nil {
-		return basics.AccountData{}, fmt.Errorf("account request error: %w", err)
-	}
 	request.Header.Set("X-Indexer-API-Token", indexerToken)
 	resp, err := client.Do(request)
 	if err != nil {
-		return basics.AccountData{}, fmt.Errorf("account request error: %w", err)
+		return basics.AccountData{}, fmt.Errorf("account request error: %s", err)
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != 200 {
@@ -235,11 +228,11 @@ func getBalanceFromIndexer(indexerURL string, indexerToken string, account basic
 	var accountResp AccountIndexerResponse
 	err = json.NewDecoder(resp.Body).Decode(&accountResp)
 	if err != nil {
-		return basics.AccountData{}, fmt.Errorf("account response decode error: %w", err)
+		return basics.AccountData{}, fmt.Errorf("account response decode error: %s", err)
 	}
 	balance, err := v2.AccountToAccountData(&accountResp.Account)
 	if err != nil {
-		return basics.AccountData{}, fmt.Errorf("AccountToAccountData error: %w", err)
+		return basics.AccountData{}, fmt.Errorf("AccountToAccountData error: %s", err)
 	}
 	return balance, nil
 }
@@ -281,47 +274,12 @@ func (l *localLedger) BlockHdr(basics.Round) (bookkeeping.BlockHeader, error) {
 	return bookkeeping.BlockHeader{}, nil
 }
 
-func (l *localLedger) CheckDup(config.ConsensusParams, basics.Round, basics.Round, basics.Round, transactions.Txid, ledgercore.Txlease) error {
+func (l *localLedger) CheckDup(config.ConsensusParams, basics.Round, basics.Round, basics.Round, transactions.Txid, ledger.TxLease) error {
 	return nil
 }
 
-func (l *localLedger) LookupAsset(rnd basics.Round, addr basics.Address, aidx basics.AssetIndex) (ledgercore.AssetResource, error) {
-	ad, ok := l.balances[addr]
-	if !ok {
-		return ledgercore.AssetResource{}, nil
-	}
-	var result ledgercore.AssetResource
-	if p, ok := ad.AssetParams[basics.AssetIndex(aidx)]; ok {
-		result.AssetParams = &p
-	}
-	if p, ok := ad.Assets[basics.AssetIndex(aidx)]; ok {
-		result.AssetHolding = &p
-	}
-
-	return result, nil
-}
-
-func (l *localLedger) LookupApplication(rnd basics.Round, addr basics.Address, aidx basics.AppIndex) (ledgercore.AppResource, error) {
-	ad, ok := l.balances[addr]
-	if !ok {
-		return ledgercore.AppResource{}, nil
-	}
-	var result ledgercore.AppResource
-	if p, ok := ad.AppParams[basics.AppIndex(aidx)]; ok {
-		result.AppParams = &p
-	}
-	if s, ok := ad.AppLocalStates[basics.AppIndex(aidx)]; ok {
-		result.AppLocalState = &s
-	}
-
-	return result, nil
-}
-
-func (l *localLedger) LookupWithoutRewards(rnd basics.Round, addr basics.Address) (ledgercore.AccountData, basics.Round, error) {
-	ad := l.balances[addr]
-	// Clear RewardsBase since tealdbg has no idea about rewards level so the underlying calculation with reward will fail.
-	ad.RewardsBase = 0
-	return ledgercore.ToAccountData(ad), rnd, nil
+func (l *localLedger) LookupWithoutRewards(rnd basics.Round, addr basics.Address) (basics.AccountData, basics.Round, error) {
+	return l.balances[addr], rnd, nil
 }
 
 func (l *localLedger) GetCreatorForRound(rnd basics.Round, cidx basics.CreatableIndex, ctype basics.CreatableType) (basics.Address, bool, error) {

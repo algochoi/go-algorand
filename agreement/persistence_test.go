@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2021 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -26,14 +26,11 @@ import (
 
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/logging"
-	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/algorand/go-algorand/util/db"
 	"github.com/algorand/go-algorand/util/timers"
 )
 
 func TestAgreementSerialization(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	// todo : we need to deserialize some more meaningfull state.
 	clock := timers.MakeMonotonicClock(time.Date(2015, 1, 2, 5, 6, 7, 8, time.UTC))
 	status := player{Round: 350, Step: soft, Deadline: time.Duration(23) * time.Second}
@@ -43,8 +40,7 @@ func TestAgreementSerialization(t *testing.T) {
 	encodedBytes := encode(clock, router, status, a)
 
 	t0 := timers.MakeMonotonicClock(time.Date(2000, 0, 0, 0, 0, 0, 0, time.UTC))
-	log := makeServiceLogger(logging.Base())
-	clock2, router2, status2, a2, err := decode(encodedBytes, t0, log)
+	clock2, router2, status2, a2, err := decode(encodedBytes, t0)
 	require.NoError(t, err)
 	require.Equalf(t, clock, clock2, "Clock wasn't serialized/deserialized correctly")
 	require.Equalf(t, router, router2, "Router wasn't serialized/deserialized correctly")
@@ -78,16 +74,14 @@ func BenchmarkAgreementDeserialization(b *testing.B) {
 
 	encodedBytes := encode(clock, router, status, a)
 	t0 := timers.MakeMonotonicClock(time.Date(2000, 0, 0, 0, 0, 0, 0, time.UTC))
-	log := makeServiceLogger(logging.Base())
+
 	b.ResetTimer()
 	for n := 0; n < b.N; n++ {
-		decode(encodedBytes, t0, log)
+		decode(encodedBytes, t0)
 	}
 }
 
 func TestAgreementPersistence(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	accessor, err := db.MakeAccessor(t.Name()+"_crash.db", false, true)
 	require.NoError(t, err)
 	defer accessor.Close()

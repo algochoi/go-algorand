@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2021 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -26,7 +26,6 @@ import (
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
-	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
 var playerTracer tracer
@@ -426,8 +425,6 @@ func testPlayerSetup() (player, rootRouter, testAccountData, testBlockFactory, L
 }
 
 func TestPlayerSynchronous(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	player, router, accs, f, ledger := testPlayerSetup()
 
 	for i := 0; i < 20; i++ {
@@ -436,8 +433,6 @@ func TestPlayerSynchronous(t *testing.T) {
 }
 
 func TestPlayerOffsetStart(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	player, router, accs, f, ledger := testPlayerSetup()
 
 	simulateTimeoutExpectAlarm(t, &router, &player)
@@ -456,8 +451,6 @@ func TestPlayerOffsetStart(t *testing.T) {
 }
 
 func TestPlayerLateBlockProposalPeriod0(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	player, router, accs, f, ledger := testPlayerSetup()
 
 	proposalVoteEventBatch, proposalPayloadEventBatch, lowestProposal := generateProposalEvents(t, player, accs, f, ledger)
@@ -511,8 +504,6 @@ func setupP(t *testing.T, r round, p period, s step) (plyr *player, pMachine ioA
 
 // ISV = Issue Soft Vote
 func TestPlayerISVDoesNotSoftVoteBottom(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	// every soft vote is associated with a proposalValue != bottom.
 	const r = round(209)
 	const p = period(1)
@@ -537,8 +528,6 @@ func TestPlayerISVDoesNotSoftVoteBottom(t *testing.T) {
 }
 
 func TestPlayerISVVoteForStartingValue(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	// if we see a next value quorum, and no next bottom quorum, vote for that value regardless
 	// every soft vote is associated with a proposalValue != bottom.
 	const r = round(209)
@@ -582,8 +571,6 @@ func TestPlayerISVVoteForStartingValue(t *testing.T) {
 }
 
 func TestPlayerISVVoteNoVoteSansProposal(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	// if we see no proposal, even if we see a next-value bottom quorum, do not issue a soft vote
 
 	const r = round(209)
@@ -635,8 +622,6 @@ func TestPlayerISVVoteNoVoteSansProposal(t *testing.T) {
 }
 
 func TestPlayerISVVoteForReProposal(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	// even if we saw bottom, if we see reproposal, and a next value quorum, vote for it
 	// why do reproposals need to be associated with next value quorums? (instead of just a next
 	// bottom quorum) - seems to be important for seed biasing
@@ -724,8 +709,6 @@ func TestPlayerISVVoteForReProposal(t *testing.T) {
 }
 
 func TestPlayerISVNoVoteForUnsupportedReProposal(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	// if there's no next value quorum, don't support the reproposal
 	const r = round(209)
 	const p = period(11)
@@ -784,8 +767,6 @@ func TestPlayerISVNoVoteForUnsupportedReProposal(t *testing.T) {
 
 // ICV = Issue Cert Vote
 func TestPlayerICVOnSoftThresholdSamePeriod(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	// basic cert vote check.
 	// This also tests cert vote even if freeze timer has not yet fired
 	const r = round(12)
@@ -858,8 +839,6 @@ func TestPlayerICVOnSoftThresholdSamePeriod(t *testing.T) {
 }
 
 func TestPlayerICVOnSoftThresholdPrePayload(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	// Check cert voting when soft bundle is received
 	// before a proposal payload. Should still generate cert vote.
 
@@ -930,8 +909,6 @@ func TestPlayerICVOnSoftThresholdPrePayload(t *testing.T) {
 }
 
 func TestPlayerICVOnSoftThresholdThenPayloadNoProposalVote(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	// if there's no proposal vote, a soft threshold should still trigger a cert vote
 	const r = round(12)
 	const p = period(1)
@@ -984,8 +961,6 @@ func TestPlayerICVOnSoftThresholdThenPayloadNoProposalVote(t *testing.T) {
 }
 
 func TestPlayerICVNoVoteForUncommittableProposal(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	const r = round(12)
 	const p = period(1)
 	pWhite, pM, helper := setupP(t, r, p, soft)
@@ -1041,8 +1016,6 @@ func TestPlayerICVNoVoteForUncommittableProposal(t *testing.T) {
 }
 
 func TestPlayerICVPanicOnSoftBottomThreshold(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	const r = round(209)
 	const p = period(1)
 	_, pM, helper := setupP(t, r, p, 0)
@@ -1075,8 +1048,6 @@ func TestPlayerICVPanicOnSoftBottomThreshold(t *testing.T) {
 
 // FF = Fast Forwarding
 func TestPlayerFFSoftThreshold(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	// future periods
 	const r = round(201221)
 	const p = period(0)
@@ -1115,8 +1086,6 @@ func TestPlayerFFSoftThreshold(t *testing.T) {
 }
 
 func TestPlayerFFSoftThresholdWithPayload(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	// future periods
 	// must also cert vote
 	const r = round(201221)
@@ -1188,8 +1157,6 @@ func TestPlayerFFSoftThresholdWithPayload(t *testing.T) {
 }
 
 func TestPlayerFFSoftThresholdLatePayloadCert(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	// should cert vote after fast forwarding due to soft bundle, if we see late payload
 	const r = round(201221)
 	const p = period(0)
@@ -1260,8 +1227,6 @@ func TestPlayerFFSoftThresholdLatePayloadCert(t *testing.T) {
 }
 
 func TestPlayerFFNextThresholdBottom(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	// Set up a composed test machine starting at period 0
 	const r = round(209)
 	pWhite, pM, helper := setupP(t, r, period(0), soft)
@@ -1296,8 +1261,6 @@ func TestPlayerFFNextThresholdBottom(t *testing.T) {
 }
 
 func TestPlayerFFNextThresholdValue(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	// Set up a composed test machine starting at period 0
 	const r = round(209)
 	pWhite, pM, helper := setupP(t, r, period(0), soft)
@@ -1332,8 +1295,6 @@ func TestPlayerFFNextThresholdValue(t *testing.T) {
 }
 
 func TestPlayerDoesNotFastForwardOldThresholdEvents(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	// thresholds/bundles with p_k < p are useless and should not cause any logic
 	// (though, in the process of generating the threshold, it should update cached next bundle)
 	const r = round(209)
@@ -1421,8 +1382,6 @@ func TestPlayerDoesNotFastForwardOldThresholdEvents(t *testing.T) {
 // Proposals
 // Contract: player should not propose unless it sees valid proof of proposal safety
 func TestPlayerProposesBottomBundle(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	// sanity check that player actually proposes something
 	// player should create a new proposal
 	const r = round(209)
@@ -1461,8 +1420,6 @@ func TestPlayerProposesBottomBundle(t *testing.T) {
 }
 
 func TestPlayerProposesNewRound(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	// player should create a new proposal on new round
 	const r = round(209)
 	const p = period(0)
@@ -1525,8 +1482,6 @@ func TestPlayerProposesNewRound(t *testing.T) {
 }
 
 func TestPlayerCertificateThenPayloadEntersNewRound(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	// player should create a new proposal on new round
 	const r = round(209)
 	const p = period(0)
@@ -1580,8 +1535,6 @@ func TestPlayerCertificateThenPayloadEntersNewRound(t *testing.T) {
 }
 
 func TestPlayerReproposesNextValueBundleWithoutPayload(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	// Even having not seen the payload, player should still repropose
 	const r = round(209)
 	const p = period(11)
@@ -1624,8 +1577,6 @@ func TestPlayerReproposesNextValueBundleWithoutPayload(t *testing.T) {
 }
 
 func TestPlayerReproposesNextValueBundleRelaysPayload(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	// player should forward the proposal payload, forwad freshest bundle, and broadcast a reproposal vote.
 	// which comes from the previous period. (has period set to p - 1)
 	const r = round(209)
@@ -1725,8 +1676,6 @@ func TestPlayerReproposesNextValueBundleRelaysPayload(t *testing.T) {
 
 // Commitment
 func TestPlayerCommitsCertThreshold(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	const r = round(20239)
 	const p = period(1001)
 	pWhite, pM, helper := setupP(t, r-1, p, soft)
@@ -1793,8 +1742,6 @@ const testPartitionPeriod = 3
 var testPartitionStep = partitionStep
 
 func TestPlayerRePropagatesFreshestBundle(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	// let's just fire a bunch of timeouts
 	const r = round(20239)
 	const p = period(2)
@@ -1855,129 +1802,7 @@ func TestPlayerRePropagatesFreshestBundle(t *testing.T) {
 	require.Truef(t, pM.getTrace().Contains(resynchEvent), "Player should try to repropagate freshest bundle")
 }
 
-func TestPlayerPropagatesProposalPayload(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
-	// if a player receives a payload from the network, it should relay it.
-	const r = round(209)
-	_, pM, helper := setupP(t, r, 0, soft)
-	payload, pV := helper.MakeRandomProposalPayload(t, r)
-
-	// store an arbitrary proposal/payload
-	vVote := helper.MakeVerifiedVote(t, 0, r, 0, propose, *pV)
-	inMsg := messageEvent{
-		T: voteVerified,
-		Input: message{
-			Vote:                vVote,
-			UnauthenticatedVote: vVote.u(),
-		},
-	}
-	err, panicErr := pM.transition(inMsg)
-	require.NoError(t, err)
-	require.NoError(t, panicErr)
-
-	m := message{
-		MessageHandle:           "msghandle",
-		UnauthenticatedProposal: payload.u(),
-	}
-	inMsg = messageEvent{
-		T:     payloadPresent,
-		Input: m,
-	}
-	err, panicErr = pM.transition(inMsg)
-	require.NoError(t, err)
-	require.NoError(t, panicErr)
-
-	relayPayloadEvent := ev(networkAction{T: relay, Tag: protocol.ProposalPayloadTag, CompoundMessage: compoundMessage{Proposal: payload.u()}})
-	require.Truef(t, pM.getTrace().Contains(relayPayloadEvent), "Player should relay payload on reception")
-}
-
-func TestPlayerPropagatesOwnProposalPayload(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
-	// if a player receives a PayloadVerified event with its own payload, it should relay it.
-	const r = round(209)
-	_, pM, helper := setupP(t, r, 0, soft)
-	payload, pV := helper.MakeRandomProposalPayload(t, r)
-
-	// store an arbitrary proposal/payload
-	vVote := helper.MakeVerifiedVote(t, 0, r, 0, propose, *pV)
-	inMsg := messageEvent{
-		T: voteVerified,
-		Input: message{
-			Vote:                vVote,
-			UnauthenticatedVote: vVote.u(),
-		},
-	}
-	err, panicErr := pM.transition(inMsg)
-	require.NoError(t, err)
-	require.NoError(t, panicErr)
-
-	m := message{
-		UnauthenticatedProposal: payload.u(),
-		Proposal:                *payload,
-	}
-	inMsg = messageEvent{
-		T:     payloadVerified,
-		Input: m,
-	}
-	err, panicErr = pM.transition(inMsg)
-	require.NoError(t, err)
-	require.NoError(t, panicErr)
-
-	relayPayloadEvent := ev(networkAction{T: relay, Tag: protocol.ProposalPayloadTag, CompoundMessage: compoundMessage{Proposal: payload.u()}})
-	require.Truef(t, pM.getTrace().Contains(relayPayloadEvent), "Player should relay own payload")
-}
-
-func TestPlayerPropagatesProposalPayloadFutureRound(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
-	// if a player receives a proposal payload for a future round, it should still
-	// propagate it at some point.
-	const r = round(209)
-	_, pM, helper := setupP(t, r, 0, soft)
-	payload, pV := helper.MakeRandomProposalPayload(t, r+1)
-
-	// store an arbitrary proposal/payload
-	vVote := helper.MakeVerifiedVote(t, 0, r+1, 0, propose, *pV)
-	inMsg := messageEvent{
-		T: voteVerified,
-		Input: message{
-			Vote:                vVote,
-			UnauthenticatedVote: vVote.u(),
-		},
-	}
-	err, panicErr := pM.transition(inMsg)
-	require.NoError(t, err)
-	require.NoError(t, panicErr)
-
-	m := message{
-		MessageHandle:           "msghandle",
-		UnauthenticatedProposal: payload.u(),
-	}
-	inMsg = messageEvent{
-		T:     payloadPresent,
-		Input: m,
-	}
-	err, panicErr = pM.transition(inMsg)
-	require.NoError(t, err)
-	require.NoError(t, panicErr)
-
-	// advance to the next round
-	msg := roundInterruptionEvent{
-		Round: r + 1,
-	}
-	err, panicErr = pM.transition(msg)
-	require.NoError(t, err)
-	require.NoError(t, panicErr)
-
-	relayPayloadEvent := ev(networkAction{T: relay, Tag: protocol.ProposalPayloadTag, CompoundMessage: compoundMessage{Proposal: payload.u()}})
-	require.Truef(t, pM.getTrace().Contains(relayPayloadEvent), "Player should relay payload on new round")
-}
-
 func TestPlayerRePropagatesProposalPayload(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	// if player broadcasts a non-bottom freshest bundle during recovery/resynch, broadcast the
 	// associated proposal payload. note this is distinct from relaying the payload
 	// on seeing a reproposal/proposal vote.
@@ -2163,83 +1988,9 @@ func TestPlayerRePropagatesProposalPayload(t *testing.T) {
 	require.Truef(t, pM.getTrace().Contains(relayPayloadEvent), "Player should relay staged payload over pinned payload on resynch")
 }
 
-func TestPlayerPropagatesProposalVote(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
-	const r = round(209)
-	_, pM, helper := setupP(t, r, 0, soft)
-	_, pV := helper.MakeRandomProposalPayload(t, r)
-
-	vVote := helper.MakeVerifiedVote(t, 0, r, 0, propose, *pV)
-	inMsg := messageEvent{
-		T: voteVerified,
-		Input: message{
-			Vote:                vVote,
-			UnauthenticatedVote: vVote.u(),
-		},
-		Proto: ConsensusVersionView{Version: protocol.ConsensusCurrentVersion},
-	}
-	err, panicErr := pM.transition(inMsg)
-	require.NoError(t, err)
-	require.NoError(t, panicErr)
-
-	relayVoteEvent := ev(networkAction{T: relay, Tag: protocol.AgreementVoteTag, UnauthenticatedVote: vVote.u()})
-	require.Truef(t, pM.getTrace().Contains(relayVoteEvent), "Player should relay proposal vote")
-}
-
-func TestPlayerPropagatesSoftVote(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
-	const r = round(209)
-	_, pM, helper := setupP(t, r, 0, soft)
-	_, pV := helper.MakeRandomProposalPayload(t, r)
-
-	vVote := helper.MakeVerifiedVote(t, 0, r, 0, soft, *pV)
-	inMsg := messageEvent{
-		T: voteVerified,
-		Input: message{
-			Vote:                vVote,
-			UnauthenticatedVote: vVote.u(),
-		},
-		Proto: ConsensusVersionView{Version: protocol.ConsensusCurrentVersion},
-	}
-	err, panicErr := pM.transition(inMsg)
-	require.NoError(t, err)
-	require.NoError(t, panicErr)
-
-	relayVoteEvent := ev(networkAction{T: relay, Tag: protocol.AgreementVoteTag, UnauthenticatedVote: vVote.u()})
-	require.Truef(t, pM.getTrace().Contains(relayVoteEvent), "Player should relay soft vote")
-}
-
-func TestPlayerPropagatesCertVote(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
-	const r = round(209)
-	_, pM, helper := setupP(t, r, 0, cert)
-	_, pV := helper.MakeRandomProposalPayload(t, r)
-
-	vVote := helper.MakeVerifiedVote(t, 0, r, 0, cert, *pV)
-	inMsg := messageEvent{
-		T: voteVerified,
-		Input: message{
-			Vote:                vVote,
-			UnauthenticatedVote: vVote.u(),
-		},
-		Proto: ConsensusVersionView{Version: protocol.ConsensusCurrentVersion},
-	}
-	err, panicErr := pM.transition(inMsg)
-	require.NoError(t, err)
-	require.NoError(t, panicErr)
-
-	relayVoteEvent := ev(networkAction{T: relay, Tag: protocol.AgreementVoteTag, UnauthenticatedVote: vVote.u()})
-	require.Truef(t, pM.getTrace().Contains(relayVoteEvent), "Player should relay cert vote")
-}
-
 // Malformed Messages
 // check both proposals, proposal payloads, and votes, bundles
-func TestPlayerDisconnectsFromMalformedProposalVote(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
+func TestPlayerDisconectsFromMalformedProposalVote(t *testing.T) {
 	const r = round(201221)
 	const p = period(0)
 	_, pM, helper := setupP(t, r, p, cert)
@@ -2277,8 +2028,6 @@ func TestPlayerDisconnectsFromMalformedProposalVote(t *testing.T) {
 }
 
 func TestPlayerIgnoresMalformedPayload(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	const r = round(201221)
 	const p = period(0)
 	_, pM, _ := setupP(t, r, p, cert)
@@ -2315,9 +2064,7 @@ func TestPlayerIgnoresMalformedPayload(t *testing.T) {
 	}), "Player should ignore malformed payload")
 }
 
-func TestPlayerDisconnectsFromMalformedVotes(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
+func TestPlayerDisconectsFromMalformedVotes(t *testing.T) {
 	const r = round(201221)
 	const p = period(0)
 	_, pM, helper := setupP(t, r, p, cert)
@@ -2355,9 +2102,7 @@ func TestPlayerDisconnectsFromMalformedVotes(t *testing.T) {
 	}), "Player should disconnect due to malformed vote")
 }
 
-func TestPlayerDisconnectsFromMalformedBundles(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
+func TestPlayerDisconectsFromMalformedBundles(t *testing.T) {
 	const r = round(201221)
 	const p = period(0)
 	_, pM, _ := setupP(t, r, p, cert)
@@ -2396,8 +2141,6 @@ func TestPlayerDisconnectsFromMalformedBundles(t *testing.T) {
 
 // Helper Sanity Checks
 func TestPlayerRequestsVoteVerification(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	const r = round(201221)
 	const p = period(0)
 	_, pM, helper := setupP(t, r, p, cert)
@@ -2419,8 +2162,6 @@ func TestPlayerRequestsVoteVerification(t *testing.T) {
 }
 
 func TestPlayerRequestsProposalVoteVerification(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	const r = round(1)
 	const p = period(0)
 	_, pM, helper := setupP(t, r, p, cert)
@@ -2442,8 +2183,6 @@ func TestPlayerRequestsProposalVoteVerification(t *testing.T) {
 }
 
 func TestPlayerRequestsBundleVerification(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	const r = round(201221)
 	const p = period(0)
 	_, pM, _ := setupP(t, r, p, cert)
@@ -2467,8 +2206,6 @@ func TestPlayerRequestsBundleVerification(t *testing.T) {
 
 // Payload Pipelining
 func TestPlayerRequestsPayloadVerification(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	const r = round(201221)
 	const p = period(0)
 	_, pM, helper := setupP(t, r, p, cert)
@@ -2504,8 +2241,6 @@ func TestPlayerRequestsPayloadVerification(t *testing.T) {
 }
 
 func TestPlayerRequestsPipelinedPayloadVerification(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	const r = round(201221)
 	const p = period(0)
 	pWhite, pM, helper := setupP(t, r, p, cert)
@@ -2599,8 +2334,6 @@ func TestPlayerRequestsPipelinedPayloadVerification(t *testing.T) {
 
 // Round pipelining
 func TestPlayerHandlesPipelinedThresholds(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	// make sure we stage a pipelined soft threshold after entering new round
 	const r = round(20)
 	const p = period(0)
@@ -2713,8 +2446,6 @@ func TestPlayerHandlesPipelinedThresholds(t *testing.T) {
 }
 
 func TestPlayerRegression_EnsuresCertThreshFromOldPeriod_8ba23942(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	// should not ignore cert thresholds from previous period in same round, if it
 	// was saved as freshest threshold
 	const r = round(20)
@@ -2789,8 +2520,6 @@ func TestPlayerRegression_EnsuresCertThreshFromOldPeriod_8ba23942(t *testing.T) 
 }
 
 func TestPlayer_RejectsCertThresholdFromPreviousRound(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	const r = round(20)
 	const p = period(0)
 	pWhite, pM, helper := setupP(t, r, p, cert)
@@ -2824,8 +2553,6 @@ func TestPlayer_RejectsCertThresholdFromPreviousRound(t *testing.T) {
 }
 
 func TestPlayer_CommitsCertThresholdWithoutPreStaging(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	// if player has pinned a block, then sees a cert threshold, it should commit
 	const r = round(20)
 	const p = period(0)
@@ -2900,8 +2627,6 @@ func TestPlayer_CommitsCertThresholdWithoutPreStaging(t *testing.T) {
 }
 
 func TestPlayer_CertThresholdDoesNotBlock(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	// check that ledger gets a hint to stage digest
 	const r = round(20)
 	const p = period(0)
@@ -2936,8 +2661,6 @@ func TestPlayer_CertThresholdDoesNotBlock(t *testing.T) {
 }
 
 func TestPlayer_CertThresholdDoesNotBlockFuturePeriod(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	// check that ledger gets a hint to stage digest
 	const r = round(20)
 	const p = period(0)
@@ -2972,8 +2695,6 @@ func TestPlayer_CertThresholdDoesNotBlockFuturePeriod(t *testing.T) {
 }
 
 func TestPlayer_CertThresholdFastForwards(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	const r = round(20)
 	const p = period(0)
 	pWhite, pM, helper := setupP(t, r, p, cert)
@@ -3012,8 +2733,6 @@ func TestPlayer_CertThresholdFastForwards(t *testing.T) {
 }
 
 func TestPlayer_CertThresholdCommitsFuturePeriodIfAlreadyHasBlock(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	const r = round(20)
 	const p = period(0)
 	pWhite, pM, helper := setupP(t, r, p, cert)
@@ -3073,12 +2792,10 @@ func TestPlayer_CertThresholdCommitsFuturePeriodIfAlreadyHasBlock(t *testing.T) 
 	require.Equalf(t, r+1, pWhite.Round, "player did not enter new round... bad!")
 	require.Equalf(t, period(0), pWhite.Period, "player should have entered period 0 of new round but didn't")
 	commitEvent := ev(ensureAction{Certificate: Certificate(bun), Payload: *payload})
-	require.Truef(t, pM.getTrace().Contains(commitEvent), "Player should have committed a block but didn't")
+	require.Truef(t, pM.getTrace().Contains(commitEvent), "Player should have commited a block but didn't")
 }
 
 func TestPlayer_PayloadAfterCertThresholdCommits(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	const r = round(20)
 	const p = period(0)
 	pWhite, pM, helper := setupP(t, r, p, cert)
@@ -3135,8 +2852,6 @@ func TestPlayer_PayloadAfterCertThresholdCommits(t *testing.T) {
 }
 
 func TestPlayerAlwaysResynchsPinnedValue(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	// a white box test that checks the pinned value is relayed even it is not staged in the period corresponding to the freshest bundle
 	const r = round(209)
 	const p = period(12)

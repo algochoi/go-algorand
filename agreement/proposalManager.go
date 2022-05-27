@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2021 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -18,10 +18,12 @@ package agreement
 
 import (
 	"fmt"
+
+	"github.com/algorand/go-algorand/logging"
 )
 
 // A proposalManager is a proposalMachine which applies relay rules to incoming
-// proposal-votes and proposal payloads, absorbs threshold events, and emits
+// proposal-votes and proposal payloads, absorbes threshold events, and emits
 // proposalCommittable events as proposals become committable.
 //
 // It handles the following type(s) of event: vote{Present,Verified},
@@ -69,7 +71,7 @@ func (m *proposalManager) handle(r routerHandle, p player, e event) event {
 		r = m.handleNewPeriod(r, p, e.(thresholdEvent))
 		return emptyEvent{}
 	}
-	r.t.log.Panicf("proposalManager: bad event type: observed an event of type %v", e.t())
+	logging.Base().Panicf("proposalManager: bad event type: observed an event of type %v", e.t())
 	panic("not reached")
 }
 

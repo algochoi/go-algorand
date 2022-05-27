@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2021 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -50,8 +50,6 @@ func (r *Registry) Register(metric Metric) {
 
 // Deregister removes the given metric to the registry
 func (r *Registry) Deregister(metric Metric) {
-	r.metricsMu.Lock()
-	defer r.metricsMu.Unlock()
 	for i, m := range r.metrics {
 		if m == metric {
 			r.metrics = append(r.metrics[:i], r.metrics[i+1:]...)
@@ -70,7 +68,7 @@ func (r *Registry) WriteMetrics(buf *strings.Builder, parentLabels string) {
 }
 
 // AddMetrics will add all the metrics that were registered to this registry
-func (r *Registry) AddMetrics(values map[string]float64) {
+func (r *Registry) AddMetrics(values map[string]string) {
 	r.metricsMu.Lock()
 	defer r.metricsMu.Unlock()
 	for _, m := range r.metrics {

@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2021 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -37,8 +37,6 @@ import (
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/data/transactions/verify"
-	"github.com/algorand/go-algorand/ledger/internal"
-	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
 )
@@ -208,7 +206,7 @@ func benchmarkFullBlocks(params testParams, b *testing.B) {
 		prev, err := l0.BlockHdr(basics.Round(i))
 		require.NoError(b, err)
 		newBlk := bookkeeping.MakeBlock(prev)
-		eval, err := l0.StartEvaluator(newBlk.BlockHeader, 5000, 0)
+		eval, err := l0.StartEvaluator(newBlk.BlockHeader, 5000)
 		require.NoError(b, err)
 
 		// build a payset
@@ -263,8 +261,8 @@ func benchmarkFullBlocks(params testParams, b *testing.B) {
 			}
 
 			// check if block is full
-			if err == ledgercore.ErrNoSpace {
-				txPerBlock = eval.PaySetSize()
+			if err == ErrNoSpace {
+				txPerBlock = len(eval.block.Payset)
 				break
 			} else {
 				require.NoError(b, err)
@@ -273,7 +271,7 @@ func benchmarkFullBlocks(params testParams, b *testing.B) {
 			// First block just creates app + opts in accts if asa test
 			if i == 1 {
 				onCompletion = transactions.NoOpOC
-				createdAppIdx = eval.TestingTxnCounter()
+				createdAppIdx = eval.state.txnCounter()
 
 				// On first block, opt in all accts to asa (accts is empty if not asa test)
 				k := 0
@@ -290,7 +288,6 @@ func benchmarkFullBlocks(params testParams, b *testing.B) {
 					stxn.Txn = tx
 					stxn.Sig = crypto.Signature{1}
 					err = eval.Transaction(stxn, transactions.ApplyData{})
-					require.NoError(b, err)
 				}
 				break
 			}
@@ -301,19 +298,19 @@ func benchmarkFullBlocks(params testParams, b *testing.B) {
 
 		// If this is the app creation block, add to both ledgers
 		if i == 1 {
-			err = l0.AddBlock(lvb.Block(), cert)
+			err = l0.AddBlock(lvb.blk, cert)
 			require.NoError(b, err)
-			err = l1.AddBlock(lvb.Block(), cert)
+			err = l1.AddBlock(lvb.blk, cert)
 			require.NoError(b, err)
 			continue
 		}
 
 		// For all other blocks, add just to the first ledger, and stash
 		// away to be replayed in the second ledger while running timer
-		err = l0.AddBlock(lvb.Block(), cert)
+		err = l0.AddBlock(lvb.blk, cert)
 		require.NoError(b, err)
 
-		blocks = append(blocks, lvb.Block())
+		blocks = append(blocks, lvb.blk)
 	}
 
 	b.Logf("built %d blocks, each with %d txns", numBlocks, txPerBlock)
@@ -322,7 +319,7 @@ func benchmarkFullBlocks(params testParams, b *testing.B) {
 	vc := verify.GetMockedCache(true)
 	b.ResetTimer()
 	for _, blk := range blocks {
-		_, err = internal.Eval(context.Background(), l1, blk, true, vc, nil)
+		_, err = eval(context.Background(), l1, blk, true, vc, nil)
 		require.NoError(b, err)
 		err = l1.AddBlock(blk, cert)
 		require.NoError(b, err)
@@ -405,7 +402,7 @@ func init() {
 
 	params = testParams{
 		testType: "app",
-		name:     "int-1",
+		name:     fmt.Sprintf("int-1"),
 		program:  ops.Program,
 	}
 	testCases[params.name] = params
@@ -413,7 +410,7 @@ func init() {
 	// Int 1 many apps
 	params = testParams{
 		testType: "app",
-		name:     "int-1-many-apps",
+		name:     fmt.Sprintf("int-1-many-apps"),
 		program:  ops.Program,
 		numApps:  10,
 	}

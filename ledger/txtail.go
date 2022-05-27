@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2021 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -17,8 +17,6 @@
 package ledger
 
 import (
-	"context"
-	"database/sql"
 	"fmt"
 
 	"github.com/algorand/go-algorand/config"
@@ -28,9 +26,8 @@ import (
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 )
 
-const initialLastValidArrayLen = 256
-
 type roundTxMembers struct {
+	txids    map[transactions.Txid]basics.Round
 	txleases map[ledgercore.Txlease]basics.Round // map of transaction lease to when it expires
 	proto    config.ConsensusParams
 }
@@ -45,7 +42,7 @@ type txTail struct {
 	lowWaterMark basics.Round // the last round known to be committed to disk
 }
 
-func (t *txTail) loadFromDisk(l ledgerForTracker, _ basics.Round) error {
+func (t *txTail) loadFromDisk(l ledgerForTracker) error {
 	latest := l.Latest()
 	hdr, err := l.BlockHdr(latest)
 	if err != nil {
@@ -63,13 +60,6 @@ func (t *txTail) loadFromDisk(l ledgerForTracker, _ basics.Round) error {
 	t.lastValid = make(map[basics.Round]map[transactions.Txid]struct{})
 
 	t.recent = make(map[basics.Round]roundTxMembers)
-
-	// the roundsLastValids is a temporary map used during the execution of
-	// loadFromDisk, allowing us to construct the lastValid maps in their
-	// optimal size. This would ensure that upon startup, we don't preallocate
-	// more memory than we truly need.
-	roundsLastValids := make(map[basics.Round][]transactions.Txid)
-
 	for ; old <= latest; old++ {
 		blk, err := l.Block(old)
 		if err != nil {
@@ -81,44 +71,19 @@ func (t *txTail) loadFromDisk(l ledgerForTracker, _ basics.Round) error {
 			return err
 		}
 
-		consensusParams := config.Consensus[blk.CurrentProtocol]
 		t.recent[old] = roundTxMembers{
-			txleases: make(map[ledgercore.Txlease]basics.Round, len(payset)),
-			proto:    consensusParams,
+			txids:    make(map[transactions.Txid]basics.Round),
+			txleases: make(map[ledgercore.Txlease]basics.Round),
+			proto:    config.Consensus[blk.CurrentProtocol],
 		}
-
 		for _, txad := range payset {
 			tx := txad.SignedTxn
-			if consensusParams.SupportTransactionLeases && (tx.Txn.Lease != [32]byte{}) {
-				t.recent[old].txleases[ledgercore.Txlease{Sender: tx.Txn.Sender, Lease: tx.Txn.Lease}] = tx.Txn.LastValid
-			}
-			if tx.Txn.LastValid > t.lowWaterMark {
-				list := roundsLastValids[tx.Txn.LastValid]
-				// if the list reached capacity, resize.
-				if len(list) == cap(list) {
-					var newList []transactions.Txid
-					if cap(list) == 0 {
-						newList = make([]transactions.Txid, 0, initialLastValidArrayLen)
-					} else {
-						newList = make([]transactions.Txid, len(list), len(list)*2)
-					}
-					copy(newList[:], list[:])
-					list = newList
-				}
-				list = append(list, tx.ID())
-				roundsLastValids[tx.Txn.LastValid] = list
-			}
+			t.recent[old].txids[tx.ID()] = tx.Txn.LastValid
+			t.recent[old].txleases[ledgercore.Txlease{Sender: tx.Txn.Sender, Lease: tx.Txn.Lease}] = tx.Txn.LastValid
+			t.putLV(tx.Txn.LastValid, tx.ID())
 		}
 	}
 
-	// add all the entries in roundsLastValids to their corresponding map entry in t.lastValid
-	for lastValid, list := range roundsLastValids {
-		lastValueMap := make(map[transactions.Txid]struct{}, len(list))
-		for _, id := range list {
-			lastValueMap[id] = struct{}{}
-		}
-		t.lastValid[lastValid] = lastValueMap
-	}
 	return nil
 }
 
@@ -128,12 +93,13 @@ func (t *txTail) close() {
 func (t *txTail) newBlock(blk bookkeeping.Block, delta ledgercore.StateDelta) {
 	rnd := blk.Round()
 
-	if _, has := t.recent[rnd]; has {
+	if t.recent[rnd].txids != nil {
 		// Repeat, ignore
 		return
 	}
 
 	t.recent[rnd] = roundTxMembers{
+		txids:    delta.Txids,
 		txleases: delta.Txleases,
 		proto:    config.Consensus[blk.CurrentProtocol],
 	}
@@ -143,7 +109,7 @@ func (t *txTail) newBlock(blk bookkeeping.Block, delta ledgercore.StateDelta) {
 	}
 }
 
-func (t *txTail) committedUpTo(rnd basics.Round) (retRound, lookback basics.Round) {
+func (t *txTail) committedUpTo(rnd basics.Round) basics.Round {
 	maxlife := basics.Round(t.recent[rnd].proto.MaxTxnLife)
 	for r := range t.recent {
 		if r+maxlife < rnd {
@@ -154,28 +120,7 @@ func (t *txTail) committedUpTo(rnd basics.Round) (retRound, lookback basics.Roun
 		delete(t.lastValid, t.lowWaterMark)
 	}
 
-	return (rnd + 1).SubSaturate(maxlife), basics.Round(0)
-}
-
-func (t *txTail) prepareCommit(*deferredCommitContext) error {
-	return nil
-}
-
-func (t *txTail) commitRound(context.Context, *sql.Tx, *deferredCommitContext) error {
-	return nil
-}
-
-func (t *txTail) postCommit(ctx context.Context, dcc *deferredCommitContext) {
-}
-
-func (t *txTail) postCommitUnlocked(ctx context.Context, dcc *deferredCommitContext) {
-}
-
-func (t *txTail) handleUnorderedCommit(*deferredCommitContext) {
-}
-
-func (t *txTail) produceCommittingTask(committedRound basics.Round, dbRound basics.Round, dcr *deferredCommitRange) *deferredCommitRange {
-	return dcr
+	return (rnd + 1).SubSaturate(maxlife)
 }
 
 // txtailMissingRound is returned by checkDup when requested for a round number below the low watermark
@@ -215,6 +160,15 @@ func (t *txTail) checkDup(proto config.ConsensusParams, current basics.Round, fi
 		return &ledgercore.TransactionInLedgerError{Txid: txid}
 	}
 	return nil
+}
+
+func (t *txTail) getRoundTxIds(rnd basics.Round) (txMap map[transactions.Txid]bool) {
+	rndtxs := t.recent[rnd].txids
+	txMap = make(map[transactions.Txid]bool, len(rndtxs))
+	for txid := range rndtxs {
+		txMap[txid] = true
+	}
+	return
 }
 
 func (t *txTail) putLV(lastValid basics.Round, id transactions.Txid) {

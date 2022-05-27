@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2021 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -17,19 +17,21 @@
 package ledger
 
 import (
+	"container/list"
+
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/logging"
 )
 
 // lruAccounts provides a storage class for the most recently used accounts data.
-// It doesn't have any synchronization primitive on it's own and require to be
+// It doesn't have any syncronization primitive on it's own and require to be
 // syncronized by the caller.
 type lruAccounts struct {
 	// accountsList contain the list of persistedAccountData, where the front ones are the most "fresh"
 	// and the ones on the back are the oldest.
-	accountsList *persistedAccountDataList
+	accountsList *list.List
 	// accounts provides fast access to the various elements in the list by using the account address
-	accounts map[basics.Address]*persistedAccountDataListNode
+	accounts map[basics.Address]*list.Element
 	// pendingAccounts are used as a way to avoid taking a write-lock. When the caller needs to "materialize" these,
 	// it would call flushPendingWrites and these would be merged into the accounts/accountsList
 	pendingAccounts chan persistedAccountData
@@ -42,8 +44,8 @@ type lruAccounts struct {
 // init initializes the lruAccounts for use.
 // thread locking semantics : write lock
 func (m *lruAccounts) init(log logging.Logger, pendingWrites int, pendingWritesWarnThreshold int) {
-	m.accountsList = newPersistedAccountList().allocateFreeNodes(pendingWrites)
-	m.accounts = make(map[basics.Address]*persistedAccountDataListNode, pendingWrites)
+	m.accountsList = list.New()
+	m.accounts = make(map[basics.Address]*list.Element)
 	m.pendingAccounts = make(chan persistedAccountData, pendingWrites)
 	m.log = log
 	m.pendingWritesWarnThreshold = pendingWritesWarnThreshold
@@ -53,7 +55,7 @@ func (m *lruAccounts) init(log logging.Logger, pendingWrites int, pendingWritesW
 // thread locking semantics : read lock
 func (m *lruAccounts) read(addr basics.Address) (data persistedAccountData, has bool) {
 	if el := m.accounts[addr]; el != nil {
-		return *el.Value, true
+		return el.Value.(persistedAccountData), true
 	}
 	return persistedAccountData{}, false
 }
@@ -73,6 +75,7 @@ func (m *lruAccounts) flushPendingWrites() {
 			return
 		}
 	}
+	return
 }
 
 // writePending write a single persistedAccountData entry to the pendingAccounts buffer.
@@ -93,14 +96,15 @@ func (m *lruAccounts) writePending(acct persistedAccountData) {
 func (m *lruAccounts) write(acctData persistedAccountData) {
 	if el := m.accounts[acctData.addr]; el != nil {
 		// already exists; is it a newer ?
-		if el.Value.before(&acctData) {
+		existing := el.Value.(persistedAccountData)
+		if existing.before(&acctData) {
 			// we update with a newer version.
-			el.Value = &acctData
+			el.Value = acctData
 		}
-		m.accountsList.moveToFront(el)
+		m.accountsList.MoveToFront(el)
 	} else {
 		// new entry.
-		m.accounts[acctData.addr] = m.accountsList.pushFront(&acctData)
+		m.accounts[acctData.addr] = m.accountsList.PushFront(acctData)
 	}
 }
 
@@ -112,9 +116,9 @@ func (m *lruAccounts) prune(newSize int) (removed int) {
 		if len(m.accounts) <= newSize {
 			break
 		}
-		back := m.accountsList.back()
-		delete(m.accounts, back.Value.addr)
-		m.accountsList.remove(back)
+		back := m.accountsList.Back()
+		delete(m.accounts, back.Value.(persistedAccountData).addr)
+		m.accountsList.Remove(back)
 		removed++
 	}
 	return

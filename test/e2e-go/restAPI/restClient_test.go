@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2021 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -18,10 +18,8 @@ package restapi
 
 import (
 	"context"
-	"encoding/hex"
 	"errors"
 	"flag"
-
 	"math"
 	"math/rand"
 	"os"
@@ -33,21 +31,17 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	algodclient "github.com/algorand/go-algorand/daemon/algod/api/client"
+	kmdclient "github.com/algorand/go-algorand/daemon/kmd/client"
+
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
-	"github.com/algorand/go-algorand/crypto/merklesignature"
-	algodclient "github.com/algorand/go-algorand/daemon/algod/api/client"
-	v1 "github.com/algorand/go-algorand/daemon/algod/api/spec/v1"
-	kmdclient "github.com/algorand/go-algorand/daemon/kmd/client"
-	"github.com/algorand/go-algorand/data/account"
+	"github.com/algorand/go-algorand/daemon/algod/api/spec/v1"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
-	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/libgoal"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/framework/fixtures"
-	"github.com/algorand/go-algorand/test/partitiontest"
-	"github.com/algorand/go-algorand/util/db"
 )
 
 var fixture fixtures.RestClientFixture
@@ -170,7 +164,7 @@ func waitForTransaction(t *testing.T, testClient libgoal.Client, fromAddress, tx
 	if rnd.LastRound == 0 {
 		t.Fatal("it is currently round 0 but we need to wait for a transaction that might happen this round but we'll never know if that happens because ConfirmedRound==0 is indestinguishable from not having happened")
 	}
-	timeoutTime := time.Now().Add(timeout)
+	timeoutTime := time.Now().Add(30 * time.Second)
 	for {
 		tx, err = testClient.TransactionInformation(fromAddress, txID)
 		if err != nil && strings.HasPrefix(err.Error(), "HTTP 404") {
@@ -192,9 +186,6 @@ func waitForTransaction(t *testing.T, testClient libgoal.Client, fromAddress, tx
 }
 
 func TestClientCanGetStatus(t *testing.T) {
-	partitiontest.PartitionTest(t)
-	defer fixtures.ShutdownSynchronizedTest(t)
-
 	a := require.New(fixtures.SynchronizedTest(t))
 	defer fixture.SetTestContext(t)()
 	testClient := fixture.LibGoalClient
@@ -209,9 +200,6 @@ func TestClientCanGetStatus(t *testing.T) {
 }
 
 func TestClientCanGetStatusAfterBlock(t *testing.T) {
-	partitiontest.PartitionTest(t)
-	defer fixtures.ShutdownSynchronizedTest(t)
-
 	a := require.New(fixtures.SynchronizedTest(t))
 	defer fixture.SetTestContext(t)()
 	testClient := fixture.LibGoalClient
@@ -225,9 +213,6 @@ func TestClientCanGetStatusAfterBlock(t *testing.T) {
 }
 
 func TestTransactionsByAddr(t *testing.T) {
-	partitiontest.PartitionTest(t)
-	defer fixtures.ShutdownSynchronizedTest(t)
-
 	a := require.New(fixtures.SynchronizedTest(t))
 	var localFixture fixtures.RestClientFixture
 	localFixture.Setup(t, filepath.Join("nettemplates", "TwoNodes50Each.json"))
@@ -250,7 +235,7 @@ func TestTransactionsByAddr(t *testing.T) {
 	rnd, err := testClient.Status()
 	a.NoError(err)
 	t.Logf("rnd[%d] created txn %s", rnd.LastRound, txID)
-	_, err = waitForTransaction(t, testClient, someAddress, txID.String(), 30*time.Second)
+	_, err = waitForTransaction(t, testClient, someAddress, txID.String(), 15*time.Second)
 	a.NoError(err)
 
 	// what is my round?
@@ -274,9 +259,6 @@ func TestTransactionsByAddr(t *testing.T) {
 }
 
 func TestClientCanGetVersion(t *testing.T) {
-	partitiontest.PartitionTest(t)
-	defer fixtures.ShutdownSynchronizedTest(t)
-
 	a := require.New(fixtures.SynchronizedTest(t))
 	defer fixture.SetTestContext(t)()
 	testClient := fixture.LibGoalClient
@@ -286,9 +268,6 @@ func TestClientCanGetVersion(t *testing.T) {
 }
 
 func TestClientCanGetSuggestedFee(t *testing.T) {
-	partitiontest.PartitionTest(t)
-	defer fixtures.ShutdownSynchronizedTest(t)
-
 	a := require.New(fixtures.SynchronizedTest(t))
 	defer fixture.SetTestContext(t)()
 	testClient := fixture.LibGoalClient
@@ -298,9 +277,6 @@ func TestClientCanGetSuggestedFee(t *testing.T) {
 }
 
 func TestClientCanGetMinTxnFee(t *testing.T) {
-	partitiontest.PartitionTest(t)
-	defer fixtures.ShutdownSynchronizedTest(t)
-
 	a := require.New(fixtures.SynchronizedTest(t))
 	defer fixture.SetTestContext(t)()
 	testClient := fixture.LibGoalClient
@@ -310,9 +286,6 @@ func TestClientCanGetMinTxnFee(t *testing.T) {
 }
 
 func TestClientCanGetBlockInfo(t *testing.T) {
-	partitiontest.PartitionTest(t)
-	defer fixtures.ShutdownSynchronizedTest(t)
-
 	a := require.New(fixtures.SynchronizedTest(t))
 	defer fixture.SetTestContext(t)()
 	testClient := fixture.LibGoalClient
@@ -323,9 +296,6 @@ func TestClientCanGetBlockInfo(t *testing.T) {
 }
 
 func TestClientRejectsBadFromAddressWhenSending(t *testing.T) {
-	partitiontest.PartitionTest(t)
-	defer fixtures.ShutdownSynchronizedTest(t)
-
 	a := require.New(fixtures.SynchronizedTest(t))
 	defer fixture.SetTestContext(t)()
 	testClient := fixture.LibGoalClient
@@ -340,9 +310,6 @@ func TestClientRejectsBadFromAddressWhenSending(t *testing.T) {
 }
 
 func TestClientRejectsBadToAddressWhenSending(t *testing.T) {
-	partitiontest.PartitionTest(t)
-	defer fixtures.ShutdownSynchronizedTest(t)
-
 	a := require.New(fixtures.SynchronizedTest(t))
 	defer fixture.SetTestContext(t)()
 	testClient := fixture.LibGoalClient
@@ -357,9 +324,6 @@ func TestClientRejectsBadToAddressWhenSending(t *testing.T) {
 }
 
 func TestClientRejectsMutatedFromAddressWhenSending(t *testing.T) {
-	partitiontest.PartitionTest(t)
-	defer fixtures.ShutdownSynchronizedTest(t)
-
 	a := require.New(fixtures.SynchronizedTest(t))
 	defer fixture.SetTestContext(t)()
 	testClient := fixture.LibGoalClient
@@ -381,9 +345,6 @@ func TestClientRejectsMutatedFromAddressWhenSending(t *testing.T) {
 }
 
 func TestClientRejectsMutatedToAddressWhenSending(t *testing.T) {
-	partitiontest.PartitionTest(t)
-	defer fixtures.ShutdownSynchronizedTest(t)
-
 	a := require.New(fixtures.SynchronizedTest(t))
 	defer fixture.SetTestContext(t)()
 	testClient := fixture.LibGoalClient
@@ -405,9 +366,6 @@ func TestClientRejectsMutatedToAddressWhenSending(t *testing.T) {
 }
 
 func TestClientRejectsSendingMoneyFromAccountForWhichItHasNoKey(t *testing.T) {
-	partitiontest.PartitionTest(t)
-	defer fixtures.ShutdownSynchronizedTest(t)
-
 	a := require.New(fixtures.SynchronizedTest(t))
 	defer fixture.SetTestContext(t)()
 	testClient := fixture.LibGoalClient
@@ -422,9 +380,6 @@ func TestClientRejectsSendingMoneyFromAccountForWhichItHasNoKey(t *testing.T) {
 }
 
 func TestClientOversizedNote(t *testing.T) {
-	partitiontest.PartitionTest(t)
-	defer fixtures.ShutdownSynchronizedTest(t)
-
 	a := require.New(fixtures.SynchronizedTest(t))
 	defer fixture.SetTestContext(t)()
 	testClient := fixture.LibGoalClient
@@ -448,9 +403,6 @@ func TestClientOversizedNote(t *testing.T) {
 }
 
 func TestClientCanSendAndGetNote(t *testing.T) {
-	partitiontest.PartitionTest(t)
-	defer fixtures.ShutdownSynchronizedTest(t)
-
 	a := require.New(fixtures.SynchronizedTest(t))
 	defer fixture.SetTestContext(t)()
 	testClient := fixture.LibGoalClient
@@ -468,15 +420,12 @@ func TestClientCanSendAndGetNote(t *testing.T) {
 	note := make([]byte, maxTxnNoteBytes)
 	tx, err := testClient.SendPaymentFromWallet(wh, nil, someAddress, toAddress, 10000, 100000, note, "", 0, 0)
 	a.NoError(err)
-	txStatus, err := waitForTransaction(t, testClient, someAddress, tx.ID().String(), 30*time.Second)
+	txStatus, err := waitForTransaction(t, testClient, someAddress, tx.ID().String(), 15*time.Second)
 	a.NoError(err)
 	a.Equal(note, txStatus.Note)
 }
 
 func TestClientCanGetTransactionStatus(t *testing.T) {
-	partitiontest.PartitionTest(t)
-	defer fixtures.ShutdownSynchronizedTest(t)
-
 	a := require.New(fixtures.SynchronizedTest(t))
 	defer fixture.SetTestContext(t)()
 	testClient := fixture.LibGoalClient
@@ -494,14 +443,11 @@ func TestClientCanGetTransactionStatus(t *testing.T) {
 	t.Log(string(protocol.EncodeJSON(tx)))
 	a.NoError(err)
 	t.Log(tx.ID().String())
-	_, err = waitForTransaction(t, testClient, someAddress, tx.ID().String(), 30*time.Second)
+	_, err = waitForTransaction(t, testClient, someAddress, tx.ID().String(), 15*time.Second)
 	a.NoError(err)
 }
 
 func TestAccountBalance(t *testing.T) {
-	partitiontest.PartitionTest(t)
-	defer fixtures.ShutdownSynchronizedTest(t)
-
 	a := require.New(fixtures.SynchronizedTest(t))
 	defer fixture.SetTestContext(t)()
 	testClient := fixture.LibGoalClient
@@ -519,7 +465,7 @@ func TestAccountBalance(t *testing.T) {
 	a.NoError(err)
 	tx, err := testClient.SendPaymentFromWallet(wh, nil, someAddress, toAddress, 10000, 100000, nil, "", 0, 0)
 	a.NoError(err)
-	_, err = waitForTransaction(t, testClient, someAddress, tx.ID().String(), 30*time.Second)
+	_, err = waitForTransaction(t, testClient, someAddress, tx.ID().String(), 15*time.Second)
 	a.NoError(err)
 
 	account, err := testClient.AccountInformation(toAddress)
@@ -529,9 +475,6 @@ func TestAccountBalance(t *testing.T) {
 }
 
 func TestAccountParticipationInfo(t *testing.T) {
-	partitiontest.PartitionTest(t)
-	defer fixtures.ShutdownSynchronizedTest(t)
-
 	a := require.New(fixtures.SynchronizedTest(t))
 	defer fixture.SetTestContext(t)()
 	testClient := fixture.LibGoalClient
@@ -553,9 +496,6 @@ func TestAccountParticipationInfo(t *testing.T) {
 	firstRound := basics.Round(params.LastRound + 1)
 	lastRound := basics.Round(params.LastRound + 1000)
 	dilution := uint64(100)
-	var stateproof merklesignature.Verifier
-	stateproof[0] = 1 // change some byte so the stateproof is not considered empty (required since consensus v31)
-
 	randomVotePKStr := randomString(32)
 	var votePK crypto.OneTimeSignatureVerifier
 	copy(votePK[:], []byte(randomVotePKStr))
@@ -579,12 +519,11 @@ func TestAccountParticipationInfo(t *testing.T) {
 			VoteKeyDilution: dilution,
 			VoteFirst:       firstRound,
 			VoteLast:        lastRound,
-			StateProofPK:    stateproof,
 		},
 	}
 	txID, err := testClient.SignAndBroadcastTransaction(wh, nil, tx)
 	a.NoError(err)
-	_, err = waitForTransaction(t, testClient, someAddress, txID, 30*time.Second)
+	_, err = waitForTransaction(t, testClient, someAddress, txID, 15*time.Second)
 	a.NoError(err)
 
 	account, err := testClient.AccountInformation(someAddress)
@@ -594,13 +533,9 @@ func TestAccountParticipationInfo(t *testing.T) {
 	a.Equal(uint64(firstRound), account.Participation.VoteFirst, "API must print correct first participation round")
 	a.Equal(uint64(lastRound), account.Participation.VoteLast, "API must print correct last participation round")
 	a.Equal(dilution, account.Participation.VoteKeyDilution, "API must print correct key dilution")
-	// TODO: should we update the v1 API to support state proof? Currently it does not return this field.
 }
 
 func TestSupply(t *testing.T) {
-	partitiontest.PartitionTest(t)
-	defer fixtures.ShutdownSynchronizedTest(t)
-
 	a := require.New(fixtures.SynchronizedTest(t))
 	defer fixture.SetTestContext(t)()
 	testClient := fixture.LibGoalClient
@@ -612,9 +547,6 @@ func TestSupply(t *testing.T) {
 }
 
 func TestClientCanGetGoRoutines(t *testing.T) {
-	partitiontest.PartitionTest(t)
-	defer fixtures.ShutdownSynchronizedTest(t)
-
 	a := require.New(fixtures.SynchronizedTest(t))
 	defer fixture.SetTestContext(t)()
 	testClient := fixture.AlgodClient
@@ -627,9 +559,6 @@ func TestClientCanGetGoRoutines(t *testing.T) {
 }
 
 func TestSendingTooMuchFails(t *testing.T) {
-	partitiontest.PartitionTest(t)
-	defer fixtures.ShutdownSynchronizedTest(t)
-
 	a := require.New(fixtures.SynchronizedTest(t))
 	defer fixture.SetTestContext(t)()
 	testClient := fixture.LibGoalClient
@@ -669,9 +598,6 @@ func TestSendingTooMuchFails(t *testing.T) {
 }
 
 func TestSendingFromEmptyAccountFails(t *testing.T) {
-	partitiontest.PartitionTest(t)
-	defer fixtures.ShutdownSynchronizedTest(t)
-
 	a := require.New(fixtures.SynchronizedTest(t))
 	defer fixture.SetTestContext(t)()
 	testClient := fixture.LibGoalClient
@@ -709,9 +635,6 @@ func TestSendingFromEmptyAccountFails(t *testing.T) {
 }
 
 func TestSendingTooLittleToEmptyAccountFails(t *testing.T) {
-	partitiontest.PartitionTest(t)
-	defer fixtures.ShutdownSynchronizedTest(t)
-
 	a := require.New(fixtures.SynchronizedTest(t))
 	defer fixture.SetTestContext(t)()
 	testClient := fixture.LibGoalClient
@@ -742,9 +665,6 @@ func TestSendingTooLittleToEmptyAccountFails(t *testing.T) {
 }
 
 func TestSendingLowFeeFails(t *testing.T) {
-	partitiontest.PartitionTest(t)
-	defer fixtures.ShutdownSynchronizedTest(t)
-
 	a := require.New(fixtures.SynchronizedTest(t))
 	defer fixture.SetTestContext(t)()
 	testClient := fixture.LibGoalClient
@@ -778,9 +698,6 @@ func TestSendingLowFeeFails(t *testing.T) {
 }
 
 func TestSendingNotClosingAccountFails(t *testing.T) {
-	partitiontest.PartitionTest(t)
-	defer fixtures.ShutdownSynchronizedTest(t)
-
 	a := require.New(fixtures.SynchronizedTest(t))
 	// use a local fixture because we might really mess with the balances
 	var localFixture fixtures.RestClientFixture
@@ -825,9 +742,6 @@ func TestSendingNotClosingAccountFails(t *testing.T) {
 }
 
 func TestClientCanGetPendingTransactions(t *testing.T) {
-	partitiontest.PartitionTest(t)
-	defer fixtures.ShutdownSynchronizedTest(t)
-
 	a := require.New(fixtures.SynchronizedTest(t))
 	var localFixture fixtures.RestClientFixture
 	localFixture.Setup(t, filepath.Join("nettemplates", "TwoNodes50Each.json"))
@@ -859,9 +773,6 @@ func TestClientCanGetPendingTransactions(t *testing.T) {
 }
 
 func TestClientTruncatesPendingTransactions(t *testing.T) {
-	partitiontest.PartitionTest(t)
-	defer fixtures.ShutdownSynchronizedTest(t)
-
 	a := require.New(fixtures.SynchronizedTest(t))
 	var localFixture fixtures.RestClientFixture
 	localFixture.Setup(t, filepath.Join("nettemplates", "TwoNodes50Each.json"))
@@ -887,6 +798,7 @@ func TestClientTruncatesPendingTransactions(t *testing.T) {
 		a.NoError(err)
 		txIDsSeen[tx2.ID().String()] = true
 	}
+
 	statusResponse, err := testClient.GetPendingTransactions(uint64(MaxTxns))
 	a.NoError(err)
 	a.NotEmpty(statusResponse)
@@ -900,9 +812,6 @@ func TestClientTruncatesPendingTransactions(t *testing.T) {
 }
 
 func TestClientPrioritizesPendingTransactions(t *testing.T) {
-	partitiontest.PartitionTest(t)
-	defer fixtures.ShutdownSynchronizedTest(t)
-
 	t.Skip("new FIFO pool does not have prioritization")
 	a := require.New(fixtures.SynchronizedTest(t))
 	var localFixture fixtures.RestClientFixture
@@ -940,290 +849,4 @@ func TestClientPrioritizesPendingTransactions(t *testing.T) {
 	a.True(int(statusResponse.TotalTxns) == NumTxns+1)
 	a.True(len(statusResponse.TruncatedTxns.Transactions) == MaxTxns)
 	a.True(statusResponse.TruncatedTxns.Transactions[0].TxID == txHigh.ID().String())
-}
-
-func TestPendingTransactionInfoInnerTxnAssetCreate(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
-	a := require.New(fixtures.SynchronizedTest(t))
-	var localFixture fixtures.RestClientFixture
-	localFixture.Setup(t, filepath.Join("nettemplates", "TwoNodes50EachFuture.json"))
-	defer localFixture.Shutdown()
-
-	testClient := localFixture.LibGoalClient
-
-	testClient.WaitForRound(1)
-
-	testClient.SetAPIVersionAffinity(algodclient.APIVersionV2, kmdclient.APIVersionV1)
-
-	wh, err := testClient.GetUnencryptedWalletHandle()
-	a.NoError(err)
-	addresses, err := testClient.ListAddresses(wh)
-	a.NoError(err)
-	_, someAddress := getMaxBalAddr(t, testClient, addresses)
-	if someAddress == "" {
-		t.Error("no addr with funds")
-	}
-	a.NoError(err)
-
-	prog := `#pragma version 5
-txn ApplicationID
-bz end
-itxn_begin
-int acfg
-itxn_field TypeEnum
-int 1000000
-itxn_field ConfigAssetTotal
-int 3
-itxn_field ConfigAssetDecimals
-byte "oz"
-itxn_field ConfigAssetUnitName
-byte "Gold"
-itxn_field ConfigAssetName
-byte "https://gold.rush/"
-itxn_field ConfigAssetURL
-byte 0x67f0cd61653bd34316160bc3f5cd3763c85b114d50d38e1f4e72c3b994411e7b
-itxn_field ConfigAssetMetadataHash
-itxn_submit
-end:
-int 1
-return
-`
-	ops, err := logic.AssembleString(prog)
-	approv := ops.Program
-	ops, err = logic.AssembleString("#pragma version 5 \nint 1")
-	clst := ops.Program
-
-	gl := basics.StateSchema{}
-	lc := basics.StateSchema{}
-
-	// create app
-	appCreateTxn, err := testClient.MakeUnsignedApplicationCallTx(0, nil, nil, nil, nil, transactions.NoOpOC, approv, clst, gl, lc, 0)
-	a.NoError(err)
-	appCreateTxn, err = testClient.FillUnsignedTxTemplate(someAddress, 0, 0, 0, appCreateTxn)
-	a.NoError(err)
-	appCreateTxID, err := testClient.SignAndBroadcastTransaction(wh, nil, appCreateTxn)
-	a.NoError(err)
-	_, err = waitForTransaction(t, testClient, someAddress, appCreateTxID, 30*time.Second)
-	a.NoError(err)
-
-	// get app ID
-	submittedAppCreateTxn, err := testClient.PendingTransactionInformationV2(appCreateTxID)
-	a.NoError(err)
-	a.NotNil(submittedAppCreateTxn.ApplicationIndex)
-	createdAppID := basics.AppIndex(*submittedAppCreateTxn.ApplicationIndex)
-	a.Greater(uint64(createdAppID), uint64(0))
-
-	// fund app account
-	appFundTxn, err := testClient.SendPaymentFromWallet(wh, nil, someAddress, createdAppID.Address().String(), 0, 1_000_000, nil, "", 0, 0)
-	a.NoError(err)
-	appFundTxID := appFundTxn.ID()
-	_, err = waitForTransaction(t, testClient, someAddress, appFundTxID.String(), 30*time.Second)
-	a.NoError(err)
-
-	// call app, which will issue an ASA create inner txn
-	appCallTxn, err := testClient.MakeUnsignedAppNoOpTx(uint64(createdAppID), nil, nil, nil, nil)
-	a.NoError(err)
-	appCallTxn, err = testClient.FillUnsignedTxTemplate(someAddress, 0, 0, 0, appCallTxn)
-	a.NoError(err)
-	appCallTxnTxID, err := testClient.SignAndBroadcastTransaction(wh, nil, appCallTxn)
-	a.NoError(err)
-	_, err = waitForTransaction(t, testClient, someAddress, appCallTxnTxID, 30*time.Second)
-	a.NoError(err)
-
-	// verify pending txn info of outer txn
-	submittedAppCallTxn, err := testClient.PendingTransactionInformationV2(appCallTxnTxID)
-	a.NoError(err)
-	a.Nil(submittedAppCallTxn.ApplicationIndex)
-	a.Nil(submittedAppCallTxn.AssetIndex)
-	a.NotNil(submittedAppCallTxn.InnerTxns)
-	a.Len(*submittedAppCallTxn.InnerTxns, 1)
-
-	// verify pending txn info of inner txn
-	innerTxn := (*submittedAppCallTxn.InnerTxns)[0]
-	a.Nil(innerTxn.ApplicationIndex)
-	a.NotNil(innerTxn.AssetIndex)
-	createdAssetID := *innerTxn.AssetIndex
-	a.Greater(createdAssetID, uint64(0))
-
-	createdAssetInfo, err := testClient.AssetInformationV2(createdAssetID)
-	a.NoError(err)
-	a.Equal(createdAssetID, createdAssetInfo.Index)
-	a.Equal(createdAppID.Address().String(), createdAssetInfo.Params.Creator)
-	a.Equal(uint64(1000000), createdAssetInfo.Params.Total)
-	a.Equal(uint64(3), createdAssetInfo.Params.Decimals)
-	a.Equal("oz", *createdAssetInfo.Params.UnitName)
-	a.Equal("Gold", *createdAssetInfo.Params.Name)
-	a.Equal("https://gold.rush/", *createdAssetInfo.Params.Url)
-	expectedMetadata, err := hex.DecodeString("67f0cd61653bd34316160bc3f5cd3763c85b114d50d38e1f4e72c3b994411e7b")
-	a.NoError(err)
-	a.Equal(expectedMetadata, *createdAssetInfo.Params.MetadataHash)
-}
-
-func TestStateProofInParticipationInfo(t *testing.T) {
-	partitiontest.PartitionTest(t)
-	defer fixtures.ShutdownSynchronizedTest(t)
-
-	a := require.New(fixtures.SynchronizedTest(t))
-	var localFixture fixtures.RestClientFixture
-
-	proto := config.Consensus[protocol.ConsensusCurrentVersion]
-	localFixture.SetConsensus(config.ConsensusProtocols{protocol.ConsensusCurrentVersion: proto})
-
-	localFixture.Setup(t, filepath.Join("nettemplates", "TwoNodes50Each.json"))
-	defer localFixture.Shutdown()
-
-	testClient := localFixture.LibGoalClient
-	waitForRoundOne(t, testClient)
-	wh, err := testClient.GetUnencryptedWalletHandle()
-	a.NoError(err)
-	addresses, err := testClient.ListAddresses(wh)
-	a.NoError(err)
-	_, someAddress := getMaxBalAddr(t, testClient, addresses)
-	a.NotEmpty(someAddress, "no addr with funds")
-
-	addr, err := basics.UnmarshalChecksumAddress(someAddress)
-	a.NoError(err)
-
-	params, err := testClient.SuggestedParams()
-	a.NoError(err)
-
-	firstRound := basics.Round(params.LastRound + 1)
-	lastRound := basics.Round(params.LastRound + 1000)
-	dilution := uint64(100)
-	randomVotePKStr := randomString(32)
-	var votePK crypto.OneTimeSignatureVerifier
-	copy(votePK[:], randomVotePKStr)
-	randomSelPKStr := randomString(32)
-	var selPK crypto.VRFVerifier
-	copy(selPK[:], randomSelPKStr)
-	var mssRoot [merklesignature.MerkleSignatureSchemeRootSize]byte
-	randomRootStr := randomString(merklesignature.MerkleSignatureSchemeRootSize)
-	copy(mssRoot[:], randomRootStr)
-	var gh crypto.Digest
-	copy(gh[:], params.GenesisHash)
-
-	tx := transactions.Transaction{
-		Type: protocol.KeyRegistrationTx,
-		Header: transactions.Header{
-			Sender:      addr,
-			Fee:         basics.MicroAlgos{Raw: 10000},
-			FirstValid:  firstRound,
-			LastValid:   lastRound,
-			GenesisHash: gh,
-		},
-		KeyregTxnFields: transactions.KeyregTxnFields{
-			VotePK:           votePK,
-			SelectionPK:      selPK,
-			VoteFirst:        firstRound,
-			StateProofPK:     mssRoot,
-			VoteLast:         lastRound,
-			VoteKeyDilution:  dilution,
-			Nonparticipation: false,
-		},
-	}
-	txID, err := testClient.SignAndBroadcastTransaction(wh, nil, tx)
-	a.NoError(err)
-	_, err = waitForTransaction(t, testClient, someAddress, txID, 120*time.Second)
-	a.NoError(err)
-
-	account, err := testClient.AccountInformationV2(someAddress, false)
-	a.NoError(err)
-	a.NotNil(account.Participation.StateProofKey)
-
-	actual := [merklesignature.MerkleSignatureSchemeRootSize]byte{}
-	copy(actual[:], *account.Participation.StateProofKey)
-	a.Equal(mssRoot, actual)
-}
-
-func TestStateProofParticipationKeysAPI(t *testing.T) {
-	partitiontest.PartitionTest(t)
-	defer fixtures.ShutdownSynchronizedTest(t)
-
-	a := require.New(fixtures.SynchronizedTest(t))
-	var localFixture fixtures.RestClientFixture
-
-	localFixture.Setup(t, filepath.Join("nettemplates", "TwoNodes50Each.json"))
-	defer localFixture.Shutdown()
-
-	testClient := localFixture.LibGoalClient
-	waitForRoundOne(t, testClient)
-
-	partdb, err := db.MakeErasableAccessor(filepath.Join(testClient.DataDir(), "/..", "/Wallet1.0.3000.partkey"))
-	a.NoError(err)
-
-	partkey, err := account.RestoreParticipation(partdb)
-
-	pRoot, err := testClient.GetParticipationKeys()
-	a.NoError(err)
-
-	actual := [merklesignature.MerkleSignatureSchemeRootSize]byte{}
-	a.NotNil(pRoot[0].Key.StateProofKey)
-	copy(actual[:], *pRoot[0].Key.StateProofKey)
-	a.Equal(partkey.StateProofSecrets.GetVerifier()[:], actual[:])
-}
-
-func TestNilStateProofInParticipationInfo(t *testing.T) {
-	partitiontest.PartitionTest(t)
-	defer fixtures.ShutdownSynchronizedTest(t)
-
-	a := require.New(fixtures.SynchronizedTest(t))
-	var localFixture fixtures.RestClientFixture
-
-	localFixture.Setup(t, filepath.Join("nettemplates", "TwoNodes50EachV30.json"))
-	defer localFixture.Shutdown()
-
-	testClient := localFixture.LibGoalClient
-	waitForRoundOne(t, testClient)
-	wh, err := testClient.GetUnencryptedWalletHandle()
-	a.NoError(err)
-	addresses, err := testClient.ListAddresses(wh)
-	a.NoError(err)
-	_, someAddress := getMaxBalAddr(t, testClient, addresses)
-	a.NotEmpty(someAddress, "no addr with funds")
-
-	addr, err := basics.UnmarshalChecksumAddress(someAddress)
-	a.NoError(err)
-
-	params, err := testClient.SuggestedParams()
-	a.NoError(err)
-
-	firstRound := basics.Round(1)
-	lastRound := basics.Round(20)
-	dilution := uint64(100)
-	randomVotePKStr := randomString(32)
-	var votePK crypto.OneTimeSignatureVerifier
-	copy(votePK[:], []byte(randomVotePKStr))
-	randomSelPKStr := randomString(32)
-	var selPK crypto.VRFVerifier
-	copy(selPK[:], []byte(randomSelPKStr))
-	var gh crypto.Digest
-	copy(gh[:], params.GenesisHash)
-
-	tx := transactions.Transaction{
-		Type: protocol.KeyRegistrationTx,
-		Header: transactions.Header{
-			Sender:      addr,
-			Fee:         basics.MicroAlgos{Raw: 10000},
-			FirstValid:  firstRound,
-			LastValid:   lastRound,
-			GenesisHash: gh,
-		},
-		KeyregTxnFields: transactions.KeyregTxnFields{
-			VotePK:           votePK,
-			SelectionPK:      selPK,
-			VoteFirst:        firstRound,
-			VoteLast:         lastRound,
-			VoteKeyDilution:  dilution,
-			Nonparticipation: false,
-		},
-	}
-	txID, err := testClient.SignAndBroadcastTransaction(wh, nil, tx)
-	a.NoError(err)
-	_, err = waitForTransaction(t, testClient, someAddress, txID, 30*time.Second)
-	a.NoError(err)
-
-	account, err := testClient.AccountInformationV2(someAddress, false)
-	a.NoError(err)
-	a.Nil(account.Participation.StateProofKey)
 }

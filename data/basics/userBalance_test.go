@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2021 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -25,21 +25,15 @@ import (
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
-	"github.com/algorand/go-algorand/crypto/merklesignature"
 	"github.com/algorand/go-algorand/protocol"
-	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
 func TestEmptyEncoding(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	var ub BalanceRecord
 	require.Equal(t, 1, len(protocol.Encode(&ub)))
 }
 
 func TestRewards(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
 	accountAlgos := []MicroAlgos{{Raw: 0}, {Raw: 8000}, {Raw: 13000}, {Raw: 83000}}
 	for _, accountAlgo := range accountAlgos {
@@ -60,8 +54,6 @@ func TestRewards(t *testing.T) {
 }
 
 func TestWithUpdatedRewardsPanics(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
 	t.Run("AlgoPanic", func(t *testing.T) {
 		paniced := false
@@ -106,20 +98,20 @@ func makeString(len int) string {
 	return s
 }
 
-func getSampleAccountData() AccountData {
+func TestEncodedAccountDataSize(t *testing.T) {
 	oneTimeSecrets := crypto.GenerateOneTimeSignatureSecrets(0, 1)
 	vrfSecrets := crypto.GenerateVRFSecrets()
-	var stateProofID merklesignature.Verifier
-	crypto.RandBytes(stateProofID[:])
-
-	return AccountData{
+	maxStateSchema := StateSchema{
+		NumUint:      0x1234123412341234,
+		NumByteSlice: 0x1234123412341234,
+	}
+	ad := AccountData{
 		Status:             NotParticipating,
 		MicroAlgos:         MicroAlgos{},
 		RewardsBase:        0x1234123412341234,
 		RewardedMicroAlgos: MicroAlgos{},
 		VoteID:             oneTimeSecrets.OneTimeSignatureVerifier,
 		SelectionID:        vrfSecrets.PK,
-		StateProofID:       stateProofID,
 		VoteFirstValid:     Round(0x1234123412341234),
 		VoteLastValid:      Round(0x1234123412341234),
 		VoteKeyDilution:    0x1234123412341234,
@@ -127,19 +119,9 @@ func getSampleAccountData() AccountData {
 		Assets:             make(map[AssetIndex]AssetHolding),
 		AppLocalStates:     make(map[AppIndex]AppLocalState),
 		AppParams:          make(map[AppIndex]AppParams),
+		TotalAppSchema:     maxStateSchema,
 		AuthAddr:           Address(crypto.Hash([]byte{1, 2, 3, 4})),
 	}
-}
-
-func TestEncodedAccountDataSize(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
-	maxStateSchema := StateSchema{
-		NumUint:      0x1234123412341234,
-		NumByteSlice: 0x1234123412341234,
-	}
-	ad := getSampleAccountData()
-	ad.TotalAppSchema = maxStateSchema
 
 	// TODO after applications enabled: change back to protocol.ConsensusCurrentVersion
 	currentConsensusParams := config.Consensus[protocol.ConsensusFuture]
@@ -169,18 +151,18 @@ func TestEncodedAccountDataSize(t *testing.T) {
 		ad.Assets[AssetIndex(0x1234123412341234-assetHolderAssets)] = ah
 	}
 
-	maxProg := []byte(makeString(config.MaxAvailableAppProgramLen))
+	maxProg := []byte(makeString(currentConsensusParams.MaxAppProgramLen))
 	maxGlobalState := make(TealKeyValue, currentConsensusParams.MaxGlobalSchemaEntries)
 	maxLocalState := make(TealKeyValue, currentConsensusParams.MaxLocalSchemaEntries)
+	maxValue := TealValue{
+		Type:  TealBytesType,
+		Bytes: makeString(currentConsensusParams.MaxAppBytesValueLen),
+	}
 
 	for globalKey := uint64(0); globalKey < currentConsensusParams.MaxGlobalSchemaEntries; globalKey++ {
 		prefix := fmt.Sprintf("%d|", globalKey)
 		padding := makeString(currentConsensusParams.MaxAppKeyLen - len(prefix))
 		maxKey := prefix + padding
-		maxValue := TealValue{
-			Type:  TealBytesType,
-			Bytes: makeString(currentConsensusParams.MaxAppSumKeyValueLens - len(maxKey)),
-		}
 		maxGlobalState[maxKey] = maxValue
 	}
 
@@ -188,17 +170,10 @@ func TestEncodedAccountDataSize(t *testing.T) {
 		prefix := fmt.Sprintf("%d|", localKey)
 		padding := makeString(currentConsensusParams.MaxAppKeyLen - len(prefix))
 		maxKey := prefix + padding
-		maxValue := TealValue{
-			Type:  TealBytesType,
-			Bytes: makeString(currentConsensusParams.MaxAppSumKeyValueLens - len(maxKey)),
-		}
 		maxLocalState[maxKey] = maxValue
 	}
-	maxAppsCreate := currentConsensusParams.MaxAppsCreated
-	if maxAppsCreate == 0 {
-		maxAppsCreate = config.Consensus[protocol.ConsensusV30].MaxAppsCreated
-	}
-	for appCreatorApps := 0; appCreatorApps < maxAppsCreate; appCreatorApps++ {
+
+	for appCreatorApps := 0; appCreatorApps < currentConsensusParams.MaxAppsCreated; appCreatorApps++ {
 		ap := AppParams{
 			ApprovalProgram:   maxProg,
 			ClearStateProgram: maxProg,
@@ -211,11 +186,7 @@ func TestEncodedAccountDataSize(t *testing.T) {
 		ad.AppParams[AppIndex(0x1234123412341234-appCreatorApps)] = ap
 	}
 
-	maxAppsOptedIn := currentConsensusParams.MaxAppsOptedIn
-	if maxAppsOptedIn == 0 {
-		maxAppsOptedIn = config.Consensus[protocol.ConsensusV30].MaxAppsOptedIn
-	}
-	for appHolderApps := 0; appHolderApps < maxAppsOptedIn; appHolderApps++ {
+	for appHolderApps := 0; appHolderApps < currentConsensusParams.MaxAppsOptedIn; appHolderApps++ {
 		ls := AppLocalState{
 			KeyValue: maxLocalState,
 			Schema:   maxStateSchema,
@@ -228,18 +199,16 @@ func TestEncodedAccountDataSize(t *testing.T) {
 }
 
 func TestEncodedAccountAllocationBounds(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	// ensure that all the supported protocols have value limits less or
 	// equal to their corresponding codec allocbounds
 	for protoVer, proto := range config.Consensus {
-		if proto.MaxAssetsPerAccount > 0 && proto.MaxAssetsPerAccount > encodedMaxAssetsPerAccount {
+		if proto.MaxAssetsPerAccount > encodedMaxAssetsPerAccount {
 			require.Failf(t, "proto.MaxAssetsPerAccount > encodedMaxAssetsPerAccount", "protocol version = %s", protoVer)
 		}
-		if proto.MaxAppsCreated > 0 && proto.MaxAppsCreated > EncodedMaxAppParams {
+		if proto.MaxAppsCreated > EncodedMaxAppParams {
 			require.Failf(t, "proto.MaxAppsCreated > encodedMaxAppParams", "protocol version = %s", protoVer)
 		}
-		if proto.MaxAppsOptedIn > 0 && proto.MaxAppsOptedIn > EncodedMaxAppLocalStates {
+		if proto.MaxAppsOptedIn > EncodedMaxAppLocalStates {
 			require.Failf(t, "proto.MaxAppsOptedIn > encodedMaxAppLocalStates", "protocol version = %s", protoVer)
 		}
 		if proto.MaxLocalSchemaEntries > EncodedMaxKeyValueEntries {
@@ -249,40 +218,4 @@ func TestEncodedAccountAllocationBounds(t *testing.T) {
 			require.Failf(t, "proto.MaxGlobalSchemaEntries > encodedMaxKeyValueEntries", "protocol version = %s", protoVer)
 		}
 	}
-}
-
-func TestAppIndexHashing(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
-	i := AppIndex(12)
-	prefix, buf := i.ToBeHashed()
-	require.Equal(t, protocol.HashID("appID"), prefix)
-	require.Equal(t, []byte{0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x0c}, buf)
-
-	i = AppIndex(12 << 16)
-	prefix, buf = i.ToBeHashed()
-	require.Equal(t, protocol.HashID("appID"), prefix)
-	require.Equal(t, []byte{0x00, 0x00, 0x00, 0x00, 0x00, 0x0c, 0x00, 0x00}, buf)
-
-	// test value created with:
-	// python -c "import algosdk.encoding as e; print(e.encode_address(e.checksum(b'appID'+($APPID).to_bytes(8, 'big'))))"
-	i = AppIndex(77)
-	require.Equal(t, "PCYUFPA2ZTOYWTP43MX2MOX2OWAIAXUDNC2WFCXAGMRUZ3DYD6BWFDL5YM", i.Address().String())
-}
-
-func TestOnlineAccountData(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
-	ad := getSampleAccountData()
-	ad.MicroAlgos.Raw = 1000000
-	ad.Status = Offline
-
-	oad := ad.OnlineAccountData()
-	require.Empty(t, oad)
-
-	ad.Status = Online
-	oad = ad.OnlineAccountData()
-	require.Equal(t, ad.MicroAlgos, oad.MicroAlgosWithRewards)
-	require.Equal(t, ad.VoteID, oad.VoteID)
-	require.Equal(t, ad.SelectionID, oad.SelectionID)
 }

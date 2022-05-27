@@ -22,10 +22,9 @@ Requires:
 Options:
     -c        Channel of build you are building binaries with this script
     -n        Run tests without building binaries (Binaries are expected in PATH)
-    -i        Start an interactive session for running e2e subs.
 "
 NO_BUILD=false
-while getopts ":c:nhi" opt; do
+while getopts ":c:nh" opt; do
   case ${opt} in
     c ) CHANNEL=$OPTARG
       ;;
@@ -34,11 +33,7 @@ while getopts ":c:nhi" opt; do
       ;;
     h ) echo "${HELP}"
         exit 0
-    ;;
-    i ) echo "  Interactive session"
-        echo "######################################################################"
-        INTERACTIVE=true
-        ;;
+      ;;
     \? ) echo "${HELP}"
         exit 2
       ;;
@@ -50,18 +45,6 @@ TEST_RUN_ID=$(${SCRIPT_PATH}/testrunid.py)
 export TEMPDIR=${SRCROOT}/tmp/out/e2e/${TEST_RUN_ID}
 echo "Test output can be found in ${TEMPDIR}"
 
-function cleanup() {
-  echo "Cleaning up temp dir."
-
-  rm -rf "${TEMPDIR}"
-
-  if ! ${NO_BUILD} ; then
-      rm -rf ${PKG_ROOT}
-  fi
-}
-
-# Cleanup files created during tests.
-trap cleanup EXIT
 
 # ARM64 has an unoptimized scrypt() which can cause tests to timeout.
 # Run kmd with scrypt() configured to run less secure and fast to go through the motions for test.
@@ -84,14 +67,6 @@ function reset_dirs() {
     rm -rf ${DATADIR}
     mkdir -p ${BINDIR}
     mkdir -p ${DATADIR}
-}
-
-# $1 - Message
-LAST_DURATION=$SECONDS
-function duration() {
-  ELAPSED=$((SECONDS - $LAST_DURATION))
-  printf "Duration: '%s' - %02dh:%02dm:%02ds\n" "$1" $(($ELAPSED/3600)) $(($ELAPSED%3600/60)) $(($ELAPSED%60))
-  LAST_DURATION=$SECONDS
 }
 
 #----------------------
@@ -117,109 +92,34 @@ export GOPATH=$(go env GOPATH)
 # Change current directory to test/scripts so we can just use ./test.sh to exec.
 cd "${SCRIPT_PATH}"
 
-if [ -z "$E2E_TEST_FILTER" ] || [ "$E2E_TEST_FILTER" == "SCRIPTS" ]; then
-    python3 -m venv "${TEMPDIR}/ve"
-    . "${TEMPDIR}/ve/bin/activate"
-    "${TEMPDIR}/ve/bin/pip3" install --upgrade pip
-    "${TEMPDIR}/ve/bin/pip3" install --upgrade cryptograpy
-    
-    # Pin a version of our python SDK's so that breaking changes don't spuriously break our tests.
-    # Please update as necessary.
-    "${TEMPDIR}/ve/bin/pip3" install py-algorand-sdk==1.9.0b1
-    
-    # Enable remote debugging:
-    "${TEMPDIR}/ve/bin/pip3" install --upgrade debugpy
-    duration "e2e client setup"
+./timeout 200 ./e2e_basic_start_stop.sh
 
-    if [ $INTERACTIVE ]; then
-        echo -e "\n\n********** READY **********\n\n"
-        echo "The test environment is now set. You can now run tests in another terminal."
+python3 -m venv "${TEMPDIR}/ve"
+. "${TEMPDIR}/ve/bin/activate"
+"${TEMPDIR}/ve/bin/pip3" install --upgrade pip
+"${TEMPDIR}/ve/bin/pip3" install --upgrade py-algorand-sdk cryptography
+"${TEMPDIR}/ve/bin/python3" e2e_client_runner.py ${RUN_KMD_WITH_UNSAFE_SCRYPT} "$SRCROOT"/test/scripts/e2e_subs/*.sh
+for vdir in "$SRCROOT"/test/scripts/e2e_subs/v??; do
+    "${TEMPDIR}/ve/bin/python3" e2e_client_runner.py ${RUN_KMD_WITH_UNSAFE_SCRYPT} --version "$(basename "$vdir")" "$vdir"/*.sh
+done
+for script in "$SRCROOT"/test/scripts/e2e_subs/serial/*; do
+    "${TEMPDIR}/ve/bin/python3" e2e_client_runner.py ${RUN_KMD_WITH_UNSAFE_SCRYPT} $script
+done
+deactivate
 
-        echo -e "\nConfigure the environment:\n"
-        if [ "$(basename $SHELL)" == "fish" ]; then
-            echo "set -g VIRTUAL_ENV \"${TEMPDIR}/ve\""
-            echo "set -g PATH \"\$VIRTUAL_ENV/bin:\$PATH\""
-        else
-            echo "export VIRTUAL_ENV=\"${TEMPDIR}/ve\""
-            echo "export PATH=\"\$VIRTUAL_ENV/bin:\$PATH\""
-        fi
+# Export our root temp folder as 'TESTDIR' for tests to use as their root test folder
+# This allows us to clean up everything with our rm -rf trap.
+export TESTDIR=${TEMPDIR}
+export TESTDATADIR=${SRCROOT}/test/testdata
+export SRCROOT=${SRCROOT}
 
-        echo ""
-        echo "python3 \"$SCRIPT_PATH/e2e_client_runner.py\" ${RUN_KMD_WITH_UNSAFE_SCRYPT} \"$SCRIPT_PATH/e2e_subs/SCRIPT_FILE_NAME\""
-        echo ""
-        echo "Press enter to shut down the test environment..."
-        read a
-        echo -n "deactivating..."
-        deactivate
-        echo "done"
-        exit
-    fi
+./e2e_go_tests.sh ${GO_TEST_ARGS}
 
-    ./timeout 200 ./e2e_basic_start_stop.sh
-    duration "e2e_basic_start_stop.sh"
+rm -rf "${TEMPDIR}"
 
-    echo "Current platform: ${E2E_PLATFORM}"
-
-    KEEP_TEMPS_CMD_STR=""
-
-    # If the platform is arm64, we want to pass "--keep-temps" into e2e_client_runner.py
-    # so that we can keep the temporary test artifact for use in the indexer e2e tests.
-    # The file is located at ${TEMPDIR}/net_done.tar.bz2
-    if [ "$E2E_PLATFORM" == "arm64" ]; then
-      KEEP_TEMPS_CMD_STR="--keep-temps"
-    fi
-
-    "${TEMPDIR}/ve/bin/python3" e2e_client_runner.py ${KEEP_TEMPS_CMD_STR} ${RUN_KMD_WITH_UNSAFE_SCRYPT} "$SRCROOT"/test/scripts/e2e_subs/*.{sh,py}
-
-    # If the temporary artifact directory exists, then the test artifact needs to be created
-    if [ -d "${TEMPDIR}/net" ]; then
-        pushd "${TEMPDIR}" || exit 1
-        tar -j -c -f net_done.tar.bz2 --exclude node.log --exclude agreement.cdv net
-        rm -rf "${TEMPDIR}/net"
-        RSTAMP=$(TZ=UTC python -c 'import time; print("{:08x}".format(0xffffffff - int(time.time() - time.mktime((2020,1,1,0,0,0,-1,-1,-1)))))')
-        echo aws s3 cp --acl public-read "${TEMPDIR}/net_done.tar.bz2" s3://algorand-testdata/indexer/e2e4/"${RSTAMP}"/net_done.tar.bz2
-        aws s3 cp --acl public-read "${TEMPDIR}/net_done.tar.bz2" s3://algorand-testdata/indexer/e2e4/"${RSTAMP}"/net_done.tar.bz2
-        popd
-    fi
-
-    duration "parallel client runner"
-
-    for vdir in "$SRCROOT"/test/scripts/e2e_subs/v??; do
-        "${TEMPDIR}/ve/bin/python3" e2e_client_runner.py ${RUN_KMD_WITH_UNSAFE_SCRYPT} --version "$(basename "$vdir")" "$vdir"/*.sh
-    done
-    duration "vdir client runners"
-
-    for script in "$SRCROOT"/test/scripts/e2e_subs/serial/*; do
-        "${TEMPDIR}/ve/bin/python3" e2e_client_runner.py ${RUN_KMD_WITH_UNSAFE_SCRYPT} $script
-    done
-
-    deactivate
-    duration "serial client runners"
-fi # if E2E_TEST_FILTER == "" or == "SCRIPTS"
-
-if [ -z "$E2E_TEST_FILTER" ] || [ "$E2E_TEST_FILTER" == "GO" ]; then
-    # Export our root temp folder as 'TESTDIR' for tests to use as their root test folder
-    # This allows us to clean up everything with our rm -rf trap.
-    mkdir "${TEMPDIR}/go"
-    export TESTDIR=${TEMPDIR}/go
-    export TESTDATADIR=${SRCROOT}/test/testdata
-    export SRCROOT=${SRCROOT}
-
-    ./e2e_go_tests.sh ${GO_TEST_ARGS}
-    duration "go integration tests"
-fi # if E2E_TEST_FILTER == "" or == "GO"
-
-if [ -z "$E2E_TEST_FILTER" ] || [ "$E2E_TEST_FILTER" == "EXPECT" ]; then
-    # Export our root temp folder as 'TESTDIR' for tests to use as their root test folder
-    # This allows us to clean up everything with our rm -rf trap.
-    mkdir "${TEMPDIR}/expect"
-    export TESTDIR=${TEMPDIR}/expect
-    export TESTDATADIR=${SRCROOT}/test/testdata
-    export SRCROOT=${SRCROOT}
-
-    ./e2e_go_tests.sh -e ${GO_TEST_ARGS}
-    duration "expect tests"
-fi # if E2E_TEST_FILTER == "" or == "EXPECT"
+if ! ${NO_BUILD} ; then
+    rm -rf ${PKG_ROOT}
+fi
 
 echo "----------------------------------------------------------------------"
 echo "  DONE: E2E"

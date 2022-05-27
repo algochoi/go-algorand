@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2021 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -23,12 +23,9 @@ import (
 
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
-	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
 func TestUniqueCatchpointLabel(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	uniqueSet := make(map[string]bool)
 
 	ledgerRoundBlockHashes := []crypto.Digest{}
@@ -58,8 +55,6 @@ func TestUniqueCatchpointLabel(t *testing.T) {
 }
 
 func TestCatchpointLabelParsing(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	ledgerRoundBlockHashes := []crypto.Digest{}
 	balancesMerkleRoots := []crypto.Digest{}
 	totals := []AccountTotals{}
@@ -88,8 +83,6 @@ func TestCatchpointLabelParsing(t *testing.T) {
 	}
 }
 func TestCatchpointLabelParsing2(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	_, _, err := ParseCatchpointLabel("5893060#KURJLS6EWBEVXTMLC7NP3NABTUMQP32QUJOBBW2TT23376L6RWJAB")
 	require.Error(t, err)
 	_, _, err = ParseCatchpointLabel("5893060KURJLS6EWBEVXTMLC7NP3NABTUMQP32QUJOBBW2TT23376L6RWJA")

@@ -3,11 +3,6 @@
 *.out
 *.prof
 coverage.html
-coverage.txt
-cover.out
-cpu.out
-mem.out
-mutex.out
 
 # cadaver
 *.cdv
@@ -65,5 +60,3 @@ assets
 
 index.html
 
-# test summary
-testresults.json

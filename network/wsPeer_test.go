@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2021 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -22,13 +22,10 @@ import (
 	"time"
 	"unsafe"
 
-	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/stretchr/testify/require"
 )
 
 func TestCheckSlowWritingPeer(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	now := time.Now()
 	peer := wsPeer{
 		intermittentOutgoingMessageEnqueueTime: 0,
@@ -45,8 +42,6 @@ func TestCheckSlowWritingPeer(t *testing.T) {
 
 // TestGetRequestNonce tests if unique values are generated each time
 func TestGetRequestNonce(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	numValues := 1000
 	peer := wsPeer{}
 	valueChannel := make(chan uint64, numValues)
@@ -79,8 +74,6 @@ func TestGetRequestNonce(t *testing.T) {
 }
 
 func TestDefaultMessageTagsLength(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	for tag := range defaultSendMessageTags {
 		require.Equal(t, 2, len(tag))
 	}
@@ -90,8 +83,6 @@ func TestDefaultMessageTagsLength(t *testing.T) {
 // offsets are 64-bit aligned. This is required due to go atomic library
 // limitation.
 func TestAtomicVariablesAligment(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	p := wsPeer{}
 	require.True(t, (unsafe.Offsetof(p.requestNonce)%8) == 0)
 	require.True(t, (unsafe.Offsetof(p.lastPacketTime)%8) == 0)

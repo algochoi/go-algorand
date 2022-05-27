@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2021 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -14,7 +14,6 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
 
-//go:build windows
 // +build windows
 
 package util
@@ -152,7 +151,7 @@ func getChildProcesses(pid int) []int {
 }
 
 func killProcess(pid int) error {
-	h, err := syscall.OpenProcess(syscall.SYNCHRONIZE|syscall.PROCESS_TERMINATE, false, uint32(pid))
+	h, err := syscall.OpenProcess(syscall.SYNCHRONIZE | syscall.PROCESS_TERMINATE, false, uint32(pid))
 	if err == nil {
 		err = syscall.TerminateProcess(h, STATUS_CANCELLED)
 		if err == nil {

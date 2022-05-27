@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2021 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -82,7 +82,7 @@ func persist(log serviceLogger, crash db.Accessor, Round basics.Round, Period pe
 		return
 	}
 
-	log.Errorf("persisting failure: %v", err)
+	logging.Base().Errorf("persisting failure: %v", err)
 	return
 }
 
@@ -90,7 +90,7 @@ func persist(log serviceLogger, crash db.Accessor, Round basics.Round, Period pe
 //
 // In case it's unable to clear the Service table, an error would get logged.
 func reset(log logging.Logger, crash db.Accessor) {
-	log.Infof("reset (agreement): resetting crash state")
+	logging.Base().Infof("reset (agreement): resetting crash state")
 
 	err := crash.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
 		// we could not retrieve our state, so wipe it
@@ -99,7 +99,7 @@ func reset(log logging.Logger, crash db.Accessor) {
 	})
 
 	if err != nil {
-		log.Warnf("reset (agreement): failed to clear Service table - %v", err)
+		logging.Base().Warnf("reset (agreement): failed to clear Service table - %v", err)
 	}
 }
 
@@ -124,8 +124,7 @@ func restore(log logging.Logger, crash db.Accessor) (raw []byte, err error) {
 	if err == nil {
 		// the above call was completed sucecssfully, which means that we've just created the table ( which wasn't there ! ).
 		// in that case, the table is guaranteed to be empty, and therefore we can return right here.
-		log.Infof("restore (agreement): crash state table initialized")
-		noCrashState = true // this is a normal case (we don't have crash state)
+		logging.Base().Infof("restore (agreement): crash state table initialized")
 		err = errNoCrashStateAvailable
 		return
 	}
@@ -136,7 +135,7 @@ func restore(log logging.Logger, crash db.Accessor) (raw []byte, err error) {
 			if !reset {
 				return
 			}
-			log.Infof("restore (agreement): resetting crash state")
+			logging.Base().Infof("restore (agreement): resetting crash state")
 
 			// we could not retrieve our state, so wipe it
 			_, err = tx.Exec("delete from Service")
@@ -150,12 +149,12 @@ func restore(log logging.Logger, crash db.Accessor) (raw []byte, err error) {
 		row := tx.QueryRow("select count(*) from Service")
 		err := row.Scan(&nrows)
 		if err != nil {
-			log.Errorf("restore (agreement): could not query raw state: %v", err)
+			logging.Base().Errorf("restore (agreement): could not query raw state: %v", err)
 			reset = true
 			return err
 		}
 		if nrows != 1 {
-			log.Infof("restore (agreement): crash state not found (n = %d)", nrows)
+			logging.Base().Infof("restore (agreement): crash state not found (n = %d)", nrows)
 			reset = true
 			noCrashState = true // this is a normal case (we have leftover crash state from an old round)
 			return errNoCrashStateAvailable
@@ -164,7 +163,7 @@ func restore(log logging.Logger, crash db.Accessor) (raw []byte, err error) {
 		row = tx.QueryRow("select data from Service")
 		err = row.Scan(&raw)
 		if err != nil {
-			log.Errorf("restore (agreement): could not read crash state raw data: %v", err)
+			logging.Base().Errorf("restore (agreement): could not read crash state raw data: %v", err)
 			reset = true
 			return err
 		}
@@ -177,7 +176,7 @@ func restore(log logging.Logger, crash db.Accessor) (raw []byte, err error) {
 // decode process the incoming raw bytes array and attempt to reconstruct the agreement state objects.
 //
 // In all decoding errors, it returns the error code in err
-func decode(raw []byte, t0 timers.Clock, log serviceLogger) (t timers.Clock, rr rootRouter, p player, a []action, err error) {
+func decode(raw []byte, t0 timers.Clock) (t timers.Clock, rr rootRouter, p player, a []action, err error) {
 	var t2 timers.Clock
 	var rr2 rootRouter
 	var p2 player
@@ -186,7 +185,7 @@ func decode(raw []byte, t0 timers.Clock, log serviceLogger) (t timers.Clock, rr 
 
 	err = protocol.DecodeReflect(raw, &s)
 	if err != nil {
-		log.Errorf("decode (agreement): error decoding retrieved state (len = %v): %v", len(raw), err)
+		logging.Base().Errorf("decode (agreement): error decoding retrieved state (len = %v): %v", len(raw), err)
 		return
 	}
 
@@ -308,9 +307,9 @@ func (p *asyncPersistenceLoop) loop(ctx context.Context) {
 		// sanity check; we check it after the fact, since it's not expected to ever happen.
 		// performance-wise, it takes approximitly 300000ns to execute, and we don't want it to
 		// block the persist operation.
-		_, _, _, _, derr := decode(s.raw, s.clock, p.log)
+		_, _, _, _, derr := decode(s.raw, s.clock)
 		if derr != nil {
-			p.log.Errorf("could not decode own encoded disk state: %v", derr)
+			logging.Base().Errorf("could not decode own encoded disk state: %v", derr)
 		}
 	}
 }

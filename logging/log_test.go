@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2021 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -21,7 +21,6 @@ import (
 	"encoding/json"
 	"testing"
 
-	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/stretchr/testify/require"
 )
 
@@ -43,7 +42,6 @@ func isJSON(s string) bool {
 }
 
 func TestFileOutputNewLogger(t *testing.T) {
-	partitiontest.PartitionTest(t)
 	a := require.New(t)
 
 	// Create a buffer (mimics a file) for the output
@@ -61,7 +59,6 @@ func TestFileOutputNewLogger(t *testing.T) {
 }
 
 func TestSetLevelNewLogger(t *testing.T) {
-	partitiontest.PartitionTest(t)
 	a := require.New(t)
 
 	//Create a buffer (mimics a file) for the output
@@ -82,7 +79,6 @@ func TestSetLevelNewLogger(t *testing.T) {
 }
 
 func TestWithFieldsNewLogger(t *testing.T) {
-	partitiontest.PartitionTest(t)
 	a := require.New(t)
 
 	// Create a buffer (mimics a file) for the output
@@ -97,7 +93,6 @@ func TestWithFieldsNewLogger(t *testing.T) {
 }
 
 func TestSetJSONFormatter(t *testing.T) {
-	partitiontest.PartitionTest(t)
 	a := require.New(t)
 
 	// Create a buffer (mimics a file) for the output

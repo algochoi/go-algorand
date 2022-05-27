@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2021 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -27,7 +27,6 @@ import (
 	"sort"
 	"sync"
 	"sync/atomic"
-	"time"
 
 	"github.com/algorand/go-deadlock"
 
@@ -150,11 +149,11 @@ func GenerateGenesisFiles(genesisData GenesisData, consensus config.ConsensusPro
 		return fmt.Errorf("couldn't make output directory '%s': %v", outDir, err.Error())
 	}
 
-	return generateGenesisFiles(outDir, proto, consensusParams, genesisData.NetworkName, genesisData.VersionModifier, allocation, genesisData.FirstPartKeyRound, genesisData.LastPartKeyRound, genesisData.PartKeyDilution, genesisData.FeeSink, genesisData.RewardsPool, genesisData.Comment, genesisData.DevMode, verboseOut)
+	return generateGenesisFiles(outDir, proto, consensusParams, genesisData.NetworkName, genesisData.VersionModifier, allocation, genesisData.FirstPartKeyRound, genesisData.LastPartKeyRound, genesisData.PartKeyDilution, genesisData.FeeSink, genesisData.RewardsPool, genesisData.Comment, verboseOut)
 }
 
 func generateGenesisFiles(outDir string, protoVersion protocol.ConsensusVersion, protoParams config.ConsensusParams, netName string, schemaVersionModifier string,
-	allocation []genesisAllocation, firstWalletValid uint64, lastWalletValid uint64, partKeyDilution uint64, feeSink, rewardsPool basics.Address, comment string, devmode bool, verboseOut io.Writer) (err error) {
+	allocation []genesisAllocation, firstWalletValid uint64, lastWalletValid uint64, partKeyDilution uint64, feeSink, rewardsPool basics.Address, comment string, verboseOut io.Writer) (err error) {
 
 	genesisAddrs := make(map[string]basics.Address)
 	records := make(map[string]basics.AccountData)
@@ -244,9 +243,6 @@ func generateGenesisFiles(outDir string, protoVersion protocol.ConsensusVersion,
 						errorsChannel <- err
 						return
 					}
-					if verbose {
-						verbosedOutput <- fmt.Sprintf("Generating %s's keys for a period of %d rounds", wallet.Name, basics.Round(lastWalletValid).SubSaturate(basics.Round(firstWalletValid)))
-					}
 
 					part, err = account.FillDBWithParticipationKeys(partDB, root.Address(), basics.Round(firstWalletValid), basics.Round(lastWalletValid), partKeyDilution)
 					if err != nil {
@@ -256,7 +252,7 @@ func generateGenesisFiles(outDir string, protoVersion protocol.ConsensusVersion,
 						return
 					}
 					if verbose {
-						verbosedOutput <- fmt.Sprintf("participation key generation for %s completed successfully", wallet.Name)
+						verbosedOutput <- fmt.Sprintf("Created new partkey: %s", pfilename)
 					}
 					atomic.AddInt64(&partKeyCreated, 1)
 				}
@@ -271,9 +267,6 @@ func generateGenesisFiles(outDir string, protoVersion protocol.ConsensusVersion,
 				data.VoteFirstValid = part.FirstValid
 				data.VoteLastValid = part.LastValid
 				data.VoteKeyDilution = part.KeyDilution
-				if protoParams.EnableStateProofKeyregCheck {
-					data.StateProofID = *part.StateProofVerifier()
-				}
 			}
 
 			writeMu.Lock()
@@ -302,7 +295,6 @@ func generateGenesisFiles(outDir string, protoVersion protocol.ConsensusVersion,
 		}()
 	}
 
-	createStart := time.Now()
 	creatingWalletsWaitGroup.Add(concurrentWalletGenerators)
 	for routinesCounter := 0; routinesCounter < concurrentWalletGenerators; routinesCounter++ {
 		go createWallet()
@@ -360,7 +352,6 @@ func generateGenesisFiles(outDir string, protoVersion protocol.ConsensusVersion,
 		FeeSink:     feeSink.String(),
 		RewardsPool: rewardsPool.String(),
 		Comment:     comment,
-		DevMode:     devmode,
 	}
 
 	for _, wallet := range allocation {
@@ -376,9 +367,8 @@ func generateGenesisFiles(outDir string, protoVersion protocol.ConsensusVersion,
 	jsonData := protocol.EncodeJSON(g)
 	err = ioutil.WriteFile(filepath.Join(outDir, config.GenesisJSONFile), append(jsonData, '\n'), 0666)
 
-	if (verbose) && (rootKeyCreated > 0 || partKeyCreated > 0) {
-		fmt.Printf("Created %d new rootkeys and %d new partkeys in %s.\n", rootKeyCreated, partKeyCreated, time.Since(createStart))
-		fmt.Printf("NOTICE: Participation keys are valid for a period of %d rounds. After this many rounds the network will stall unless new keys are registered.\n", lastWalletValid-firstWalletValid)
+	if (!verbose) && (rootKeyCreated > 0 || partKeyCreated > 0) {
+		fmt.Printf("Created %d new rootkeys and %d new partkeys.\n", rootKeyCreated, partKeyCreated)
 	}
 
 	return

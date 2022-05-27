@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2021 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -19,6 +19,7 @@ package agreement
 import (
 	"context"
 	"errors"
+	"time"
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
@@ -50,7 +51,7 @@ type BlockValidator interface {
 	Validate(context.Context, bookkeeping.Block) (ValidatedBlock, error)
 }
 
-// A ValidatedBlock represents an Block that has been successfully validated
+// A ValidatedBlock represents an Block that has been successfuly validated
 // and can now be recorded in the ledger.  This is an optimized version of
 // calling EnsureBlock() on the Ledger.
 type ValidatedBlock interface {
@@ -73,7 +74,10 @@ var ErrAssembleBlockRoundStale = errors.New("requested round for AssembleBlock i
 // Round.
 type BlockFactory interface {
 	// AssembleBlock produces a new ValidatedBlock which is suitable for proposal
-	// at a given Round.
+	// at a given Round.  The time argument specifies a target deadline by
+	// which the block should be produced.  Specifically, the deadline can
+	// cause the factory to add fewer transactions to the block in question
+	// than might otherwise be possible.
 	//
 	// AssembleBlock should produce a ValidatedBlock for which the corresponding
 	// BlockValidator validates (i.e. for which BlockValidator.Validate
@@ -84,7 +88,7 @@ type BlockFactory interface {
 	// produce a ValidatedBlock for the given round. If an insufficient number of
 	// nodes on the network can assemble entries, the agreement protocol may
 	// lose liveness.
-	AssembleBlock(basics.Round) (ValidatedBlock, error)
+	AssembleBlock(basics.Round, time.Time) (ValidatedBlock, error)
 }
 
 // A Ledger represents the sequence of Entries agreed upon by the protocol.
@@ -124,14 +128,14 @@ type LedgerReader interface {
 	// protocol may lose liveness.
 	Seed(basics.Round) (committee.Seed, error)
 
-	// LookupAgreement returns the AccountData associated with some Address
-	// needed by agreement at the conclusion of a given round.
+	// Lookup returns the AccountData associated with some Address
+	// at the conclusion of a given round.
 	//
 	// This method returns an error if the given Round has not yet been
 	// confirmed. It may also return an error if the given Round is
 	// unavailable by the storage device. In that case, the agreement
 	// protocol may lose liveness.
-	LookupAgreement(basics.Round, basics.Address) (basics.OnlineAccountData, error)
+	Lookup(basics.Round, basics.Address) (basics.AccountData, error)
 
 	// Circulation returns the total amount of money in circulation at the
 	// conclusion of a given round.
@@ -224,11 +228,7 @@ type KeyManager interface {
 	// VotingKeys returns an immutable array of voting keys that are
 	// valid for the provided votingRound, and were available at
 	// keysRound.
-	VotingKeys(votingRound, keysRound basics.Round) []account.ParticipationRecordForRound
-
-	// Record indicates that the given participation action has been taken.
-	// The operation needs to be asynchronous to avoid impacting agreement.
-	Record(account basics.Address, round basics.Round, participationType account.ParticipationAction)
+	VotingKeys(votingRound, keysRound basics.Round) []account.Participation
 }
 
 // MessageHandle is an ID referring to a specific message.

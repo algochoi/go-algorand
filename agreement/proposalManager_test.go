@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2021 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -19,7 +19,6 @@ package agreement
 import (
 	"testing"
 
-	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/stretchr/testify/require"
 )
 
@@ -43,8 +42,6 @@ func setupManager(t *testing.T, r round) (pWhite *proposalManager, pMachine ioAu
 }
 
 func TestProposalManagerThresholdSoftFastForward(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	// sanity check that manager tells underlings to fast forward new period
 	const p = 1
 	const r = 10
@@ -72,8 +69,6 @@ func TestProposalManagerThresholdSoftFastForward(t *testing.T) {
 }
 
 func TestProposalManagerThresholdSoftStage(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	// sanity check that manager tells underlings to deal with soft threshold
 	const p = 1
 	const r = 10
@@ -110,8 +105,6 @@ func TestProposalManagerThresholdSoftStage(t *testing.T) {
 }
 
 func TestProposalManagerThresholdCert(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	const p = 10
 	const r = 1
 	_, pM, helper := setupManager(t, r)
@@ -147,8 +140,6 @@ func TestProposalManagerThresholdCert(t *testing.T) {
 }
 
 func TestProposalManagerThresholdNext(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	// check that manager tells the Tracker to increase period +1
 	const p = 10
 	const r = 1
@@ -176,8 +167,6 @@ func TestProposalManagerThresholdNext(t *testing.T) {
 }
 
 func TestProposalManagerResetsRoundInterruption(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	// check that manager tells Store to increase round + 1
 	const p = 10
 	const r = 1
@@ -194,8 +183,6 @@ func TestProposalManagerResetsRoundInterruption(t *testing.T) {
 }
 
 func TestProposalManagerRejectsUnknownEvent(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	// check that manager discards unknown events.
 	_, pM, _ := setupManager(t, 0)
 
@@ -210,8 +197,6 @@ func TestProposalManagerRejectsUnknownEvent(t *testing.T) {
 }
 
 func TestProposalFreshAdjacentPeriods(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	// votes from periods that are non-adjacent to current period are not fresh
 	// unfortunately, this is more of an end-to-end test as the proposeTracker will also filter
 	const r = 100
@@ -329,8 +314,6 @@ func TestProposalFreshAdjacentPeriods(t *testing.T) {
 }
 
 func TestProposalFreshAdjacentPeriodsVerified(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	// verbatim copy of above test case, but with verified votes
 	// votes from periods that are non-adjacent to current period are not fresh
 	// unfortunately, this is more of an end-to-end test as the proposeTracker will also filter
@@ -456,8 +439,6 @@ func TestProposalFreshAdjacentPeriodsVerified(t *testing.T) {
 }
 
 func TestProposalManagerCancelledVoteFiltered(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	const r = 100000
 	const p = 2
 	const s = cert

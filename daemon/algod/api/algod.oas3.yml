@@ -223,56 +223,6 @@
       }
     },
     "responses": {
-      "AccountApplicationResponse": {
-        "content": {
-          "application/json": {
-            "schema": {
-              "properties": {
-                "app-local-state": {
-                  "$ref": "#/components/schemas/ApplicationLocalState"
-                },
-                "created-app": {
-                  "$ref": "#/components/schemas/ApplicationParams"
-                },
-                "round": {
-                  "description": "The round for which this information is relevant.",
-                  "type": "integer"
-                }
-              },
-              "required": [
-                "round"
-              ],
-              "type": "object"
-            }
-          }
-        },
-        "description": "AccountApplicationResponse describes the account's application local state and global state (AppLocalState and AppParams, if either exists) for a specific application ID. Global state will only be returned if the provided address is the application's creator."
-      },
-      "AccountAssetResponse": {
-        "content": {
-          "application/json": {
-            "schema": {
-              "properties": {
-                "asset-holding": {
-                  "$ref": "#/components/schemas/AssetHolding"
-                },
-                "created-asset": {
-                  "$ref": "#/components/schemas/AssetParams"
-                },
-                "round": {
-                  "description": "The round for which this information is relevant.",
-                  "type": "integer"
-                }
-              },
-              "required": [
-                "round"
-              ],
-              "type": "object"
-            }
-          }
-        },
-        "description": "AccountAssetResponse describes the account's asset holding and asset parameters (if either exist) for a specific asset ID. Asset parameters will only be returned if the provided address is the asset's creator."
-      },
       "AccountResponse": {
         "content": {
           "application/json": {
@@ -280,8 +230,7 @@
               "$ref": "#/components/schemas/Account"
             }
           }
-        },
-        "description": "AccountResponse wraps the Account type in a response."
+        }
       },
       "ApplicationResponse": {
         "content": {
@@ -380,11 +329,6 @@
                 "result": {
                   "description": "base64 encoded program bytes",
                   "type": "string"
-                },
-                "sourcemap": {
-                  "description": "JSON of the source map",
-                  "properties": {},
-                  "type": "object"
                 }
               },
               "required": [
@@ -396,25 +340,6 @@
           }
         },
         "description": "Teal compile Result"
-      },
-      "DisassembleResponse": {
-        "content": {
-          "application/json": {
-            "schema": {
-              "properties": {
-                "result": {
-                  "description": "disassembled Teal code",
-                  "type": "string"
-                }
-              },
-              "required": [
-                "result"
-              ],
-              "type": "object"
-            }
-          }
-        },
-        "description": "Teal disassembly Result"
       },
       "DryrunResponse": {
         "content": {
@@ -528,28 +453,74 @@
           }
         }
       },
-      "ParticipationKeyResponse": {
+      "PendingTransactionResponse": {
         "content": {
           "application/json": {
             "schema": {
-              "$ref": "#/components/schemas/ParticipationKey"
-            }
-          }
-        },
-        "description": "A detailed description of a participation ID"
-      },
-      "ParticipationKeysResponse": {
-        "content": {
-          "application/json": {
-            "schema": {
-              "items": {
-                "$ref": "#/components/schemas/ParticipationKey"
+              "description": "Details about a pending transaction. If the transaction was recently confirmed, includes confirmation details like the round and reward details.",
+              "properties": {
+                "application-index": {
+                  "description": "The application index if the transaction was found and it created an application.",
+                  "type": "integer"
+                },
+                "asset-closing-amount": {
+                  "description": "The number of the asset's unit that were transferred to the close-to address.",
+                  "type": "integer"
+                },
+                "asset-index": {
+                  "description": "The asset index if the transaction was found and it created an asset.",
+                  "type": "integer"
+                },
+                "close-rewards": {
+                  "description": "Rewards in microalgos applied to the close remainder to account.",
+                  "type": "integer"
+                },
+                "closing-amount": {
+                  "description": "Closing amount for the transaction.",
+                  "type": "integer"
+                },
+                "confirmed-round": {
+                  "description": "The round where this transaction was confirmed, if present.",
+                  "type": "integer"
+                },
+                "global-state-delta": {
+                  "$ref": "#/components/schemas/StateDelta"
+                },
+                "local-state-delta": {
+                  "description": "\\[ld\\] Local state key/value changes for the application being executed by this transaction.",
+                  "items": {
+                    "$ref": "#/components/schemas/AccountStateDelta"
+                  },
+                  "type": "array"
+                },
+                "pool-error": {
+                  "description": "Indicates that the transaction was kicked out of this node's transaction pool (and specifies why that happened).  An empty string indicates the transaction wasn't kicked out of this node's txpool due to an error.\n",
+                  "type": "string"
+                },
+                "receiver-rewards": {
+                  "description": "Rewards in microalgos applied to the receiver account.",
+                  "type": "integer"
+                },
+                "sender-rewards": {
+                  "description": "Rewards in microalgos applied to the sender account.",
+                  "type": "integer"
+                },
+                "txn": {
+                  "description": "The raw signed transaction.",
+                  "properties": {},
+                  "type": "object",
+                  "x-algorand-format": "SignedTransaction"
+                }
               },
-              "type": "array"
+              "required": [
+                "pool-error",
+                "txn"
+              ],
+              "type": "object"
             }
           }
         },
-        "description": "A list of participation keys"
+        "description": "Given a transaction id of a recently submitted transaction, it returns information about it.  There are several cases when this might succeed:\n- transaction committed (committed round > 0)\n- transaction still in the pool (committed round = 0, pool error = \"\")\n- transaction removed from pool due to error (committed round = 0, pool error != \"\")\n\nOr the transaction may have happened sufficiently long ago that the node no longer remembers it, and this will return an error."
       },
       "PendingTransactionsResponse": {
         "content": {
@@ -581,25 +552,6 @@
         },
         "description": "A potentially truncated list of transactions currently in the node's transaction pool. You can compute whether or not the list is truncated if the number of elements in the **top-transactions** array is fewer than **total-transactions**."
       },
-      "PostParticipationResponse": {
-        "content": {
-          "application/json": {
-            "schema": {
-              "properties": {
-                "partId": {
-                  "description": "encoding of the participation ID.",
-                  "type": "string"
-                }
-              },
-              "required": [
-                "partId"
-              ],
-              "type": "object"
-            }
-          }
-        },
-        "description": "Participation ID of the submission"
-      },
       "PostTransactionsResponse": {
         "content": {
           "application/json": {
@@ -624,14 +576,6 @@
           "application/json": {
             "schema": {
               "properties": {
-                "hashtype": {
-                  "description": "The type of hash function used to create the proof, must be one of: \n* sha512_256 \n* sha256",
-                  "enum": [
-                    "sha512_256",
-                    "sha256"
-                  ],
-                  "type": "string"
-                },
                 "idx": {
                   "description": "Index of the transaction in the block's payset.",
                   "type": "integer"
@@ -647,18 +591,12 @@
                   "format": "byte",
                   "pattern": "^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$",
                   "type": "string"
-                },
-                "treedepth": {
-                  "description": "Represents the depth of the tree that is being proven, i.e. the number of edges from a leaf to the root.",
-                  "type": "integer"
                 }
               },
               "required": [
-                "hashtype",
                 "idx",
                 "proof",
-                "stibhash",
-                "treedepth"
+                "stibhash"
               ],
               "type": "object"
             }
@@ -778,10 +716,6 @@
             },
             "type": "array"
           },
-          "apps-total-extra-pages": {
-            "description": "\\[teap\\] the sum of all extra application program pages for this account.",
-            "type": "integer"
-          },
           "apps-total-schema": {
             "$ref": "#/components/schemas/ApplicationStateSchema"
           },
@@ -810,10 +744,6 @@
               "$ref": "#/components/schemas/Asset"
             },
             "type": "array"
-          },
-          "min-balance": {
-            "description": "MicroAlgo balance required by the account.\n\nThe requirement grows based on asset and application usage.",
-            "type": "integer"
           },
           "participation": {
             "$ref": "#/components/schemas/AccountParticipation"
@@ -846,37 +776,16 @@
           "status": {
             "description": "\\[onl\\] delegation status of the account's MicroAlgos\n* Offline - indicates that the associated account is delegated.\n*  Online  - indicates that the associated account used as part of the delegation pool.\n*   NotParticipating - indicates that the associated account is neither a delegator nor a delegate.",
             "type": "string"
-          },
-          "total-apps-opted-in": {
-            "description": "The count of all applications that have been opted in, equivalent to the count of application local data (AppLocalState objects) stored in this account.",
-            "type": "integer"
-          },
-          "total-assets-opted-in": {
-            "description": "The count of all assets that have been opted in, equivalent to the count of AssetHolding objects held by this account.",
-            "type": "integer"
-          },
-          "total-created-apps": {
-            "description": "The count of all apps (AppParams objects) created by this account.",
-            "type": "integer"
-          },
-          "total-created-assets": {
-            "description": "The count of all assets (AssetParams objects) created by this account.",
-            "type": "integer"
           }
         },
         "required": [
           "address",
           "amount",
           "amount-without-pending-rewards",
-          "min-balance",
           "pending-rewards",
           "rewards",
           "round",
-          "status",
-          "total-apps-opted-in",
-          "total-assets-opted-in",
-          "total-created-apps",
-          "total-created-assets"
+          "status"
         ],
         "type": "object"
       },
@@ -885,12 +794,6 @@
         "properties": {
           "selection-participation-key": {
             "description": "\\[sel\\] Selection public key (if any) currently registered for this round.",
-            "format": "byte",
-            "pattern": "^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$",
-            "type": "string"
-          },
-          "state-proof-key": {
-            "description": "\\[stprf\\] Root of the state proof key (if any)",
             "format": "byte",
             "pattern": "^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$",
             "type": "string"
@@ -998,10 +901,6 @@
             "type": "string",
             "x-algorand-format": "Address"
           },
-          "extra-program-pages": {
-            "description": "\\[epp\\] the amount of extra program pages available to this app.",
-            "type": "integer"
-          },
           "global-state": {
             "$ref": "#/components/schemas/TealKeyValueStore"
           },
@@ -1067,6 +966,10 @@
             "type": "integer",
             "x-go-name": "AssetID"
           },
+          "creator": {
+            "description": "Address that created this asset. This is the address where the parameters for this asset can be found, and also the address where unwanted asset units can be sent in the worst case.",
+            "type": "string"
+          },
           "is-frozen": {
             "description": "\\[f\\] whether or not the holding is frozen.",
             "type": "boolean"
@@ -1075,6 +978,7 @@
         "required": [
           "amount",
           "asset-id",
+          "creator",
           "is-frozen"
         ],
         "type": "object"
@@ -1115,13 +1019,7 @@
             "type": "string"
           },
           "name": {
-            "description": "\\[an\\] Name of this asset, as supplied by the creator. Included only when the asset name is composed of printable utf-8 characters.",
-            "type": "string"
-          },
-          "name-b64": {
-            "description": "Base64 encoded name of this asset, as supplied by the creator.",
-            "format": "byte",
-            "pattern": "^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$",
+            "description": "\\[an\\] Name of this asset, as supplied by the creator.",
             "type": "string"
           },
           "reserve": {
@@ -1134,23 +1032,11 @@
             "x-algorand-format": "uint64"
           },
           "unit-name": {
-            "description": "\\[un\\] Name of a unit of this asset, as supplied by the creator. Included only when the name of a unit of this asset is composed of printable utf-8 characters.",
-            "type": "string"
-          },
-          "unit-name-b64": {
-            "description": "Base64 encoded name of a unit of this asset, as supplied by the creator.",
-            "format": "byte",
-            "pattern": "^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$",
+            "description": "\\[un\\] Name of a unit of this asset, as supplied by the creator.",
             "type": "string"
           },
           "url": {
-            "description": "\\[au\\] URL where more information about the asset can be retrieved. Included only when the URL is composed of printable utf-8 characters.",
-            "type": "string"
-          },
-          "url-b64": {
-            "description": "Base64 encoded URL where more information about the asset can be retrieved.",
-            "format": "byte",
-            "pattern": "^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$",
+            "description": "\\[au\\] URL where more information about the asset can be retrieved.",
             "type": "string"
           }
         },
@@ -1328,10 +1214,6 @@
             },
             "type": "array"
           },
-          "cost": {
-            "description": "Execution cost of app call transaction",
-            "type": "integer"
-          },
           "disassembly": {
             "description": "Disassembled program line by line.",
             "items": {
@@ -1348,13 +1230,6 @@
             },
             "type": "array"
           },
-          "logic-sig-disassembly": {
-            "description": "Disassembled lsig program line by line.",
-            "items": {
-              "type": "string"
-            },
-            "type": "array"
-          },
           "logic-sig-messages": {
             "items": {
               "type": "string"
@@ -1364,14 +1239,6 @@
           "logic-sig-trace": {
             "items": {
               "$ref": "#/components/schemas/DryrunState"
-            },
-            "type": "array"
-          },
-          "logs": {
-            "items": {
-              "format": "byte",
-              "pattern": "^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$",
-              "type": "string"
             },
             "type": "array"
           }
@@ -1385,8 +1252,7 @@
         "description": "An error response with optional data field.",
         "properties": {
           "data": {
-            "properties": {},
-            "type": "object"
+            "type": "string"
           },
           "message": {
             "type": "string"
@@ -1435,129 +1301,6 @@
         ],
         "type": "object"
       },
-      "ParticipationKey": {
-        "description": "Represents a participation key used by the node.",
-        "properties": {
-          "address": {
-            "description": "Address the key was generated for.",
-            "type": "string",
-            "x-algorand-format": "Address"
-          },
-          "effective-first-valid": {
-            "description": "When registered, this is the first round it may be used.",
-            "type": "integer",
-            "x-algorand-format": "uint64"
-          },
-          "effective-last-valid": {
-            "description": "When registered, this is the last round it may be used.",
-            "type": "integer",
-            "x-algorand-format": "uint64"
-          },
-          "id": {
-            "description": "The key's ParticipationID.",
-            "type": "string"
-          },
-          "key": {
-            "$ref": "#/components/schemas/AccountParticipation"
-          },
-          "last-block-proposal": {
-            "description": "Round when this key was last used to propose a block.",
-            "type": "integer"
-          },
-          "last-state-proof": {
-            "description": "Round when this key was last used to generate a state proof.",
-            "type": "integer"
-          },
-          "last-vote": {
-            "description": "Round when this key was last used to vote.",
-            "type": "integer"
-          }
-        },
-        "required": [
-          "address",
-          "id",
-          "key"
-        ],
-        "type": "object"
-      },
-      "PendingTransactionResponse": {
-        "description": "Details about a pending transaction. If the transaction was recently confirmed, includes confirmation details like the round and reward details.",
-        "properties": {
-          "application-index": {
-            "description": "The application index if the transaction was found and it created an application.",
-            "type": "integer"
-          },
-          "asset-closing-amount": {
-            "description": "The number of the asset's unit that were transferred to the close-to address.",
-            "type": "integer"
-          },
-          "asset-index": {
-            "description": "The asset index if the transaction was found and it created an asset.",
-            "type": "integer"
-          },
-          "close-rewards": {
-            "description": "Rewards in microalgos applied to the close remainder to account.",
-            "type": "integer"
-          },
-          "closing-amount": {
-            "description": "Closing amount for the transaction.",
-            "type": "integer"
-          },
-          "confirmed-round": {
-            "description": "The round where this transaction was confirmed, if present.",
-            "type": "integer"
-          },
-          "global-state-delta": {
-            "$ref": "#/components/schemas/StateDelta"
-          },
-          "inner-txns": {
-            "description": "Inner transactions produced by application execution.",
-            "items": {
-              "$ref": "#/components/schemas/PendingTransactionResponse"
-            },
-            "type": "array"
-          },
-          "local-state-delta": {
-            "description": "\\[ld\\] Local state key/value changes for the application being executed by this transaction.",
-            "items": {
-              "$ref": "#/components/schemas/AccountStateDelta"
-            },
-            "type": "array"
-          },
-          "logs": {
-            "description": "\\[lg\\] Logs for the application being executed by this transaction.",
-            "items": {
-              "format": "byte",
-              "pattern": "^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$",
-              "type": "string"
-            },
-            "type": "array"
-          },
-          "pool-error": {
-            "description": "Indicates that the transaction was kicked out of this node's transaction pool (and specifies why that happened).  An empty string indicates the transaction wasn't kicked out of this node's txpool due to an error.\n",
-            "type": "string"
-          },
-          "receiver-rewards": {
-            "description": "Rewards in microalgos applied to the receiver account.",
-            "type": "integer"
-          },
-          "sender-rewards": {
-            "description": "Rewards in microalgos applied to the sender account.",
-            "type": "integer"
-          },
-          "txn": {
-            "description": "The raw signed transaction.",
-            "properties": {},
-            "type": "object",
-            "x-algorand-format": "SignedTransaction"
-          }
-        },
-        "required": [
-          "pool-error",
-          "txn"
-        ],
-        "type": "object"
-      },
       "StateDelta": {
         "description": "Application state delta.",
         "items": {
@@ -1596,7 +1339,7 @@
             "type": "string"
           },
           "type": {
-            "description": "\\[tt\\] value type. Value `1` refers to **bytes**, value `2` refers to **uint**",
+            "description": "\\[tt\\] value type.",
             "type": "integer"
           },
           "uint": {
@@ -1780,18 +1523,6 @@
               "pattern": "[A-Z0-9]{58}",
               "type": "string"
             }
-          },
-          {
-            "description": "When set to `all` will exclude asset holdings, application local state, created asset parameters, any created application parameters. Defaults to `none`.",
-            "in": "query",
-            "name": "exclude",
-            "schema": {
-              "enum": [
-                "all",
-                "none"
-              ],
-              "type": "string"
-            }
           }
         ],
         "responses": {
@@ -1807,8 +1538,7 @@
                   "$ref": "#/components/schemas/Account"
                 }
               }
-            },
-            "description": "AccountResponse wraps the Account type in a response."
+            }
           },
           "400": {
             "content": {
@@ -1823,7 +1553,7 @@
                 }
               }
             },
-            "description": "Bad request"
+            "description": "Malformed address"
           },
           "401": {
             "content": {
@@ -1861,278 +1591,6 @@
           }
         },
         "summary": "Get account information."
-      }
-    },
-    "/v2/accounts/{address}/applications/{application-id}": {
-      "get": {
-        "description": "Given a specific account public key and application ID, this call returns the account's application local state and global state (AppLocalState and AppParams, if either exists). Global state will only be returned if the provided address is the application's creator.",
-        "operationId": "AccountApplicationInformation",
-        "parameters": [
-          {
-            "description": "Configures whether the response object is JSON or MessagePack encoded.",
-            "in": "query",
-            "name": "format",
-            "schema": {
-              "enum": [
-                "json",
-                "msgpack"
-              ],
-              "type": "string"
-            }
-          },
-          {
-            "description": "An account public key",
-            "in": "path",
-            "name": "address",
-            "required": true,
-            "schema": {
-              "pattern": "[A-Z0-9]{58}",
-              "type": "string"
-            }
-          },
-          {
-            "description": "An application identifier",
-            "in": "path",
-            "name": "application-id",
-            "required": true,
-            "schema": {
-              "type": "integer"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "properties": {
-                    "app-local-state": {
-                      "$ref": "#/components/schemas/ApplicationLocalState"
-                    },
-                    "created-app": {
-                      "$ref": "#/components/schemas/ApplicationParams"
-                    },
-                    "round": {
-                      "description": "The round for which this information is relevant.",
-                      "type": "integer"
-                    }
-                  },
-                  "required": [
-                    "round"
-                  ],
-                  "type": "object"
-                }
-              },
-              "application/msgpack": {
-                "schema": {
-                  "properties": {
-                    "app-local-state": {
-                      "$ref": "#/components/schemas/ApplicationLocalState"
-                    },
-                    "created-app": {
-                      "$ref": "#/components/schemas/ApplicationParams"
-                    },
-                    "round": {
-                      "description": "The round for which this information is relevant.",
-                      "type": "integer"
-                    }
-                  },
-                  "required": [
-                    "round"
-                  ],
-                  "type": "object"
-                }
-              }
-            },
-            "description": "AccountApplicationResponse describes the account's application local state and global state (AppLocalState and AppParams, if either exists) for a specific application ID. Global state will only be returned if the provided address is the application's creator."
-          },
-          "400": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              },
-              "application/msgpack": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Malformed address or application ID"
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              },
-              "application/msgpack": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Invalid API Token"
-          },
-          "500": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              },
-              "application/msgpack": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Internal Error"
-          },
-          "default": {
-            "content": {},
-            "description": "Unknown Error"
-          }
-        },
-        "summary": "Get account information about a given app."
-      }
-    },
-    "/v2/accounts/{address}/assets/{asset-id}": {
-      "get": {
-        "description": "Given a specific account public key and asset ID, this call returns the account's asset holding and asset parameters (if either exist). Asset parameters will only be returned if the provided address is the asset's creator.",
-        "operationId": "AccountAssetInformation",
-        "parameters": [
-          {
-            "description": "Configures whether the response object is JSON or MessagePack encoded.",
-            "in": "query",
-            "name": "format",
-            "schema": {
-              "enum": [
-                "json",
-                "msgpack"
-              ],
-              "type": "string"
-            }
-          },
-          {
-            "description": "An account public key",
-            "in": "path",
-            "name": "address",
-            "required": true,
-            "schema": {
-              "pattern": "[A-Z0-9]{58}",
-              "type": "string"
-            }
-          },
-          {
-            "description": "An asset identifier",
-            "in": "path",
-            "name": "asset-id",
-            "required": true,
-            "schema": {
-              "type": "integer"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "properties": {
-                    "asset-holding": {
-                      "$ref": "#/components/schemas/AssetHolding"
-                    },
-                    "created-asset": {
-                      "$ref": "#/components/schemas/AssetParams"
-                    },
-                    "round": {
-                      "description": "The round for which this information is relevant.",
-                      "type": "integer"
-                    }
-                  },
-                  "required": [
-                    "round"
-                  ],
-                  "type": "object"
-                }
-              },
-              "application/msgpack": {
-                "schema": {
-                  "properties": {
-                    "asset-holding": {
-                      "$ref": "#/components/schemas/AssetHolding"
-                    },
-                    "created-asset": {
-                      "$ref": "#/components/schemas/AssetParams"
-                    },
-                    "round": {
-                      "description": "The round for which this information is relevant.",
-                      "type": "integer"
-                    }
-                  },
-                  "required": [
-                    "round"
-                  ],
-                  "type": "object"
-                }
-              }
-            },
-            "description": "AccountAssetResponse describes the account's asset holding and asset parameters (if either exist) for a specific asset ID. Asset parameters will only be returned if the provided address is the asset's creator."
-          },
-          "400": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              },
-              "application/msgpack": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Malformed address or asset ID"
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              },
-              "application/msgpack": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Invalid API Token"
-          },
-          "500": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              },
-              "application/msgpack": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Internal Error"
-          },
-          "default": {
-            "content": {},
-            "description": "Unknown Error"
-          }
-        },
-        "summary": "Get account information about a given asset."
       }
     },
     "/v2/accounts/{address}/transactions/pending": {
@@ -2297,7 +1755,7 @@
     },
     "/v2/applications/{application-id}": {
       "get": {
-        "description": "Given a application ID, it returns application information including creator, approval and clear programs, global and local schemas, and global state.",
+        "description": "Given a application id, it returns application information including creator, approval and clear programs, global and local schemas, and global state.",
         "operationId": "GetApplicationByID",
         "parameters": [
           {
@@ -2371,7 +1829,7 @@
     },
     "/v2/assets/{asset-id}": {
       "get": {
-        "description": "Given a asset ID, it returns asset information including creator, name, total supply and special addresses.",
+        "description": "Given a asset id, it returns asset information including creator, name, total supply and special addresses.",
         "operationId": "GetAssetByID",
         "parameters": [
           {
@@ -2612,18 +2070,6 @@
             }
           },
           {
-            "description": "The type of hash function used to create the proof, must be one of: \n* sha512_256 \n* sha256",
-            "in": "query",
-            "name": "hashtype",
-            "schema": {
-              "enum": [
-                "sha512_256",
-                "sha256"
-              ],
-              "type": "string"
-            }
-          },
-          {
             "description": "Configures whether the response object is JSON or MessagePack encoded.",
             "in": "query",
             "name": "format",
@@ -2642,14 +2088,6 @@
               "application/json": {
                 "schema": {
                   "properties": {
-                    "hashtype": {
-                      "description": "The type of hash function used to create the proof, must be one of: \n* sha512_256 \n* sha256",
-                      "enum": [
-                        "sha512_256",
-                        "sha256"
-                      ],
-                      "type": "string"
-                    },
                     "idx": {
                       "description": "Index of the transaction in the block's payset.",
                       "type": "integer"
@@ -2665,18 +2103,12 @@
                       "format": "byte",
                       "pattern": "^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$",
                       "type": "string"
-                    },
-                    "treedepth": {
-                      "description": "Represents the depth of the tree that is being proven, i.e. the number of edges from a leaf to the root.",
-                      "type": "integer"
                     }
                   },
                   "required": [
-                    "hashtype",
                     "idx",
                     "proof",
-                    "stibhash",
-                    "treedepth"
+                    "stibhash"
                   ],
                   "type": "object"
                 }
@@ -2961,399 +2393,78 @@
         "summary": "Get the current supply reported by the ledger."
       }
     },
-    "/v2/participation": {
-      "get": {
-        "description": "Return a list of participation keys",
-        "operationId": "GetParticipationKeys",
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "items": {
-                    "$ref": "#/components/schemas/ParticipationKey"
-                  },
-                  "type": "array"
-                }
-              }
-            },
-            "description": "A list of participation keys"
-          },
-          "400": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Bad Request"
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Invalid API Token"
-          },
-          "404": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Participation Key Not Found"
-          },
-          "500": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Internal Error"
-          },
-          "default": {
-            "content": {},
-            "description": "Unknown Error"
-          }
-        },
-        "summary": "Return a list of participation keys",
-        "tags": [
-          "private"
-        ]
-      },
+    "/v2/register-participation-keys/{address}": {
       "post": {
-        "operationId": "AddParticipationKey",
-        "requestBody": {
-          "content": {
-            "application/msgpack": {
-              "schema": {
-                "format": "binary",
-                "type": "string"
-              }
+        "description": "Generate (or renew) and register participation keys on the node for a given account address.",
+        "operationId": "RegisterParticipationKeys",
+        "parameters": [
+          {
+            "description": "The `account-id` to update, or `all` to update all accounts.",
+            "in": "path",
+            "name": "address",
+            "required": true,
+            "schema": {
+              "type": "string"
             }
           },
-          "description": "The participation key to add to the node",
-          "required": true
-        },
+          {
+            "description": "The fee to use when submitting key registration transactions. Defaults to the suggested fee.",
+            "in": "query",
+            "name": "fee",
+            "schema": {
+              "default": 1000,
+              "type": "integer"
+            }
+          },
+          {
+            "description": "value to use for two-level participation key.",
+            "in": "query",
+            "name": "key-dilution",
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "description": "The last round for which the generated participation keys will be valid.",
+            "in": "query",
+            "name": "round-last-valid",
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Don't wait for transaction to commit before returning response.",
+            "in": "query",
+            "name": "no-wait",
+            "schema": {
+              "type": "boolean"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "content": {
               "application/json": {
                 "schema": {
                   "properties": {
-                    "partId": {
-                      "description": "encoding of the participation ID.",
+                    "txId": {
+                      "description": "encoding of the transaction hash.",
                       "type": "string"
                     }
                   },
                   "required": [
-                    "partId"
+                    "txId"
                   ],
                   "type": "object"
                 }
               }
             },
-            "description": "Participation ID of the submission"
-          },
-          "400": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Bad Request"
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Invalid API Token"
-          },
-          "404": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Participation Key Not Found"
-          },
-          "500": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Internal Error"
-          },
-          "503": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Service Temporarily Unavailable"
-          },
-          "default": {
-            "content": {},
-            "description": "Unknown Error"
+            "description": "Transaction ID of the submission."
           }
         },
-        "summary": "Add a participation key to the node",
-        "tags": [
-          "private"
-        ],
-        "x-codegen-request-body-name": "participationkey"
-      }
-    },
-    "/v2/participation/{participation-id}": {
-      "delete": {
-        "description": "Delete a given participation key by ID",
-        "operationId": "DeleteParticipationKeyByID",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "participation-id",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {},
-            "description": "Participation key got deleted by ID"
-          },
-          "400": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Bad Request"
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Invalid API Token"
-          },
-          "404": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Participation Key Not Found"
-          },
-          "500": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Internal Error"
-          },
-          "default": {
-            "content": {},
-            "description": "Unknown Error"
-          }
-        },
-        "summary": "Delete a given participation key by ID",
         "tags": [
           "private"
         ]
-      },
-      "get": {
-        "description": "Given a participation ID, return information about that participation key",
-        "operationId": "GetParticipationKeyByID",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "participation-id",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ParticipationKey"
-                }
-              }
-            },
-            "description": "A detailed description of a participation ID"
-          },
-          "400": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Bad Request"
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Invalid API Token"
-          },
-          "404": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Participation Key Not Found"
-          },
-          "500": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Internal Error"
-          },
-          "default": {
-            "content": {},
-            "description": "Unknown Error"
-          }
-        },
-        "summary": "Get participation key info given a participation ID",
-        "tags": [
-          "private"
-        ]
-      },
-      "post": {
-        "description": "Given a participation ID, append state proof keys to a particular set of participation keys",
-        "operationId": "AppendKeys",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "participation-id",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/msgpack": {
-              "schema": {
-                "format": "binary",
-                "type": "string"
-              }
-            }
-          },
-          "description": "The state proof keys to add to an existing participation ID",
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ParticipationKey"
-                }
-              }
-            },
-            "description": "A detailed description of a participation ID"
-          },
-          "400": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Bad Request"
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Invalid API Token"
-          },
-          "404": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Participation Key Not Found"
-          },
-          "500": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Internal Error"
-          },
-          "default": {
-            "content": {},
-            "description": "Unknown Error"
-          }
-        },
-        "summary": "Append state proof keys to a participation key",
-        "tags": [
-          "private"
-        ],
-        "x-codegen-request-body-name": "keymap"
       }
     },
     "/v2/shutdown": {
@@ -3649,18 +2760,8 @@
     },
     "/v2/teal/compile": {
       "post": {
-        "description": "Given TEAL source code in plain text, return base64 encoded program bytes and base32 SHA512_256 hash of program bytes (Address style). This endpoint is only enabled when a node's configuration file sets EnableDeveloperAPI to true.",
+        "description": "Given TEAL source code in plain text, return base64 encoded program bytes and base32 SHA512_256 hash of program bytes (Address style). This endpoint is only enabled when a node's configureation file sets EnableDeveloperAPI to true.",
         "operationId": "TealCompile",
-        "parameters": [
-          {
-            "description": "When set to `true`, returns the source map of the program as a JSON. Defaults to `false`.",
-            "in": "query",
-            "name": "sourcemap",
-            "schema": {
-              "type": "boolean"
-            }
-          }
-        ],
         "requestBody": {
           "content": {
             "text/plain": {
@@ -3686,11 +2787,6 @@
                     "result": {
                       "description": "base64 encoded program bytes",
                       "type": "string"
-                    },
-                    "sourcemap": {
-                      "description": "JSON of the source map",
-                      "properties": {},
-                      "type": "object"
                     }
                   },
                   "required": [
@@ -3746,88 +2842,9 @@
         "x-codegen-request-body-name": "source"
       }
     },
-    "/v2/teal/disassemble": {
-      "post": {
-        "description": "Given the program bytes, return the TEAL source code in plain text. This endpoint is only enabled when a node's configuration file sets EnableDeveloperAPI to true.",
-        "operationId": "TealDisassemble",
-        "requestBody": {
-          "content": {
-            "application/x-binary": {
-              "schema": {
-                "format": "byte",
-                "type": "string"
-              }
-            }
-          },
-          "description": "TEAL program binary to be disassembled",
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "properties": {
-                    "result": {
-                      "description": "disassembled Teal code",
-                      "type": "string"
-                    }
-                  },
-                  "required": [
-                    "result"
-                  ],
-                  "type": "object"
-                }
-              }
-            },
-            "description": "Teal disassembly Result"
-          },
-          "400": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Bad Request - Teal Compile Error"
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Invalid API Token"
-          },
-          "404": {
-            "content": {},
-            "description": "Developer API not enabled"
-          },
-          "500": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Internal Error"
-          },
-          "default": {
-            "content": {},
-            "description": "Unknown Error"
-          }
-        },
-        "summary": "Disassemble program bytes into the TEAL source code.",
-        "x-codegen-request-body-name": "source"
-      }
-    },
     "/v2/teal/dryrun": {
       "post": {
-        "description": "Executes TEAL program(s) in context and returns debugging information about the execution. This endpoint is only enabled when a node's configuration file sets EnableDeveloperAPI to true.",
+        "description": "Executes TEAL program(s) in context and returns debugging information about the execution. This endpoint is only enabled when a node's configureation file sets EnableDeveloperAPI to true.",
         "operationId": "TealDryrun",
         "requestBody": {
           "content": {
@@ -4230,11 +3247,11 @@
     },
     "/v2/transactions/pending/{txid}": {
       "get": {
-        "description": "Given a transaction ID of a recently submitted transaction, it returns information about it.  There are several cases when this might succeed:\n- transaction committed (committed round > 0)\n- transaction still in the pool (committed round = 0, pool error = \"\")\n- transaction removed from pool due to error (committed round = 0, pool error != \"\")\nOr the transaction may have happened sufficiently long ago that the node no longer remembers it, and this will return an error.\n",
+        "description": "Given a transaction id of a recently submitted transaction, it returns information about it.  There are several cases when this might succeed:\n- transaction committed (committed round > 0)\n- transaction still in the pool (committed round = 0, pool error = \"\")\n- transaction removed from pool due to error (committed round = 0, pool error != \"\")\nOr the transaction may have happened sufficiently long ago that the node no longer remembers it, and this will return an error.\n",
         "operationId": "PendingTransactionInformation",
         "parameters": [
           {
-            "description": "A transaction ID",
+            "description": "A transaction id",
             "in": "path",
             "name": "txid",
             "required": true,
@@ -4261,16 +3278,134 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/PendingTransactionResponse"
+                  "description": "Details about a pending transaction. If the transaction was recently confirmed, includes confirmation details like the round and reward details.",
+                  "properties": {
+                    "application-index": {
+                      "description": "The application index if the transaction was found and it created an application.",
+                      "type": "integer"
+                    },
+                    "asset-closing-amount": {
+                      "description": "The number of the asset's unit that were transferred to the close-to address.",
+                      "type": "integer"
+                    },
+                    "asset-index": {
+                      "description": "The asset index if the transaction was found and it created an asset.",
+                      "type": "integer"
+                    },
+                    "close-rewards": {
+                      "description": "Rewards in microalgos applied to the close remainder to account.",
+                      "type": "integer"
+                    },
+                    "closing-amount": {
+                      "description": "Closing amount for the transaction.",
+                      "type": "integer"
+                    },
+                    "confirmed-round": {
+                      "description": "The round where this transaction was confirmed, if present.",
+                      "type": "integer"
+                    },
+                    "global-state-delta": {
+                      "$ref": "#/components/schemas/StateDelta"
+                    },
+                    "local-state-delta": {
+                      "description": "\\[ld\\] Local state key/value changes for the application being executed by this transaction.",
+                      "items": {
+                        "$ref": "#/components/schemas/AccountStateDelta"
+                      },
+                      "type": "array"
+                    },
+                    "pool-error": {
+                      "description": "Indicates that the transaction was kicked out of this node's transaction pool (and specifies why that happened).  An empty string indicates the transaction wasn't kicked out of this node's txpool due to an error.\n",
+                      "type": "string"
+                    },
+                    "receiver-rewards": {
+                      "description": "Rewards in microalgos applied to the receiver account.",
+                      "type": "integer"
+                    },
+                    "sender-rewards": {
+                      "description": "Rewards in microalgos applied to the sender account.",
+                      "type": "integer"
+                    },
+                    "txn": {
+                      "description": "The raw signed transaction.",
+                      "properties": {},
+                      "type": "object",
+                      "x-algorand-format": "SignedTransaction"
+                    }
+                  },
+                  "required": [
+                    "pool-error",
+                    "txn"
+                  ],
+                  "type": "object"
                 }
               },
               "application/msgpack": {
                 "schema": {
-                  "$ref": "#/components/schemas/PendingTransactionResponse"
+                  "description": "Details about a pending transaction. If the transaction was recently confirmed, includes confirmation details like the round and reward details.",
+                  "properties": {
+                    "application-index": {
+                      "description": "The application index if the transaction was found and it created an application.",
+                      "type": "integer"
+                    },
+                    "asset-closing-amount": {
+                      "description": "The number of the asset's unit that were transferred to the close-to address.",
+                      "type": "integer"
+                    },
+                    "asset-index": {
+                      "description": "The asset index if the transaction was found and it created an asset.",
+                      "type": "integer"
+                    },
+                    "close-rewards": {
+                      "description": "Rewards in microalgos applied to the close remainder to account.",
+                      "type": "integer"
+                    },
+                    "closing-amount": {
+                      "description": "Closing amount for the transaction.",
+                      "type": "integer"
+                    },
+                    "confirmed-round": {
+                      "description": "The round where this transaction was confirmed, if present.",
+                      "type": "integer"
+                    },
+                    "global-state-delta": {
+                      "$ref": "#/components/schemas/StateDelta"
+                    },
+                    "local-state-delta": {
+                      "description": "\\[ld\\] Local state key/value changes for the application being executed by this transaction.",
+                      "items": {
+                        "$ref": "#/components/schemas/AccountStateDelta"
+                      },
+                      "type": "array"
+                    },
+                    "pool-error": {
+                      "description": "Indicates that the transaction was kicked out of this node's transaction pool (and specifies why that happened).  An empty string indicates the transaction wasn't kicked out of this node's txpool due to an error.\n",
+                      "type": "string"
+                    },
+                    "receiver-rewards": {
+                      "description": "Rewards in microalgos applied to the receiver account.",
+                      "type": "integer"
+                    },
+                    "sender-rewards": {
+                      "description": "Rewards in microalgos applied to the sender account.",
+                      "type": "integer"
+                    },
+                    "txn": {
+                      "description": "The raw signed transaction.",
+                      "properties": {},
+                      "type": "object",
+                      "x-algorand-format": "SignedTransaction"
+                    }
+                  },
+                  "required": [
+                    "pool-error",
+                    "txn"
+                  ],
+                  "type": "object"
                 }
               }
             },
-            "description": "Given a transaction ID of a recently submitted transaction, it returns information about it.  There are several cases when this might succeed:\n- transaction committed (committed round > 0)\n- transaction still in the pool (committed round = 0, pool error = \"\")\n- transaction removed from pool due to error (committed round = 0, pool error != \"\")\n\nOr the transaction may have happened sufficiently long ago that the node no longer remembers it, and this will return an error."
+            "description": "Given a transaction id of a recently submitted transaction, it returns information about it.  There are several cases when this might succeed:\n- transaction committed (committed round > 0)\n- transaction still in the pool (committed round = 0, pool error = \"\")\n- transaction removed from pool due to error (committed round = 0, pool error != \"\")\n\nOr the transaction may have happened sufficiently long ago that the node no longer remembers it, and this will return an error."
           },
           "400": {
             "content": {

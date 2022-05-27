@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2021 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -24,7 +24,7 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
-	"github.com/algorand/go-algorand/ledger/ledgercore"
+	"github.com/algorand/go-algorand/ledger"
 	"github.com/algorand/go-algorand/network"
 	"github.com/algorand/go-algorand/protocol"
 )
@@ -32,7 +32,7 @@ import (
 // TransactionSender is an interface that captures the node's ability
 // to broadcast a new transaction.
 type TransactionSender interface {
-	BroadcastInternalSignedTxGroup([]transactions.SignedTxn) error
+	BroadcastSignedTxGroup([]transactions.SignedTxn) error
 }
 
 // Ledger captures the aspects of the ledger that are used by this package.
@@ -41,7 +41,7 @@ type Ledger interface {
 	Wait(basics.Round) chan struct{}
 	GenesisHash() crypto.Digest
 	BlockHdr(basics.Round) (bookkeeping.BlockHeader, error)
-	CompactCertVoters(basics.Round) (*ledgercore.VotersForRound, error)
+	CompactCertVoters(basics.Round) (*ledger.VotersForRound, error)
 }
 
 // Network captures the aspects of the gossip network protocol that are
@@ -54,5 +54,5 @@ type Network interface {
 // Accounts captures the aspects of the AccountManager that are used by
 // this package.
 type Accounts interface {
-	StateProofKeys(basics.Round) []account.StateProofRecordForRound
+	Keys(basics.Round) []account.Participation
 }

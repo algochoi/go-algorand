@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2021 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -31,12 +31,7 @@ import (
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/protocol"
-	"github.com/algorand/go-algorand/test/partitiontest"
 )
-
-const testGenesisID string = "foo"
-
-var genesisHash = crypto.Digest{0x1, 0x2, 0x3}
 
 type IndexSuite struct {
 	suite.Suite
@@ -66,18 +61,14 @@ func (s *IndexSuite) SetupSuite() {
 		var txnEnc []transactions.SignedTxnInBlock
 		b := bookkeeping.Block{
 			BlockHeader: bookkeeping.BlockHeader{
-				Round:       basics.Round(uint64(i + 2)),
-				TimeStamp:   time.Now().Unix(),
-				GenesisID:   testGenesisID,
-				GenesisHash: genesisHash,
-				UpgradeState: bookkeeping.UpgradeState{
-					CurrentProtocol: protocol.ConsensusFuture,
-				},
+				Round:     basics.Round(uint64(i + 2)),
+				TimeStamp: time.Now().Unix(),
 			},
 		}
 
 		chunkSize := numOfTransactions / numOfBlocks
 		for t := i * chunkSize; t < (i+1)*chunkSize; t++ {
+
 			txid, err := b.EncodeSignedTxn(s.txns[t], transactions.ApplyData{})
 			require.NoError(s.T(), err)
 			txnEnc = append(txnEnc, txid)
@@ -119,7 +110,7 @@ func (s *IndexSuite) TestIndexer_GetRoundsByAddress() {
 }
 
 func (s *IndexSuite) TestIndexer_DuplicateRounds() {
-	// Get Transactions (we're guaranteed to have more than one txn per address per block)
+	// Get Transactions (we're guranteed to have more than one txn per address per block)
 
 	res, err := s.idx.GetRoundsByAddress(s.addrs[0].String(), 100)
 
@@ -159,8 +150,6 @@ func (s *IndexSuite) TestIndexer_Asset() {
 }
 
 func TestExampleTestSuite(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	suite.Run(t, new(IndexSuite))
 }
 
@@ -238,12 +227,10 @@ func generateTestObjects(numTxs, numAccs int) ([]transactions.Transaction, []tra
 
 		txs[i] = transactions.Transaction{
 			Header: transactions.Header{
-				Sender:      addresses[s],
-				Fee:         basics.MicroAlgos{Raw: f},
-				FirstValid:  basics.Round(iss),
-				LastValid:   basics.Round(exp),
-				GenesisID:   testGenesisID,
-				GenesisHash: genesisHash,
+				Sender:     addresses[s],
+				Fee:        basics.MicroAlgos{Raw: f},
+				FirstValid: basics.Round(iss),
+				LastValid:  basics.Round(exp),
 			},
 		}
 

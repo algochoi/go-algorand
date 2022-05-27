@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2021 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -22,12 +22,9 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/protocol"
-	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
 func TestUnmarshallMessageOfInterestErrors(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	tags, err := unmarshallMessageOfInterest([]byte{0x88})
 	require.Equal(t, errUnableUnmarshallMessage, err)
 	require.Equal(t, 0, len(tags))
@@ -49,8 +46,6 @@ func TestUnmarshallMessageOfInterestErrors(t *testing.T) {
 }
 
 func TestMarshallMessageOfInterest(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	bytes := MarshallMessageOfInterest([]protocol.Tag{protocol.AgreementVoteTag})
 	tags, err := unmarshallMessageOfInterest(bytes)
 	require.NoError(t, err)

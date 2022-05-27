@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2021 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -19,8 +19,6 @@ package crypto
 import (
 	"bytes"
 	"testing"
-
-	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
 func makeCurve25519Secret() *SignatureSecrets {
@@ -30,50 +28,45 @@ func makeCurve25519Secret() *SignatureSecrets {
 }
 
 func TestSignVerifyEmptyMessage(t *testing.T) {
-	partitiontest.PartitionTest(t)
 	pk, sk := ed25519GenerateKey()
 	sig := ed25519Sign(sk, []byte{})
-	if !ed25519Verify(pk, []byte{}, sig, true) {
+	if !ed25519Verify(pk, []byte{}, sig) {
 		t.Errorf("sig of an empty message failed to verify")
 	}
 }
 
 func TestVerifyZeros(t *testing.T) {
-	partitiontest.PartitionTest(t)
 	var pk SignatureVerifier
 	var sig Signature
 	for x := byte(0); x < 255; x++ {
-		if pk.VerifyBytes([]byte{x}, sig, true) {
+		if pk.VerifyBytes([]byte{x}, sig) {
 			t.Errorf("Zero sig with zero pk successfully verified message %x", x)
 		}
 	}
 }
 
 func TestGenerateSignatureSecrets(t *testing.T) {
-	partitiontest.PartitionTest(t)
 	var s Seed
 	RandBytes(s[:])
 	ref := GenerateSignatureSecrets(s)
 	for i := 0; i < 10; i++ {
 		secrets := GenerateSignatureSecrets(s)
 		if bytes.Compare(ref.SignatureVerifier[:], secrets.SignatureVerifier[:]) != 0 {
-			t.Errorf("SignatureSecrets.SignatureVerifier is inconsistent; different results generated for the same seed")
+			t.Errorf("SignatureSecrets.SignatureVerifier is inconsistent; diffrent results generated for the same seed")
 			return
 		}
 		if bytes.Compare(ref.SK[:], secrets.SK[:]) != 0 {
-			t.Errorf("SignatureSecrets.SK is inconsistent; different results generated for the same seed")
+			t.Errorf("SignatureSecrets.SK is inconsistent; diffrent results generated for the same seed")
 			return
 		}
 	}
 }
 
 func TestCurve25519SignVerify(t *testing.T) {
-	partitiontest.PartitionTest(t)
 	signVerify(t, makeCurve25519Secret(), makeCurve25519Secret())
 }
 
 func TestVRFProveVerify(t *testing.T) {
-	partitiontest.PartitionTest(t)
 	proveVerifyVrf(t, GenerateVRFSecrets(), GenerateVRFSecrets())
 }
 
@@ -84,7 +77,7 @@ func BenchmarkSignVerify(b *testing.B) {
 
 	for i := 0; i < b.N; i++ {
 		sig := c.Sign(s)
-		_ = c.Verify(s, sig, true)
+		_ = c.Verify(s, sig)
 	}
 }
 
@@ -108,6 +101,6 @@ func BenchmarkVerify(b *testing.B) {
 	b.ResetTimer()
 
 	for i := 0; i < b.N; i++ {
-		_ = c.Verify(strs[i], sigs[i], true)
+		_ = c.Verify(strs[i], sigs[i])
 	}
 }

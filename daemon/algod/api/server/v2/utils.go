@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2021 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -21,13 +21,12 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
-	"unicode"
-	"unicode/utf8"
 
 	"github.com/algorand/go-codec/codec"
 	"github.com/labstack/echo/v4"
 
 	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated"
+	"github.com/algorand/go-algorand/data"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/logging"
@@ -109,7 +108,7 @@ func computeCreatableIndexInPayset(tx node.TxnWithStatus, txnCounter uint64, pay
 // computeAssetIndexFromTxn returns the created asset index given a confirmed
 // transaction whose confirmation block is available in the ledger. Note that
 // 0 is an invalid asset index (they start at 1).
-func computeAssetIndexFromTxn(tx node.TxnWithStatus, l LedgerForAPI) *uint64 {
+func computeAssetIndexFromTxn(tx node.TxnWithStatus, l *data.Ledger) (aidx *uint64) {
 	// Must have ledger
 	if l == nil {
 		return nil
@@ -126,15 +125,6 @@ func computeAssetIndexFromTxn(tx node.TxnWithStatus, l LedgerForAPI) *uint64 {
 	if tx.Txn.Txn.AssetConfigTxnFields.ConfigAsset != 0 {
 		return nil
 	}
-
-	aid := uint64(tx.ApplyData.ConfigAsset)
-	if aid > 0 {
-		return &aid
-	}
-	// If there is no ConfigAsset in the ApplyData, it must be a
-	// transaction before inner transactions were activated. Therefore
-	// the computeCreatableIndexInPayset function will work properly
-	// to deduce the aid. Proceed.
 
 	// Look up block where transaction was confirmed
 	blk, err := l.Block(tx.ConfirmedRound)
@@ -153,7 +143,7 @@ func computeAssetIndexFromTxn(tx node.TxnWithStatus, l LedgerForAPI) *uint64 {
 // computeAppIndexFromTxn returns the created app index given a confirmed
 // transaction whose confirmation block is available in the ledger. Note that
 // 0 is an invalid asset index (they start at 1).
-func computeAppIndexFromTxn(tx node.TxnWithStatus, l LedgerForAPI) *uint64 {
+func computeAppIndexFromTxn(tx node.TxnWithStatus, l *data.Ledger) (aidx *uint64) {
 	// Must have ledger
 	if l == nil {
 		return nil
@@ -170,15 +160,6 @@ func computeAppIndexFromTxn(tx node.TxnWithStatus, l LedgerForAPI) *uint64 {
 	if tx.Txn.Txn.ApplicationCallTxnFields.ApplicationID != 0 {
 		return nil
 	}
-
-	aid := uint64(tx.ApplyData.ApplicationID)
-	if aid > 0 {
-		return &aid
-	}
-	// If there is no ApplicationID in the ApplyData, it must be a
-	// transaction before inner transactions were activated. Therefore
-	// the computeCreatableIndexInPayset function will work properly
-	// to deduce the aid. Proceed.
 
 	// Look up block where transaction was confirmed
 	blk, err := l.Block(tx.ConfirmedRound)
@@ -203,7 +184,7 @@ func getCodecHandle(formatPtr *string) (codec.Handle, string, error) {
 
 	switch format {
 	case "json":
-		return protocol.JSONStrictHandle, "application/json", nil
+		return protocol.JSONHandle, "application/json", nil
 	case "msgpack":
 		fallthrough
 	case "msgp":
@@ -281,68 +262,4 @@ func convertToDeltas(txn node.TxnWithStatus) (*[]generated.AccountStateDelta, *g
 	}
 
 	return localStateDelta, stateDeltaToStateDelta(txn.ApplyData.EvalDelta.GlobalDelta)
-}
-
-func convertLogs(txn node.TxnWithStatus) *[][]byte {
-	var logItems *[][]byte
-	if len(txn.ApplyData.EvalDelta.Logs) > 0 {
-		l := make([][]byte, len(txn.ApplyData.EvalDelta.Logs))
-
-		for i, log := range txn.ApplyData.EvalDelta.Logs {
-			l[i] = []byte(log)
-		}
-
-		logItems = &l
-	}
-	return logItems
-}
-
-func convertInners(txn *node.TxnWithStatus) *[]preEncodedTxInfo {
-	inner := make([]preEncodedTxInfo, len(txn.ApplyData.EvalDelta.InnerTxns))
-	for i, itxn := range txn.ApplyData.EvalDelta.InnerTxns {
-		inner[i] = convertInnerTxn(&itxn)
-	}
-	return &inner
-}
-
-func convertInnerTxn(txn *transactions.SignedTxnWithAD) preEncodedTxInfo {
-	// This copies from handlers.PendingTransactionInformation, with
-	// simplifications because we have a SignedTxnWithAD rather than
-	// TxnWithStatus, and we know this txn has committed.
-
-	response := preEncodedTxInfo{Txn: txn.SignedTxn}
-
-	response.ClosingAmount = &txn.ApplyData.ClosingAmount.Raw
-	response.AssetClosingAmount = &txn.ApplyData.AssetClosingAmount
-	response.SenderRewards = &txn.ApplyData.SenderRewards.Raw
-	response.ReceiverRewards = &txn.ApplyData.ReceiverRewards.Raw
-	response.CloseRewards = &txn.ApplyData.CloseRewards.Raw
-
-	// Since this is an inner txn, we know these indexes will be populated. No
-	// need to search payset for IDs
-	response.AssetIndex = numOrNil(uint64(txn.ApplyData.ConfigAsset))
-	response.ApplicationIndex = numOrNil(uint64(txn.ApplyData.ApplicationID))
-
-	withStatus := node.TxnWithStatus{
-		Txn:       txn.SignedTxn,
-		ApplyData: txn.ApplyData,
-	}
-	response.LocalStateDelta, response.GlobalStateDelta = convertToDeltas(withStatus)
-	response.Logs = convertLogs(withStatus)
-	response.Inners = convertInners(&withStatus)
-	return response
-}
-
-// printableUTF8OrEmpty checks to see if the entire string is a UTF8 printable string.
-// If this is the case, the string is returned as is. Otherwise, the empty string is returned.
-func printableUTF8OrEmpty(in string) string {
-	// iterate throughout all the characters in the string to see if they are all printable.
-	// when range iterating on go strings, go decode each element as a utf8 rune.
-	for _, c := range in {
-		// is this a printable character, or invalid rune ?
-		if c == utf8.RuneError || !unicode.IsPrint(c) {
-			return ""
-		}
-	}
-	return in
 }

@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2021 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -21,12 +21,10 @@ import (
 	"os"
 	"testing"
 
-	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/stretchr/testify/require"
 )
 
 func TestCyclicWrite(t *testing.T) {
-	partitiontest.PartitionTest(t)
 	liveFileName := "live.test"
 	archiveFileName := "archive.test"
 	defer os.Remove(liveFileName)

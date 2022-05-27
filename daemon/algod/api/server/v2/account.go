@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2021 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -19,10 +19,7 @@ package v2
 import (
 	"encoding/base64"
 	"errors"
-	"math"
-	"sort"
 
-	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated"
 	"github.com/algorand/go-algorand/data/basics"
@@ -30,35 +27,30 @@ import (
 
 // AccountDataToAccount converts basics.AccountData to v2.generated.Account
 func AccountDataToAccount(
-	address string, record *basics.AccountData,
-	lastRound basics.Round, consensus *config.ConsensusParams,
-	amountWithoutPendingRewards basics.MicroAlgos,
+	address string, record *basics.AccountData, assetsCreators map[basics.AssetIndex]string,
+	lastRound basics.Round, amountWithoutPendingRewards basics.MicroAlgos,
 ) (generated.Account, error) {
 
 	assets := make([]generated.AssetHolding, 0, len(record.Assets))
 	for curid, holding := range record.Assets {
 		// Empty is ok, asset may have been deleted, so we can no
 		// longer fetch the creator
+		creator := assetsCreators[curid]
 		holding := generated.AssetHolding{
 			Amount:   holding.Amount,
 			AssetId:  uint64(curid),
+			Creator:  creator,
 			IsFrozen: holding.Frozen,
 		}
 
 		assets = append(assets, holding)
 	}
-	sort.Slice(assets, func(i, j int) bool {
-		return assets[i].AssetId < assets[j].AssetId
-	})
 
 	createdAssets := make([]generated.Asset, 0, len(record.AssetParams))
 	for idx, params := range record.AssetParams {
 		asset := AssetParamsToAsset(address, idx, &params)
 		createdAssets = append(createdAssets, asset)
 	}
-	sort.Slice(createdAssets, func(i, j int) bool {
-		return createdAssets[i].Index < createdAssets[j].Index
-	})
 
 	var apiParticipation *generated.AccountParticipation
 	if record.VoteID != (crypto.OneTimeSignatureVerifier{}) {
@@ -69,10 +61,6 @@ func AccountDataToAccount(
 			VoteLastValid:             uint64(record.VoteLastValid),
 			VoteKeyDilution:           uint64(record.VoteKeyDilution),
 		}
-		if !record.StateProofID.IsEmpty() {
-			tmp := record.StateProofID[:]
-			apiParticipation.StateProofKey = &tmp
-		}
 	}
 
 	createdApps := make([]generated.Application, 0, len(record.AppParams))
@@ -80,9 +68,6 @@ func AccountDataToAccount(
 		app := AppParamsToApplication(address, appIdx, &appParams)
 		createdApps = append(createdApps, app)
 	}
-	sort.Slice(createdApps, func(i, j int) bool {
-		return createdApps[i].Id < createdApps[j].Id
-	})
 
 	appsLocalState := make([]generated.ApplicationLocalState, 0, len(record.AppLocalStates))
 	for appIdx, state := range record.AppLocalStates {
@@ -96,23 +81,17 @@ func AccountDataToAccount(
 			},
 		})
 	}
-	sort.Slice(appsLocalState, func(i, j int) bool {
-		return appsLocalState[i].Id < appsLocalState[j].Id
-	})
 
 	totalAppSchema := generated.ApplicationStateSchema{
 		NumByteSlice: record.TotalAppSchema.NumByteSlice,
 		NumUint:      record.TotalAppSchema.NumUint,
 	}
-	totalExtraPages := uint64(record.TotalExtraAppPages)
 
 	amount := record.MicroAlgos
 	pendingRewards, overflowed := basics.OSubA(amount, amountWithoutPendingRewards)
 	if overflowed {
-		return generated.Account{}, errors.New("overflow on pending reward calculation")
+		return generated.Account{}, errors.New("overflow on pending reward calcuation")
 	}
-
-	minBalance := record.MinBalance(consensus)
 
 	return generated.Account{
 		SigType:                     nil,
@@ -126,17 +105,11 @@ func AccountDataToAccount(
 		RewardBase:                  &record.RewardsBase,
 		Participation:               apiParticipation,
 		CreatedAssets:               &createdAssets,
-		TotalCreatedAssets:          uint64(len(createdAssets)),
 		CreatedApps:                 &createdApps,
-		TotalCreatedApps:            uint64(len(createdApps)),
 		Assets:                      &assets,
-		TotalAssetsOptedIn:          uint64(len(assets)),
 		AuthAddr:                    addrOrNil(record.AuthAddr),
 		AppsLocalState:              &appsLocalState,
-		TotalAppsOptedIn:            uint64(len(appsLocalState)),
 		AppsTotalSchema:             &totalAppSchema,
-		AppsTotalExtraPages:         numOrNil(totalExtraPages),
-		MinBalance:                  minBalance.Raw,
 	}, nil
 }
 
@@ -145,8 +118,7 @@ func convertTKVToGenerated(tkv *basics.TealKeyValue) *generated.TealKeyValueStor
 		return nil
 	}
 
-	converted := make(generated.TealKeyValueStore, 0, len(*tkv))
-	rawKeyBytes := make([]string, 0, len(*tkv))
+	var converted generated.TealKeyValueStore
 	for k, v := range *tkv {
 		converted = append(converted, generated.TealKeyValue{
 			Key: base64.StdEncoding.EncodeToString([]byte(k)),
@@ -156,11 +128,7 @@ func convertTKVToGenerated(tkv *basics.TealKeyValue) *generated.TealKeyValueStor
 				Uint:  v.Uint,
 			},
 		})
-		rawKeyBytes = append(rawKeyBytes, k)
 	}
-	sort.Slice(converted, func(i, j int) bool {
-		return rawKeyBytes[i] < rawKeyBytes[j]
-	})
 	return &converted
 }
 
@@ -322,14 +290,6 @@ func AccountToAccountData(a *generated.Account) (basics.AccountData, error) {
 		totalSchema.NumByteSlice = a.AppsTotalSchema.NumByteSlice
 	}
 
-	var totalExtraPages uint32
-	if a.AppsTotalExtraPages != nil {
-		if *a.AppsTotalExtraPages > math.MaxUint32 {
-			return basics.AccountData{}, errors.New("AppsTotalExtraPages exceeds maximum decodable value")
-		}
-		totalExtraPages = uint32(*a.AppsTotalExtraPages)
-	}
-
 	status, err := basics.UnmarshalStatus(a.Status)
 	if err != nil {
 		return basics.AccountData{}, err
@@ -349,7 +309,6 @@ func AccountToAccountData(a *generated.Account) (basics.AccountData, error) {
 		AppLocalStates:     appLocalStates,
 		AppParams:          appParams,
 		TotalAppSchema:     totalSchema,
-		TotalExtraAppPages: totalExtraPages,
 	}
 
 	if a.AuthAddr != nil {
@@ -381,12 +340,6 @@ func ApplicationParamsToAppParams(gap *generated.ApplicationParams) (basics.AppP
 		ApprovalProgram:   gap.ApprovalProgram,
 		ClearStateProgram: gap.ClearStateProgram,
 	}
-	if gap.ExtraProgramPages != nil {
-		if *gap.ExtraProgramPages > math.MaxUint32 {
-			return basics.AppParams{}, errors.New("ExtraProgramPages exceeds maximum decodable value")
-		}
-		ap.ExtraProgramPages = uint32(*gap.ExtraProgramPages)
-	}
 	if gap.LocalStateSchema != nil {
 		ap.LocalStateSchema = basics.StateSchema{
 			NumUint:      gap.LocalStateSchema.NumUint,
@@ -411,14 +364,12 @@ func ApplicationParamsToAppParams(gap *generated.ApplicationParams) (basics.AppP
 // AppParamsToApplication converts basics.AppParams to generated.Application
 func AppParamsToApplication(creator string, appIdx basics.AppIndex, appParams *basics.AppParams) generated.Application {
 	globalState := convertTKVToGenerated(&appParams.GlobalState)
-	extraProgramPages := uint64(appParams.ExtraProgramPages)
-	app := generated.Application{
+	return generated.Application{
 		Id: uint64(appIdx),
 		Params: generated.ApplicationParams{
 			Creator:           creator,
 			ApprovalProgram:   appParams.ApprovalProgram,
 			ClearStateProgram: appParams.ClearStateProgram,
-			ExtraProgramPages: numOrNil(extraProgramPages),
 			GlobalState:       globalState,
 			LocalStateSchema: &generated.ApplicationStateSchema{
 				NumByteSlice: appParams.LocalStateSchema.NumByteSlice,
@@ -430,7 +381,6 @@ func AppParamsToApplication(creator string, appIdx basics.AppIndex, appParams *b
 			},
 		},
 	}
-	return app
 }
 
 // AssetParamsToAsset converts basics.AssetParams to generated.Asset
@@ -441,12 +391,9 @@ func AssetParamsToAsset(creator string, idx basics.AssetIndex, params *basics.As
 		Total:         params.Total,
 		Decimals:      uint64(params.Decimals),
 		DefaultFrozen: &frozen,
-		Name:          strOrNil(printableUTF8OrEmpty(params.AssetName)),
-		NameB64:       byteOrNil([]byte(params.AssetName)),
-		UnitName:      strOrNil(printableUTF8OrEmpty(params.UnitName)),
-		UnitNameB64:   byteOrNil([]byte(params.UnitName)),
-		Url:           strOrNil(printableUTF8OrEmpty(params.URL)),
-		UrlB64:        byteOrNil([]byte(params.URL)),
+		Name:          strOrNil(params.AssetName),
+		UnitName:      strOrNil(params.UnitName),
+		Url:           strOrNil(params.URL),
 		Clawback:      addrOrNil(params.Clawback),
 		Freeze:        addrOrNil(params.Freeze),
 		Manager:       addrOrNil(params.Manager),

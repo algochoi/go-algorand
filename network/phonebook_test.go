@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2021 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -23,7 +23,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -87,8 +86,6 @@ func testPhonebookUniform(t *testing.T, set []string, ph Phonebook, getsize int)
 }
 
 func TestArrayPhonebookAll(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	set := []string{"a", "b", "c", "d", "e"}
 	ph := MakePhonebook(1, 1).(*phonebookImpl)
 	for _, e := range set {
@@ -98,8 +95,6 @@ func TestArrayPhonebookAll(t *testing.T) {
 }
 
 func TestArrayPhonebookUniform1(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	set := []string{"a", "b", "c", "d", "e"}
 	ph := MakePhonebook(1, 1).(*phonebookImpl)
 	for _, e := range set {
@@ -109,8 +104,6 @@ func TestArrayPhonebookUniform1(t *testing.T) {
 }
 
 func TestArrayPhonebookUniform3(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	set := []string{"a", "b", "c", "d", "e"}
 	ph := MakePhonebook(1, 1).(*phonebookImpl)
 	for _, e := range set {
@@ -122,8 +115,6 @@ func TestArrayPhonebookUniform3(t *testing.T) {
 // TestPhonebookExtension tests for extending different phonebooks with
 // addresses.
 func TestPhonebookExtension(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	setA := []string{"a"}
 	moreB := []string{"b"}
 	ph := MakePhonebook(1, 1).(*phonebookImpl)
@@ -148,8 +139,6 @@ func extenderThread(th *phonebookImpl, more []string, wg *sync.WaitGroup, repeti
 }
 
 func TestThreadsafePhonebookExtension(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	set := []string{"a", "b", "c", "d", "e"}
 	more := []string{"f", "g", "h", "i", "j"}
 	ph := MakePhonebook(1, 1).(*phonebookImpl)
@@ -174,8 +163,6 @@ func threadTestThreadsafePhonebookExtensionLong(wg *sync.WaitGroup, ph *phoneboo
 }
 
 func TestThreadsafePhonebookExtensionLong(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	if testing.Short() {
 		t.SkipNow()
 		return
@@ -196,8 +183,6 @@ func TestThreadsafePhonebookExtensionLong(t *testing.T) {
 }
 
 func TestMultiPhonebook(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	set := []string{"a", "b", "c", "d", "e", "f", "g", "h", "i", "j"}
 	pha := make([]string, 0)
 	for _, e := range set[:5] {
@@ -217,8 +202,6 @@ func TestMultiPhonebook(t *testing.T) {
 }
 
 func TestMultiPhonebookDuplicateFiltering(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	set := []string{"a", "b", "c", "d", "e", "f", "g", "h", "i", "j"}
 	pha := make([]string, 0)
 	for _, e := range set[:7] {
@@ -238,14 +221,7 @@ func TestMultiPhonebookDuplicateFiltering(t *testing.T) {
 }
 
 func TestWaitAndAddConnectionTimeLongtWindow(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
-	// make the connectionsRateLimitingWindow long enough to avoid triggering it when the
-	// test is running in a slow environment
-	// The test will artificially simulate time passing
-	timeUnit := 2000 * time.Second
-	connectionsRateLimitingWindow := 2 * timeUnit
-	entries := MakePhonebook(3, connectionsRateLimitingWindow).(*phonebookImpl)
+	entries := MakePhonebook(3, 200*time.Millisecond).(*phonebookImpl)
 	addr1 := "addrABC"
 	addr2 := "addrXYZ"
 
@@ -264,10 +240,8 @@ func TestWaitAndAddConnectionTimeLongtWindow(t *testing.T) {
 	phBookData := entries.data[addr1].recentConnectionTimes
 	require.Equal(t, 1, len(phBookData))
 
-	// simulate passing a unit of time
-	for rct := range entries.data[addr1].recentConnectionTimes {
-		entries.data[addr1].recentConnectionTimes[rct] = entries.data[addr1].recentConnectionTimes[rct].Add(-1 * timeUnit)
-	}
+	// introduce a gap between the two requests
+	time.Sleep(100 * time.Millisecond)
 
 	// add another value to addr
 	addrInPhonebook, waitTime, provisionalTime = entries.GetConnectionWaitTime(addr1)
@@ -276,11 +250,8 @@ func TestWaitAndAddConnectionTimeLongtWindow(t *testing.T) {
 	phBookData = entries.data[addr1].recentConnectionTimes
 	require.Equal(t, 2, len(phBookData))
 
-	// simulate passing a unit of time
-	for rct := range entries.data[addr1].recentConnectionTimes {
-		entries.data[addr1].recentConnectionTimes[rct] =
-			entries.data[addr1].recentConnectionTimes[rct].Add(-1 * timeUnit)
-	}
+	// wait for the time the first element should be removed
+	time.Sleep(100 * time.Millisecond)
 
 	// the first time should be removed and a new one added
 	// there should not be any wait
@@ -304,11 +275,7 @@ func TestWaitAndAddConnectionTimeLongtWindow(t *testing.T) {
 	require.Equal(t, true, entries.UpdateConnectionTime(addr2, provisionalTime))
 
 	// introduce a gap between the two requests so that only the first will be removed later when waited
-	// simulate passing a unit of time
-	for rct := range entries.data[addr2].recentConnectionTimes {
-		entries.data[addr2].recentConnectionTimes[rct] =
-			entries.data[addr2].recentConnectionTimes[rct].Add(-1 * timeUnit)
-	}
+	time.Sleep(100 * time.Millisecond)
 
 	// value 2
 	addrInPhonebook, waitTime, provisionalTime = entries.GetConnectionWaitTime(addr2)
@@ -332,11 +299,7 @@ func TestWaitAndAddConnectionTimeLongtWindow(t *testing.T) {
 	require.Equal(t, phBookData[1], phBookData2[1])
 	require.Equal(t, phBookData[2], phBookData2[2])
 
-	// simulate passing of the waitTime duration
-	for rct := range entries.data[addr2].recentConnectionTimes {
-		entries.data[addr2].recentConnectionTimes[rct] =
-			entries.data[addr2].recentConnectionTimes[rct].Add(-1 * waitTime)
-	}
+	time.Sleep(waitTime)
 
 	// The wait should be sufficient
 	_, waitTime, provisionalTime = entries.GetConnectionWaitTime(addr2)
@@ -344,7 +307,7 @@ func TestWaitAndAddConnectionTimeLongtWindow(t *testing.T) {
 	require.Equal(t, true, entries.UpdateConnectionTime(addr2, provisionalTime))
 	// only one element should be removed, and one added
 	phBookData2 = entries.data[addr2].recentConnectionTimes
-	require.Equal(t, 3, len(phBookData2))
+	require.Equal(t, 3, len(phBookData))
 
 	// make sure the right time was removed
 	require.Equal(t, phBookData[1], phBookData2[0])
@@ -352,8 +315,6 @@ func TestWaitAndAddConnectionTimeLongtWindow(t *testing.T) {
 }
 
 func TestWaitAndAddConnectionTimeShortWindow(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	entries := MakePhonebook(3, 2*time.Millisecond).(*phonebookImpl)
 	addr1 := "addrABC"
 
@@ -406,8 +367,6 @@ func BenchmarkThreadsafePhonebook(b *testing.B) {
 // TestPhonebookRoles tests that the filtering by roles for different
 // phonebooks entries works as expected.
 func TestPhonebookRoles(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	relaysSet := []string{"relay1", "relay2", "relay3"}
 	archiverSet := []string{"archiver1", "archiver2", "archiver3"}
 

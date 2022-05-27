@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2021 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -102,22 +102,19 @@ type ApplicationCallTxnFields struct {
 	// ApprovalProgram or ClearStateProgram.
 	ApplicationArgs [][]byte `codec:"apaa,allocbound=encodedMaxApplicationArgs"`
 
-	// Accounts are accounts whose balance records are accessible
-	// by the executing ApprovalProgram or ClearStateProgram. To
-	// access LocalState or an ASA balance for an account besides
-	// the sender, that account's address must be listed here (and
-	// since v4, the ForeignApp or ForeignAsset must also include
-	// the app or asset id).
+	// Accounts are accounts whose balance records are accessible by the
+	// executing ApprovalProgram or ClearStateProgram. To access LocalState
+	// for an account besides the sender, that account's address must be
+	// listed here.
 	Accounts []basics.Address `codec:"apat,allocbound=encodedMaxAccounts"`
 
-	// ForeignApps are application IDs for applications besides
-	// this one whose GlobalState (or Local, since v4) may be read
-	// by the executing ApprovalProgram or ClearStateProgram.
+	// ForeignApps are application IDs for applications besides this one
+	// whose GlobalState may be read by the executing ApprovalProgram or
+	// ClearStateProgram.
 	ForeignApps []basics.AppIndex `codec:"apfa,allocbound=encodedMaxForeignApps"`
 
-	// ForeignAssets are asset IDs for assets whose AssetParams
-	// (and since v4, Holdings) may be read by the executing
-	// ApprovalProgram or ClearStateProgram.
+	// ForeignAssets are asset IDs for assets whose AssetParams may be read
+	// by the executing ApprovalProgram or ClearStateProgram.
 	ForeignAssets []basics.AssetIndex `codec:"apas,allocbound=encodedMaxForeignAssets"`
 
 	// LocalStateSchema specifies the maximum number of each type that may
@@ -137,19 +134,14 @@ type ApplicationCallTxnFields struct {
 	// except for those where OnCompletion is equal to ClearStateOC. If
 	// this program fails, the transaction is rejected. This program may
 	// read and write local and global state for this application.
-	ApprovalProgram []byte `codec:"apap,allocbound=config.MaxAvailableAppProgramLen"`
+	ApprovalProgram []byte `codec:"apap,allocbound=config.MaxAppProgramLen"`
 
 	// ClearStateProgram is the stateful TEAL bytecode that executes on
 	// ApplicationCall transactions associated with this application when
 	// OnCompletion is equal to ClearStateOC. This program will not cause
 	// the transaction to be rejected, even if it fails. This program may
 	// read and write local and global state for this application.
-	ClearStateProgram []byte `codec:"apsu,allocbound=config.MaxAvailableAppProgramLen"`
-
-	// ExtraProgramPages specifies the additional app program len requested in pages.
-	// A page is MaxAppProgramLen bytes. This field enables execution of app programs
-	// larger than the default config, MaxAppProgramLen.
-	ExtraProgramPages uint32 `codec:"apep,omitempty"`
+	ClearStateProgram []byte `codec:"apsu,allocbound=config.MaxAppProgramLen"`
 
 	// If you add any fields here, remember you MUST modify the Empty
 	// method below!
@@ -188,9 +180,6 @@ func (ac *ApplicationCallTxnFields) Empty() bool {
 	if ac.ClearStateProgram != nil {
 		return false
 	}
-	if ac.ExtraProgramPages != 0 {
-		return false
-	}
 	return true
 }
 
@@ -207,7 +196,7 @@ func (ac *ApplicationCallTxnFields) AddressByIndex(accountIdx uint64, sender bas
 	// An index > 0 corresponds to an offset into txn.Accounts. Check to
 	// make sure the index is valid.
 	if accountIdx > uint64(len(ac.Accounts)) {
-		err := fmt.Errorf("invalid Account reference %d", accountIdx)
+		err := fmt.Errorf("cannot load account[%d] of %d", accountIdx, len(ac.Accounts))
 		return basics.Address{}, err
 	}
 
@@ -231,47 +220,5 @@ func (ac *ApplicationCallTxnFields) IndexByAddress(target basics.Address, sender
 		}
 	}
 
-	return 0, fmt.Errorf("invalid Account reference %s", target)
-}
-
-// AppIDByIndex converts an integer index into an application id associated with the
-// transaction. Index 0 corresponds to the current app, and an index > 0
-// corresponds to an offset into txn.ForeignApps. Returns an error if the index is
-// not valid.
-func (ac *ApplicationCallTxnFields) AppIDByIndex(i uint64) (basics.AppIndex, error) {
-
-	// Index 0 always corresponds to the current app
-	if i == 0 {
-		return ac.ApplicationID, nil
-	}
-
-	// An index > 0 corresponds to an offset into txn.ForeignApps. Check to
-	// make sure the index is valid.
-	if i > uint64(len(ac.ForeignApps)) {
-		err := fmt.Errorf("invalid Foreign App reference %d", i)
-		return basics.AppIndex(0), err
-	}
-
-	// aidx must be in [1, len(ac.ForeignApps)]
-	return ac.ForeignApps[i-1], nil
-}
-
-// IndexByAppID converts an application id into an integer offset into [current app,
-// txn.ForeignApps[0], ...], returning the index at the first match. It returns
-// an error if there is no such match.
-func (ac *ApplicationCallTxnFields) IndexByAppID(appID basics.AppIndex) (uint64, error) {
-
-	// Index 0 always corresponds to the current app
-	if appID == ac.ApplicationID {
-		return 0, nil
-	}
-
-	// Otherwise we index into ac.ForeignApps
-	for i, id := range ac.ForeignApps {
-		if appID == id {
-			return uint64(i) + 1, nil
-		}
-	}
-
-	return 0, fmt.Errorf("invalid Foreign App reference %d", appID)
+	return 0, fmt.Errorf("could not find offset of address %s", target)
 }

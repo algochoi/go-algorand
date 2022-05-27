@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2021 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -432,7 +432,7 @@ func (nc NodeController) SetConsensus(consensus config.ConsensusProtocols) error
 	return config.SaveConfigurableConsensus(nc.algodDataDir, consensus)
 }
 
-// GetConsensus rebuild the consensus version from the data directory
+// GetConsensus rebuild the consensus version from the data directroy
 func (nc NodeController) GetConsensus() (config.ConsensusProtocols, error) {
 	return config.PreloadConfigurableConsensusProtocols(nc.algodDataDir)
 }

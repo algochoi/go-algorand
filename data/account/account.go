@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2021 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -23,7 +23,6 @@ import (
 	"fmt"
 
 	"github.com/algorand/go-algorand/crypto"
-	"github.com/algorand/go-algorand/crypto/merklesignature"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
@@ -136,7 +135,7 @@ func (root Root) Address() basics.Address {
 // RestoreParticipation restores a Participation from a database
 // handle.
 func RestoreParticipation(store db.Accessor) (acc PersistedParticipation, err error) {
-	var rawParent, rawVRF, rawVoting, rawStateProof []byte
+	var rawParent, rawVRF, rawVoting []byte
 
 	err = Migrate(store)
 	if err != nil {
@@ -154,9 +153,8 @@ func RestoreParticipation(store db.Accessor) (acc PersistedParticipation, err er
 			logging.Base().Infof("RestoreParticipation: state not found (n = %v)", nrows)
 		}
 
-		row = tx.QueryRow("select parent, vrf, voting, firstValid, lastValid, keyDilution, stateProof from ParticipationAccount")
-
-		err = row.Scan(&rawParent, &rawVRF, &rawVoting, &acc.FirstValid, &acc.LastValid, &acc.KeyDilution, &rawStateProof)
+		row = tx.QueryRow("select parent, vrf, voting, firstValid, lastValid, keyDilution from ParticipationAccount")
+		err = row.Scan(&rawParent, &rawVRF, &rawVoting, &acc.FirstValid, &acc.LastValid, &acc.KeyDilution)
 		if err != nil {
 			return fmt.Errorf("RestoreParticipation: could not read account raw data: %v", err)
 		}
@@ -167,8 +165,6 @@ func RestoreParticipation(store db.Accessor) (acc PersistedParticipation, err er
 	if err != nil {
 		return PersistedParticipation{}, err
 	}
-
-	acc.Store = store
 
 	acc.VRF = &crypto.VRFSecrets{}
 	err = protocol.Decode(rawVRF, acc.VRF)
@@ -182,33 +178,6 @@ func RestoreParticipation(store db.Accessor) (acc PersistedParticipation, err er
 		return PersistedParticipation{}, err
 	}
 
-	if len(rawStateProof) == 0 {
-		return acc, nil
-	}
-	acc.StateProofSecrets = &merklesignature.Secrets{}
-	// only the state proof data is decoded here (the keys are stored in a different DB table and are fetched separately)
-	if err = protocol.Decode(rawStateProof, acc.StateProofSecrets); err != nil {
-		return PersistedParticipation{}, err
-	}
-
+	acc.Store = store
 	return acc, nil
-}
-
-// RestoreParticipationWithSecrets restores a Participation from a database
-// handle. In addition, this function also restores all stateproof secrets
-func RestoreParticipationWithSecrets(store db.Accessor) (PersistedParticipation, error) {
-	persistedParticipation, err := RestoreParticipation(store)
-	if err != nil {
-		return PersistedParticipation{}, err
-	}
-
-	if persistedParticipation.StateProofSecrets == nil { // no state proof keys to restore
-		return persistedParticipation, nil
-	}
-
-	err = persistedParticipation.StateProofSecrets.RestoreAllSecrets(store)
-	if err != nil {
-		return PersistedParticipation{}, err
-	}
-	return persistedParticipation, nil
 }

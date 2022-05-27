@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2021 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -19,8 +19,6 @@ package crypto
 // #cgo CFLAGS: -Wall -std=c99
 // #cgo darwin,amd64 CFLAGS: -I${SRCDIR}/libs/darwin/amd64/include
 // #cgo darwin,amd64 LDFLAGS: ${SRCDIR}/libs/darwin/amd64/lib/libsodium.a
-// #cgo darwin,arm64 CFLAGS: -I${SRCDIR}/libs/darwin/arm64/include
-// #cgo darwin,arm64 LDFLAGS: ${SRCDIR}/libs/darwin/arm64/lib/libsodium.a
 // #cgo linux,amd64 CFLAGS: -I${SRCDIR}/libs/linux/amd64/include
 // #cgo linux,amd64 LDFLAGS: ${SRCDIR}/libs/linux/amd64/lib/libsodium.a
 // #cgo linux,arm64 CFLAGS: -I${SRCDIR}/libs/linux/arm64/include
@@ -112,19 +110,14 @@ func ed25519Sign(secret ed25519PrivateKey, data []byte) (sig ed25519Signature) {
 	return
 }
 
-func ed25519Verify(public ed25519PublicKey, data []byte, sig ed25519Signature, useBatchVerificationCompatibleVersion bool) bool {
+func ed25519Verify(public ed25519PublicKey, data []byte, sig ed25519Signature) bool {
 	// &data[0] will make Go panic if msg is zero length
 	d := (*C.uchar)(C.NULL)
 	if len(data) != 0 {
 		d = (*C.uchar)(&data[0])
 	}
 	// https://download.libsodium.org/doc/public-key_cryptography/public-key_signatures#detached-mode
-	var result C.int
-	if useBatchVerificationCompatibleVersion {
-		result = C.crypto_sign_ed25519_bv_compatible_verify_detached((*C.uchar)(&sig[0]), d, C.ulonglong(len(data)), (*C.uchar)(&public[0]))
-	} else {
-		result = C.crypto_sign_ed25519_verify_detached((*C.uchar)(&sig[0]), d, C.ulonglong(len(data)), (*C.uchar)(&public[0]))
-	}
+	result := C.crypto_sign_ed25519_verify_detached((*C.uchar)(&sig[0]), d, C.ulonglong(len(data)), (*C.uchar)(&public[0]))
 	return result == 0
 }
 
@@ -201,7 +194,7 @@ func GenerateSignatureSecrets(seed Seed) *SignatureSecrets {
 // cryptographic secrets.
 func (s *SignatureSecrets) Sign(message Hashable) Signature {
 	cryptoSigSecretsSignTotal.Inc(map[string]string{})
-	return s.SignBytes(HashRep(message))
+	return s.SignBytes(hashRep(message))
 }
 
 // SignBytes signs a message directly, without first hashing.
@@ -216,15 +209,15 @@ func (s *SignatureSecrets) SignBytes(message []byte) Signature {
 //
 // It returns true if this is the case; otherwise, it returns false.
 //
-func (v SignatureVerifier) Verify(message Hashable, sig Signature, useBatchVerificationCompatibleVersion bool) bool {
+func (v SignatureVerifier) Verify(message Hashable, sig Signature) bool {
 	cryptoSigSecretsVerifyTotal.Inc(map[string]string{})
-	return ed25519Verify(ed25519PublicKey(v), HashRep(message), ed25519Signature(sig), useBatchVerificationCompatibleVersion)
+	return ed25519Verify(ed25519PublicKey(v), hashRep(message), ed25519Signature(sig))
 }
 
 // VerifyBytes verifies a signature, where the message is not hashed first.
 // Caller is responsible for domain separation.
 // If the message is a Hashable, Verify() can be used instead.
-func (v SignatureVerifier) VerifyBytes(message []byte, sig Signature, useBatchVerificationCompatibleVersion bool) bool {
+func (v SignatureVerifier) VerifyBytes(message []byte, sig Signature) bool {
 	cryptoSigSecretsVerifyBytesTotal.Inc(map[string]string{})
-	return ed25519Verify(ed25519PublicKey(v), message, ed25519Signature(sig), useBatchVerificationCompatibleVersion)
+	return ed25519Verify(ed25519PublicKey(v), message, ed25519Signature(sig))
 }

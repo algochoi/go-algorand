@@ -5,6 +5,7 @@ package compactcert
 import (
 	"sort"
 
+	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/msgp/msgp"
 )
 
@@ -24,6 +25,14 @@ import (
 //            |-----> (*) CanUnmarshalMsg
 //            |-----> (*) Msgsize
 //            |-----> (*) MsgIsZero
+//
+// Participant
+//      |-----> (*) MarshalMsg
+//      |-----> (*) CanMarshalMsg
+//      |-----> (*) UnmarshalMsg
+//      |-----> (*) CanUnmarshalMsg
+//      |-----> (*) Msgsize
+//      |-----> (*) MsgIsZero
 //
 // Reveal
 //    |-----> (*) MarshalMsg
@@ -54,47 +63,61 @@ import (
 func (z *Cert) MarshalMsg(b []byte) (o []byte) {
 	o = msgp.Require(b, z.Msgsize())
 	// omitempty: check for empty values
-	zb0003Len := uint32(5)
-	var zb0003Mask uint8 /* 6 bits */
-	if (*z).PartProofs.MsgIsZero() {
-		zb0003Len--
-		zb0003Mask |= 0x1
+	zb0005Len := uint32(5)
+	var zb0005Mask uint8 /* 6 bits */
+	if len((*z).PartProofs) == 0 {
+		zb0005Len--
+		zb0005Mask |= 0x1
 	}
-	if (*z).SigProofs.MsgIsZero() {
-		zb0003Len--
-		zb0003Mask |= 0x2
+	if len((*z).SigProofs) == 0 {
+		zb0005Len--
+		zb0005Mask |= 0x2
 	}
 	if (*z).SigCommit.MsgIsZero() {
-		zb0003Len--
-		zb0003Mask |= 0x8
+		zb0005Len--
+		zb0005Mask |= 0x8
 	}
 	if len((*z).Reveals) == 0 {
-		zb0003Len--
-		zb0003Mask |= 0x10
+		zb0005Len--
+		zb0005Mask |= 0x10
 	}
 	if (*z).SignedWeight == 0 {
-		zb0003Len--
-		zb0003Mask |= 0x20
+		zb0005Len--
+		zb0005Mask |= 0x20
 	}
-	// variable map header, size zb0003Len
-	o = append(o, 0x80|uint8(zb0003Len))
-	if zb0003Len != 0 {
-		if (zb0003Mask & 0x1) == 0 { // if not empty
+	// variable map header, size zb0005Len
+	o = append(o, 0x80|uint8(zb0005Len))
+	if zb0005Len != 0 {
+		if (zb0005Mask & 0x1) == 0 { // if not empty
 			// string "P"
 			o = append(o, 0xa1, 0x50)
-			o = (*z).PartProofs.MarshalMsg(o)
+			if (*z).PartProofs == nil {
+				o = msgp.AppendNil(o)
+			} else {
+				o = msgp.AppendArrayHeader(o, uint32(len((*z).PartProofs)))
+			}
+			for zb0002 := range (*z).PartProofs {
+				o = (*z).PartProofs[zb0002].MarshalMsg(o)
+			}
 		}
-		if (zb0003Mask & 0x2) == 0 { // if not empty
+		if (zb0005Mask & 0x2) == 0 { // if not empty
 			// string "S"
 			o = append(o, 0xa1, 0x53)
-			o = (*z).SigProofs.MarshalMsg(o)
+			if (*z).SigProofs == nil {
+				o = msgp.AppendNil(o)
+			} else {
+				o = msgp.AppendArrayHeader(o, uint32(len((*z).SigProofs)))
+			}
+			for zb0001 := range (*z).SigProofs {
+				o = (*z).SigProofs[zb0001].MarshalMsg(o)
+			}
 		}
-		if (zb0003Mask & 0x8) == 0 { // if not empty
+		if (zb0005Mask & 0x8) == 0 { // if not empty
 			// string "c"
 			o = append(o, 0xa1, 0x63)
 			o = (*z).SigCommit.MarshalMsg(o)
 		}
-		if (zb0003Mask & 0x10) == 0 { // if not empty
+		if (zb0005Mask & 0x10) == 0 { // if not empty
 			// string "r"
 			o = append(o, 0xa1, 0x72)
 			if (*z).Reveals == nil {
@@ -102,19 +125,19 @@ func (z *Cert) MarshalMsg(b []byte) (o []byte) {
 			} else {
 				o = msgp.AppendMapHeader(o, uint32(len((*z).Reveals)))
 			}
-			zb0001_keys := make([]uint64, 0, len((*z).Reveals))
-			for zb0001 := range (*z).Reveals {
-				zb0001_keys = append(zb0001_keys, zb0001)
+			zb0003_keys := make([]uint64, 0, len((*z).Reveals))
+			for zb0003 := range (*z).Reveals {
+				zb0003_keys = append(zb0003_keys, zb0003)
 			}
-			sort.Sort(SortUint64(zb0001_keys))
-			for _, zb0001 := range zb0001_keys {
-				zb0002 := (*z).Reveals[zb0001]
-				_ = zb0002
-				o = msgp.AppendUint64(o, zb0001)
-				o = zb0002.MarshalMsg(o)
+			sort.Sort(SortUint64(zb0003_keys))
+			for _, zb0003 := range zb0003_keys {
+				zb0004 := (*z).Reveals[zb0003]
+				_ = zb0004
+				o = msgp.AppendUint64(o, zb0003)
+				o = zb0004.MarshalMsg(o)
 			}
 		}
-		if (zb0003Mask & 0x20) == 0 { // if not empty
+		if (zb0005Mask & 0x20) == 0 { // if not empty
 			// string "w"
 			o = append(o, 0xa1, 0x77)
 			o = msgp.AppendUint64(o, (*z).SignedWeight)
@@ -132,85 +155,127 @@ func (_ *Cert) CanMarshalMsg(z interface{}) bool {
 func (z *Cert) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	var field []byte
 	_ = field
-	var zb0003 int
-	var zb0004 bool
-	zb0003, zb0004, bts, err = msgp.ReadMapHeaderBytes(bts)
+	var zb0005 int
+	var zb0006 bool
+	zb0005, zb0006, bts, err = msgp.ReadMapHeaderBytes(bts)
 	if _, ok := err.(msgp.TypeError); ok {
-		zb0003, zb0004, bts, err = msgp.ReadArrayHeaderBytes(bts)
+		zb0005, zb0006, bts, err = msgp.ReadArrayHeaderBytes(bts)
 		if err != nil {
 			err = msgp.WrapError(err)
 			return
 		}
-		if zb0003 > 0 {
-			zb0003--
+		if zb0005 > 0 {
+			zb0005--
 			bts, err = (*z).SigCommit.UnmarshalMsg(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "SigCommit")
 				return
 			}
 		}
-		if zb0003 > 0 {
-			zb0003--
+		if zb0005 > 0 {
+			zb0005--
 			(*z).SignedWeight, bts, err = msgp.ReadUint64Bytes(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "SignedWeight")
 				return
 			}
 		}
-		if zb0003 > 0 {
-			zb0003--
-			bts, err = (*z).SigProofs.UnmarshalMsg(bts)
+		if zb0005 > 0 {
+			zb0005--
+			var zb0007 int
+			var zb0008 bool
+			zb0007, zb0008, bts, err = msgp.ReadArrayHeaderBytes(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "SigProofs")
 				return
 			}
+			if zb0007 > maxProofDigests {
+				err = msgp.ErrOverflow(uint64(zb0007), uint64(maxProofDigests))
+				err = msgp.WrapError(err, "struct-from-array", "SigProofs")
+				return
+			}
+			if zb0008 {
+				(*z).SigProofs = nil
+			} else if (*z).SigProofs != nil && cap((*z).SigProofs) >= zb0007 {
+				(*z).SigProofs = ((*z).SigProofs)[:zb0007]
+			} else {
+				(*z).SigProofs = make([]crypto.Digest, zb0007)
+			}
+			for zb0001 := range (*z).SigProofs {
+				bts, err = (*z).SigProofs[zb0001].UnmarshalMsg(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "struct-from-array", "SigProofs", zb0001)
+					return
+				}
+			}
 		}
-		if zb0003 > 0 {
-			zb0003--
-			bts, err = (*z).PartProofs.UnmarshalMsg(bts)
+		if zb0005 > 0 {
+			zb0005--
+			var zb0009 int
+			var zb0010 bool
+			zb0009, zb0010, bts, err = msgp.ReadArrayHeaderBytes(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "PartProofs")
 				return
 			}
+			if zb0009 > maxProofDigests {
+				err = msgp.ErrOverflow(uint64(zb0009), uint64(maxProofDigests))
+				err = msgp.WrapError(err, "struct-from-array", "PartProofs")
+				return
+			}
+			if zb0010 {
+				(*z).PartProofs = nil
+			} else if (*z).PartProofs != nil && cap((*z).PartProofs) >= zb0009 {
+				(*z).PartProofs = ((*z).PartProofs)[:zb0009]
+			} else {
+				(*z).PartProofs = make([]crypto.Digest, zb0009)
+			}
+			for zb0002 := range (*z).PartProofs {
+				bts, err = (*z).PartProofs[zb0002].UnmarshalMsg(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "struct-from-array", "PartProofs", zb0002)
+					return
+				}
+			}
 		}
-		if zb0003 > 0 {
-			zb0003--
-			var zb0005 int
-			var zb0006 bool
-			zb0005, zb0006, bts, err = msgp.ReadMapHeaderBytes(bts)
+		if zb0005 > 0 {
+			zb0005--
+			var zb0011 int
+			var zb0012 bool
+			zb0011, zb0012, bts, err = msgp.ReadMapHeaderBytes(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "Reveals")
 				return
 			}
-			if zb0005 > MaxReveals {
-				err = msgp.ErrOverflow(uint64(zb0005), uint64(MaxReveals))
+			if zb0011 > maxReveals {
+				err = msgp.ErrOverflow(uint64(zb0011), uint64(maxReveals))
 				err = msgp.WrapError(err, "struct-from-array", "Reveals")
 				return
 			}
-			if zb0006 {
+			if zb0012 {
 				(*z).Reveals = nil
 			} else if (*z).Reveals == nil {
-				(*z).Reveals = make(map[uint64]Reveal, zb0005)
+				(*z).Reveals = make(map[uint64]Reveal, zb0011)
 			}
-			for zb0005 > 0 {
-				var zb0001 uint64
-				var zb0002 Reveal
-				zb0005--
-				zb0001, bts, err = msgp.ReadUint64Bytes(bts)
+			for zb0011 > 0 {
+				var zb0003 uint64
+				var zb0004 Reveal
+				zb0011--
+				zb0003, bts, err = msgp.ReadUint64Bytes(bts)
 				if err != nil {
 					err = msgp.WrapError(err, "struct-from-array", "Reveals")
 					return
 				}
-				bts, err = zb0002.UnmarshalMsg(bts)
+				bts, err = zb0004.UnmarshalMsg(bts)
 				if err != nil {
-					err = msgp.WrapError(err, "struct-from-array", "Reveals", zb0001)
+					err = msgp.WrapError(err, "struct-from-array", "Reveals", zb0003)
 					return
 				}
-				(*z).Reveals[zb0001] = zb0002
+				(*z).Reveals[zb0003] = zb0004
 			}
 		}
-		if zb0003 > 0 {
-			err = msgp.ErrTooManyArrayFields(zb0003)
+		if zb0005 > 0 {
+			err = msgp.ErrTooManyArrayFields(zb0005)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array")
 				return
@@ -221,11 +286,11 @@ func (z *Cert) UnmarshalMsg(bts []byte) (o []byte, err error) {
 			err = msgp.WrapError(err)
 			return
 		}
-		if zb0004 {
+		if zb0006 {
 			(*z) = Cert{}
 		}
-		for zb0003 > 0 {
-			zb0003--
+		for zb0005 > 0 {
+			zb0005--
 			field, bts, err = msgp.ReadMapKeyZC(bts)
 			if err != nil {
 				err = msgp.WrapError(err)
@@ -245,50 +310,92 @@ func (z *Cert) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					return
 				}
 			case "S":
-				bts, err = (*z).SigProofs.UnmarshalMsg(bts)
+				var zb0013 int
+				var zb0014 bool
+				zb0013, zb0014, bts, err = msgp.ReadArrayHeaderBytes(bts)
 				if err != nil {
 					err = msgp.WrapError(err, "SigProofs")
 					return
 				}
+				if zb0013 > maxProofDigests {
+					err = msgp.ErrOverflow(uint64(zb0013), uint64(maxProofDigests))
+					err = msgp.WrapError(err, "SigProofs")
+					return
+				}
+				if zb0014 {
+					(*z).SigProofs = nil
+				} else if (*z).SigProofs != nil && cap((*z).SigProofs) >= zb0013 {
+					(*z).SigProofs = ((*z).SigProofs)[:zb0013]
+				} else {
+					(*z).SigProofs = make([]crypto.Digest, zb0013)
+				}
+				for zb0001 := range (*z).SigProofs {
+					bts, err = (*z).SigProofs[zb0001].UnmarshalMsg(bts)
+					if err != nil {
+						err = msgp.WrapError(err, "SigProofs", zb0001)
+						return
+					}
+				}
 			case "P":
-				bts, err = (*z).PartProofs.UnmarshalMsg(bts)
+				var zb0015 int
+				var zb0016 bool
+				zb0015, zb0016, bts, err = msgp.ReadArrayHeaderBytes(bts)
 				if err != nil {
 					err = msgp.WrapError(err, "PartProofs")
 					return
 				}
+				if zb0015 > maxProofDigests {
+					err = msgp.ErrOverflow(uint64(zb0015), uint64(maxProofDigests))
+					err = msgp.WrapError(err, "PartProofs")
+					return
+				}
+				if zb0016 {
+					(*z).PartProofs = nil
+				} else if (*z).PartProofs != nil && cap((*z).PartProofs) >= zb0015 {
+					(*z).PartProofs = ((*z).PartProofs)[:zb0015]
+				} else {
+					(*z).PartProofs = make([]crypto.Digest, zb0015)
+				}
+				for zb0002 := range (*z).PartProofs {
+					bts, err = (*z).PartProofs[zb0002].UnmarshalMsg(bts)
+					if err != nil {
+						err = msgp.WrapError(err, "PartProofs", zb0002)
+						return
+					}
+				}
 			case "r":
-				var zb0007 int
-				var zb0008 bool
-				zb0007, zb0008, bts, err = msgp.ReadMapHeaderBytes(bts)
+				var zb0017 int
+				var zb0018 bool
+				zb0017, zb0018, bts, err = msgp.ReadMapHeaderBytes(bts)
 				if err != nil {
 					err = msgp.WrapError(err, "Reveals")
 					return
 				}
-				if zb0007 > MaxReveals {
-					err = msgp.ErrOverflow(uint64(zb0007), uint64(MaxReveals))
+				if zb0017 > maxReveals {
+					err = msgp.ErrOverflow(uint64(zb0017), uint64(maxReveals))
 					err = msgp.WrapError(err, "Reveals")
 					return
 				}
-				if zb0008 {
+				if zb0018 {
 					(*z).Reveals = nil
 				} else if (*z).Reveals == nil {
-					(*z).Reveals = make(map[uint64]Reveal, zb0007)
+					(*z).Reveals = make(map[uint64]Reveal, zb0017)
 				}
-				for zb0007 > 0 {
-					var zb0001 uint64
-					var zb0002 Reveal
-					zb0007--
-					zb0001, bts, err = msgp.ReadUint64Bytes(bts)
+				for zb0017 > 0 {
+					var zb0003 uint64
+					var zb0004 Reveal
+					zb0017--
+					zb0003, bts, err = msgp.ReadUint64Bytes(bts)
 					if err != nil {
 						err = msgp.WrapError(err, "Reveals")
 						return
 					}
-					bts, err = zb0002.UnmarshalMsg(bts)
+					bts, err = zb0004.UnmarshalMsg(bts)
 					if err != nil {
-						err = msgp.WrapError(err, "Reveals", zb0001)
+						err = msgp.WrapError(err, "Reveals", zb0003)
 						return
 					}
-					(*z).Reveals[zb0001] = zb0002
+					(*z).Reveals[zb0003] = zb0004
 				}
 			default:
 				err = msgp.ErrNoField(string(field))
@@ -310,12 +417,20 @@ func (_ *Cert) CanUnmarshalMsg(z interface{}) bool {
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *Cert) Msgsize() (s int) {
-	s = 1 + 2 + (*z).SigCommit.Msgsize() + 2 + msgp.Uint64Size + 2 + (*z).SigProofs.Msgsize() + 2 + (*z).PartProofs.Msgsize() + 2 + msgp.MapHeaderSize
+	s = 1 + 2 + (*z).SigCommit.Msgsize() + 2 + msgp.Uint64Size + 2 + msgp.ArrayHeaderSize
+	for zb0001 := range (*z).SigProofs {
+		s += (*z).SigProofs[zb0001].Msgsize()
+	}
+	s += 2 + msgp.ArrayHeaderSize
+	for zb0002 := range (*z).PartProofs {
+		s += (*z).PartProofs[zb0002].Msgsize()
+	}
+	s += 2 + msgp.MapHeaderSize
 	if (*z).Reveals != nil {
-		for zb0001, zb0002 := range (*z).Reveals {
-			_ = zb0001
-			_ = zb0002
-			s += 0 + msgp.Uint64Size + zb0002.Msgsize()
+		for zb0003, zb0004 := range (*z).Reveals {
+			_ = zb0003
+			_ = zb0004
+			s += 0 + msgp.Uint64Size + zb0004.Msgsize()
 		}
 	}
 	return
@@ -323,53 +438,71 @@ func (z *Cert) Msgsize() (s int) {
 
 // MsgIsZero returns whether this is a zero value
 func (z *Cert) MsgIsZero() bool {
-	return ((*z).SigCommit.MsgIsZero()) && ((*z).SignedWeight == 0) && ((*z).SigProofs.MsgIsZero()) && ((*z).PartProofs.MsgIsZero()) && (len((*z).Reveals) == 0)
+	return ((*z).SigCommit.MsgIsZero()) && ((*z).SignedWeight == 0) && (len((*z).SigProofs) == 0) && (len((*z).PartProofs) == 0) && (len((*z).Reveals) == 0)
 }
 
 // MarshalMsg implements msgp.Marshaler
 func (z *CompactOneTimeSignature) MarshalMsg(b []byte) (o []byte) {
 	o = msgp.Require(b, z.Msgsize())
 	// omitempty: check for empty values
-	zb0001Len := uint32(4)
-	var zb0001Mask uint8 /* 6 bits */
-	if (*z).Signature.MerkleArrayIndex == 0 {
+	zb0001Len := uint32(6)
+	var zb0001Mask uint8 /* 8 bits */
+	if (*z).OneTimeSignature.PK.MsgIsZero() {
 		zb0001Len--
 		zb0001Mask |= 0x4
 	}
-	if (*z).Signature.Proof.MsgIsZero() {
+	if (*z).OneTimeSignature.PK1Sig.MsgIsZero() {
 		zb0001Len--
 		zb0001Mask |= 0x8
 	}
-	if (*z).Signature.Signature.MsgIsZero() {
+	if (*z).OneTimeSignature.PK2.MsgIsZero() {
 		zb0001Len--
 		zb0001Mask |= 0x10
 	}
-	if (*z).Signature.VerifyingKey.MsgIsZero() {
+	if (*z).OneTimeSignature.PK2Sig.MsgIsZero() {
 		zb0001Len--
 		zb0001Mask |= 0x20
+	}
+	if (*z).OneTimeSignature.PKSigOld.MsgIsZero() {
+		zb0001Len--
+		zb0001Mask |= 0x40
+	}
+	if (*z).OneTimeSignature.Sig.MsgIsZero() {
+		zb0001Len--
+		zb0001Mask |= 0x80
 	}
 	// variable map header, size zb0001Len
 	o = append(o, 0x80|uint8(zb0001Len))
 	if zb0001Len != 0 {
 		if (zb0001Mask & 0x4) == 0 { // if not empty
-			// string "idx"
-			o = append(o, 0xa3, 0x69, 0x64, 0x78)
-			o = msgp.AppendUint64(o, (*z).Signature.MerkleArrayIndex)
+			// string "p"
+			o = append(o, 0xa1, 0x70)
+			o = (*z).OneTimeSignature.PK.MarshalMsg(o)
 		}
 		if (zb0001Mask & 0x8) == 0 { // if not empty
-			// string "prf"
-			o = append(o, 0xa3, 0x70, 0x72, 0x66)
-			o = (*z).Signature.Proof.MarshalMsg(o)
+			// string "p1s"
+			o = append(o, 0xa3, 0x70, 0x31, 0x73)
+			o = (*z).OneTimeSignature.PK1Sig.MarshalMsg(o)
 		}
 		if (zb0001Mask & 0x10) == 0 { // if not empty
-			// string "sig"
-			o = append(o, 0xa3, 0x73, 0x69, 0x67)
-			o = (*z).Signature.Signature.MarshalMsg(o)
+			// string "p2"
+			o = append(o, 0xa2, 0x70, 0x32)
+			o = (*z).OneTimeSignature.PK2.MarshalMsg(o)
 		}
 		if (zb0001Mask & 0x20) == 0 { // if not empty
-			// string "vkey"
-			o = append(o, 0xa4, 0x76, 0x6b, 0x65, 0x79)
-			o = (*z).Signature.VerifyingKey.MarshalMsg(o)
+			// string "p2s"
+			o = append(o, 0xa3, 0x70, 0x32, 0x73)
+			o = (*z).OneTimeSignature.PK2Sig.MarshalMsg(o)
+		}
+		if (zb0001Mask & 0x40) == 0 { // if not empty
+			// string "ps"
+			o = append(o, 0xa2, 0x70, 0x73)
+			o = (*z).OneTimeSignature.PKSigOld.MarshalMsg(o)
+		}
+		if (zb0001Mask & 0x80) == 0 { // if not empty
+			// string "s"
+			o = append(o, 0xa1, 0x73)
+			o = (*z).OneTimeSignature.Sig.MarshalMsg(o)
 		}
 	}
 	return
@@ -395,33 +528,49 @@ func (z *CompactOneTimeSignature) UnmarshalMsg(bts []byte) (o []byte, err error)
 		}
 		if zb0001 > 0 {
 			zb0001--
-			bts, err = (*z).Signature.Signature.UnmarshalMsg(bts)
+			bts, err = (*z).OneTimeSignature.Sig.UnmarshalMsg(bts)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "Signature")
+				err = msgp.WrapError(err, "struct-from-array", "Sig")
 				return
 			}
 		}
 		if zb0001 > 0 {
 			zb0001--
-			(*z).Signature.MerkleArrayIndex, bts, err = msgp.ReadUint64Bytes(bts)
+			bts, err = (*z).OneTimeSignature.PK.UnmarshalMsg(bts)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "MerkleArrayIndex")
+				err = msgp.WrapError(err, "struct-from-array", "PK")
 				return
 			}
 		}
 		if zb0001 > 0 {
 			zb0001--
-			bts, err = (*z).Signature.Proof.UnmarshalMsg(bts)
+			bts, err = (*z).OneTimeSignature.PKSigOld.UnmarshalMsg(bts)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "Proof")
+				err = msgp.WrapError(err, "struct-from-array", "PKSigOld")
 				return
 			}
 		}
 		if zb0001 > 0 {
 			zb0001--
-			bts, err = (*z).Signature.VerifyingKey.UnmarshalMsg(bts)
+			bts, err = (*z).OneTimeSignature.PK2.UnmarshalMsg(bts)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "VerifyingKey")
+				err = msgp.WrapError(err, "struct-from-array", "PK2")
+				return
+			}
+		}
+		if zb0001 > 0 {
+			zb0001--
+			bts, err = (*z).OneTimeSignature.PK1Sig.UnmarshalMsg(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "PK1Sig")
+				return
+			}
+		}
+		if zb0001 > 0 {
+			zb0001--
+			bts, err = (*z).OneTimeSignature.PK2Sig.UnmarshalMsg(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "PK2Sig")
 				return
 			}
 		}
@@ -448,28 +597,40 @@ func (z *CompactOneTimeSignature) UnmarshalMsg(bts []byte) (o []byte, err error)
 				return
 			}
 			switch string(field) {
-			case "sig":
-				bts, err = (*z).Signature.Signature.UnmarshalMsg(bts)
+			case "s":
+				bts, err = (*z).OneTimeSignature.Sig.UnmarshalMsg(bts)
 				if err != nil {
-					err = msgp.WrapError(err, "Signature")
+					err = msgp.WrapError(err, "Sig")
 					return
 				}
-			case "idx":
-				(*z).Signature.MerkleArrayIndex, bts, err = msgp.ReadUint64Bytes(bts)
+			case "p":
+				bts, err = (*z).OneTimeSignature.PK.UnmarshalMsg(bts)
 				if err != nil {
-					err = msgp.WrapError(err, "MerkleArrayIndex")
+					err = msgp.WrapError(err, "PK")
 					return
 				}
-			case "prf":
-				bts, err = (*z).Signature.Proof.UnmarshalMsg(bts)
+			case "ps":
+				bts, err = (*z).OneTimeSignature.PKSigOld.UnmarshalMsg(bts)
 				if err != nil {
-					err = msgp.WrapError(err, "Proof")
+					err = msgp.WrapError(err, "PKSigOld")
 					return
 				}
-			case "vkey":
-				bts, err = (*z).Signature.VerifyingKey.UnmarshalMsg(bts)
+			case "p2":
+				bts, err = (*z).OneTimeSignature.PK2.UnmarshalMsg(bts)
 				if err != nil {
-					err = msgp.WrapError(err, "VerifyingKey")
+					err = msgp.WrapError(err, "PK2")
+					return
+				}
+			case "p1s":
+				bts, err = (*z).OneTimeSignature.PK1Sig.UnmarshalMsg(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "PK1Sig")
+					return
+				}
+			case "p2s":
+				bts, err = (*z).OneTimeSignature.PK2Sig.UnmarshalMsg(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "PK2Sig")
 					return
 				}
 			default:
@@ -492,13 +653,165 @@ func (_ *CompactOneTimeSignature) CanUnmarshalMsg(z interface{}) bool {
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *CompactOneTimeSignature) Msgsize() (s int) {
-	s = 1 + 4 + (*z).Signature.Signature.Msgsize() + 4 + msgp.Uint64Size + 4 + (*z).Signature.Proof.Msgsize() + 5 + (*z).Signature.VerifyingKey.Msgsize()
+	s = 1 + 2 + (*z).OneTimeSignature.Sig.Msgsize() + 2 + (*z).OneTimeSignature.PK.Msgsize() + 3 + (*z).OneTimeSignature.PKSigOld.Msgsize() + 3 + (*z).OneTimeSignature.PK2.Msgsize() + 4 + (*z).OneTimeSignature.PK1Sig.Msgsize() + 4 + (*z).OneTimeSignature.PK2Sig.Msgsize()
 	return
 }
 
 // MsgIsZero returns whether this is a zero value
 func (z *CompactOneTimeSignature) MsgIsZero() bool {
-	return ((*z).Signature.Signature.MsgIsZero()) && ((*z).Signature.MerkleArrayIndex == 0) && ((*z).Signature.Proof.MsgIsZero()) && ((*z).Signature.VerifyingKey.MsgIsZero())
+	return ((*z).OneTimeSignature.Sig.MsgIsZero()) && ((*z).OneTimeSignature.PK.MsgIsZero()) && ((*z).OneTimeSignature.PKSigOld.MsgIsZero()) && ((*z).OneTimeSignature.PK2.MsgIsZero()) && ((*z).OneTimeSignature.PK1Sig.MsgIsZero()) && ((*z).OneTimeSignature.PK2Sig.MsgIsZero())
+}
+
+// MarshalMsg implements msgp.Marshaler
+func (z *Participant) MarshalMsg(b []byte) (o []byte) {
+	o = msgp.Require(b, z.Msgsize())
+	// omitempty: check for empty values
+	zb0001Len := uint32(3)
+	var zb0001Mask uint8 /* 4 bits */
+	if (*z).KeyDilution == 0 {
+		zb0001Len--
+		zb0001Mask |= 0x2
+	}
+	if (*z).PK.MsgIsZero() {
+		zb0001Len--
+		zb0001Mask |= 0x4
+	}
+	if (*z).Weight == 0 {
+		zb0001Len--
+		zb0001Mask |= 0x8
+	}
+	// variable map header, size zb0001Len
+	o = append(o, 0x80|uint8(zb0001Len))
+	if zb0001Len != 0 {
+		if (zb0001Mask & 0x2) == 0 { // if not empty
+			// string "d"
+			o = append(o, 0xa1, 0x64)
+			o = msgp.AppendUint64(o, (*z).KeyDilution)
+		}
+		if (zb0001Mask & 0x4) == 0 { // if not empty
+			// string "p"
+			o = append(o, 0xa1, 0x70)
+			o = (*z).PK.MarshalMsg(o)
+		}
+		if (zb0001Mask & 0x8) == 0 { // if not empty
+			// string "w"
+			o = append(o, 0xa1, 0x77)
+			o = msgp.AppendUint64(o, (*z).Weight)
+		}
+	}
+	return
+}
+
+func (_ *Participant) CanMarshalMsg(z interface{}) bool {
+	_, ok := (z).(*Participant)
+	return ok
+}
+
+// UnmarshalMsg implements msgp.Unmarshaler
+func (z *Participant) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	var field []byte
+	_ = field
+	var zb0001 int
+	var zb0002 bool
+	zb0001, zb0002, bts, err = msgp.ReadMapHeaderBytes(bts)
+	if _, ok := err.(msgp.TypeError); ok {
+		zb0001, zb0002, bts, err = msgp.ReadArrayHeaderBytes(bts)
+		if err != nil {
+			err = msgp.WrapError(err)
+			return
+		}
+		if zb0001 > 0 {
+			zb0001--
+			bts, err = (*z).PK.UnmarshalMsg(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "PK")
+				return
+			}
+		}
+		if zb0001 > 0 {
+			zb0001--
+			(*z).Weight, bts, err = msgp.ReadUint64Bytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "Weight")
+				return
+			}
+		}
+		if zb0001 > 0 {
+			zb0001--
+			(*z).KeyDilution, bts, err = msgp.ReadUint64Bytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "KeyDilution")
+				return
+			}
+		}
+		if zb0001 > 0 {
+			err = msgp.ErrTooManyArrayFields(zb0001)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array")
+				return
+			}
+		}
+	} else {
+		if err != nil {
+			err = msgp.WrapError(err)
+			return
+		}
+		if zb0002 {
+			(*z) = Participant{}
+		}
+		for zb0001 > 0 {
+			zb0001--
+			field, bts, err = msgp.ReadMapKeyZC(bts)
+			if err != nil {
+				err = msgp.WrapError(err)
+				return
+			}
+			switch string(field) {
+			case "p":
+				bts, err = (*z).PK.UnmarshalMsg(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "PK")
+					return
+				}
+			case "w":
+				(*z).Weight, bts, err = msgp.ReadUint64Bytes(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "Weight")
+					return
+				}
+			case "d":
+				(*z).KeyDilution, bts, err = msgp.ReadUint64Bytes(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "KeyDilution")
+					return
+				}
+			default:
+				err = msgp.ErrNoField(string(field))
+				if err != nil {
+					err = msgp.WrapError(err)
+					return
+				}
+			}
+		}
+	}
+	o = bts
+	return
+}
+
+func (_ *Participant) CanUnmarshalMsg(z interface{}) bool {
+	_, ok := (z).(*Participant)
+	return ok
+}
+
+// Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
+func (z *Participant) Msgsize() (s int) {
+	s = 1 + 2 + (*z).PK.Msgsize() + 2 + msgp.Uint64Size + 2 + msgp.Uint64Size
+	return
+}
+
+// MsgIsZero returns whether this is a zero value
+func (z *Participant) MsgIsZero() bool {
+	return ((*z).PK.MsgIsZero()) && ((*z).Weight == 0) && ((*z).KeyDilution == 0)
 }
 
 // MarshalMsg implements msgp.Marshaler

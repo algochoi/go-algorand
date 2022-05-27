@@ -46,7 +46,7 @@ all blocks from the beginning of the blockchain.  As an optimization,
 the ledger allows trackers to store persistent state, so that they can
 reconstruct their state quickly, without considering every block.
 
-The interface between ledger and trackers is defined in `tracker.go`.
+The interface between ledger and trackers is defined in `trackers.go`.
 
 Trackers have access to the ledger through a restricted API defined by
 `ledgerForTracker`.  This allows trackers to access the ledger's SQLite
@@ -96,6 +96,11 @@ locking.
 
 - `Totals(round)` returns the totals of accounts, using the account
   tracker.
+
+### Time tracker
+
+- `Timestamp(round)` uses the time tracker to return the time as
+  of `round`.
 
 ### Recent transactions tracker
 

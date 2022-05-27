@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2021 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -48,7 +48,7 @@ func (logger *LoggerMiddleware) handler(next echo.HandlerFunc) echo.HandlerFunc 
 		res := ctx.Response()
 		req := ctx.Request()
 
-		// Propagate the error if the next middleware has a problem
+		// Propogate the error if the next middleware has a problem
 		if err = next(ctx); err != nil {
 			ctx.Error(err)
 		}

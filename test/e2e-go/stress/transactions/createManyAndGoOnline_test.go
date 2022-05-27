@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2021 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -25,7 +25,6 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/libgoal"
 	"github.com/algorand/go-algorand/test/framework/fixtures"
-	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
 func cascadeCreateAndFundAccounts(amountToSend, transactionFee uint64, fundingAccount string, client libgoal.Client, a *require.Assertions) map[string]string {
@@ -49,9 +48,6 @@ func cascadeCreateAndFundAccounts(amountToSend, transactionFee uint64, fundingAc
 // this test creates many accounts
 // sends them all money, and sends them online
 func TestManyAccountsCanGoOnline(t *testing.T) {
-	partitiontest.PartitionTest(t)
-	defer fixtures.ShutdownSynchronizedTest(t)
-
 	t.Parallel()
 	a := require.New(fixtures.SynchronizedTest(t))
 

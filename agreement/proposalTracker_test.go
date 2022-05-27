@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2021 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -21,7 +21,6 @@ import (
 	"sort"
 	"testing"
 
-	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -52,8 +51,6 @@ func sortedVoteGen(t *testing.T) (votes []vote) {
 }
 
 func TestProposalTrackerProposalSeeker(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	votes := sortedVoteGen(t)
 	for len(votes) < 4 {
 		votes = sortedVoteGen(t)
@@ -327,8 +324,6 @@ func setupProposalTrackerTests(t *testing.T) (votes []vote) {
 }
 
 func TestProposalTrackerBasic(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	votes := setupProposalTrackerTests(t)
 	for len(votes) <= 3 {
 		votes = setupProposalTrackerTests(t)

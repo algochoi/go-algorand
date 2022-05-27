@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2021 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -24,9 +24,8 @@ import (
 	"io"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
-	"unicode"
-	"unicode/utf8"
 
 	"github.com/labstack/echo/v4"
 
@@ -164,20 +163,6 @@ func participationKeysEncode(r basics.AccountData) *v1.Participation {
 	return &apiParticipation
 }
 
-// printableUTF8OrEmpty checks to see if the entire string is a UTF8 printable string.
-// If this is the case, the string is returned as is. Otherwise, the empty string is returned.
-func printableUTF8OrEmpty(in string) string {
-	// iterate throughout all the characters in the string to see if they are all printable.
-	// when range iterating on go strings, go decode each element as a utf8 rune.
-	for _, c := range in {
-		// is this a printable character, or invalid rune ?
-		if c == utf8.RuneError || !unicode.IsPrint(c) {
-			return ""
-		}
-	}
-	return in
-}
-
 func modelAssetParams(creator basics.Address, params basics.AssetParams) v1.AssetParams {
 	paramsModel := v1.AssetParams{
 		Total:         params.Total,
@@ -185,9 +170,9 @@ func modelAssetParams(creator basics.Address, params basics.AssetParams) v1.Asse
 		Decimals:      params.Decimals,
 	}
 
-	paramsModel.UnitName = printableUTF8OrEmpty(params.UnitName)
-	paramsModel.AssetName = printableUTF8OrEmpty(params.AssetName)
-	paramsModel.URL = printableUTF8OrEmpty(params.URL)
+	paramsModel.UnitName = strings.TrimRight(string(params.UnitName[:]), "\x00")
+	paramsModel.AssetName = strings.TrimRight(string(params.AssetName[:]), "\x00")
+	paramsModel.URL = strings.TrimRight(string(params.URL[:]), "\x00")
 	if params.MetadataHash != [32]byte{} {
 		paramsModel.MetadataHash = params.MetadataHash[:]
 	}
@@ -395,7 +380,7 @@ func computeCreatableIndexInPayset(tx node.TxnWithStatus, txnCounter uint64, pay
 // computeAssetIndexFromTxn returns the created asset index given a confirmed
 // transaction whose confirmation block is available in the ledger. Note that
 // 0 is an invalid asset index (they start at 1).
-func computeAssetIndexFromTxn(tx node.TxnWithStatus, l *data.Ledger) uint64 {
+func computeAssetIndexFromTxn(tx node.TxnWithStatus, l *data.Ledger) (aidx uint64) {
 	// Must have ledger
 	if l == nil {
 		return 0
@@ -412,15 +397,6 @@ func computeAssetIndexFromTxn(tx node.TxnWithStatus, l *data.Ledger) uint64 {
 	if tx.Txn.Txn.AssetConfigTxnFields.ConfigAsset != 0 {
 		return 0
 	}
-
-	aidx := uint64(tx.ApplyData.ConfigAsset)
-	if aidx > 0 {
-		return aidx
-	}
-	// If there is no ConfigAsset in the ApplyData, it must be a
-	// transaction before inner transactions were activated. Therefore
-	// the computeCreatableIndexInPayset function will work properly
-	// to deduce the aid. Proceed.
 
 	// Look up block where transaction was confirmed
 	blk, err := l.Block(tx.ConfirmedRound)
@@ -439,7 +415,7 @@ func computeAssetIndexFromTxn(tx node.TxnWithStatus, l *data.Ledger) uint64 {
 // computeAppIndexFromTxn returns the created app index given a confirmed
 // transaction whose confirmation block is available in the ledger. Note that
 // 0 is an invalid asset index (they start at 1).
-func computeAppIndexFromTxn(tx node.TxnWithStatus, l *data.Ledger) uint64 {
+func computeAppIndexFromTxn(tx node.TxnWithStatus, l *data.Ledger) (aidx uint64) {
 	// Must have ledger
 	if l == nil {
 		return 0
@@ -456,15 +432,6 @@ func computeAppIndexFromTxn(tx node.TxnWithStatus, l *data.Ledger) uint64 {
 	if tx.Txn.Txn.ApplicationCallTxnFields.ApplicationID != 0 {
 		return 0
 	}
-
-	aidx := uint64(tx.ApplyData.ApplicationID)
-	if aidx > 0 {
-		return aidx
-	}
-	// If there is no ApplicationID in the ApplyData, it must be a
-	// transaction before inner transactions were activated. Therefore
-	// the computeCreatableIndexInPayset function will work properly
-	// to deduce the aidx. Proceed.
 
 	// Look up block where transaction was confirmed
 	blk, err := l.Block(tx.ConfirmedRound)
@@ -487,7 +454,7 @@ func blockEncode(b bookkeeping.Block, c agreement.Certificate) (v1.Block, error)
 		Seed:              crypto.Digest(b.Seed()).String(),
 		Proposer:          c.Proposal.OriginalProposer.String(),
 		Round:             uint64(b.Round()),
-		TransactionsRoot:  b.TxnCommitments.NativeSha512_256Commitment.String(), // No need to support SHA256 in API V1
+		TransactionsRoot:  b.TxnRoot.String(),
 		RewardsRate:       b.RewardsRate,
 		RewardsLevel:      b.RewardsLevel,
 		RewardsResidue:    b.RewardsResidue,
@@ -508,7 +475,7 @@ func blockEncode(b bookkeeping.Block, c agreement.Certificate) (v1.Block, error)
 		CompactCertNextRound:   uint64(b.CompactCert[protocol.CompactCertBasic].CompactCertNextRound),
 	}
 
-	if !b.CompactCert[protocol.CompactCertBasic].CompactCertVoters.IsEmpty() {
+	if !b.CompactCert[protocol.CompactCertBasic].CompactCertVoters.IsZero() {
 		voters := b.CompactCert[protocol.CompactCertBasic].CompactCertVoters
 		block.CompactCertVoters = voters[:]
 	}
@@ -789,13 +756,20 @@ func AccountInformation(ctx lib.ReqContext, context echo.Context) {
 	}
 
 	ledger := ctx.Node.Ledger()
-	record, lastRound, amountWithoutPendingRewards, err := ledger.LookupLatest(basics.Address(addr))
+	lastRound := ledger.Latest()
+	record, err := ledger.Lookup(lastRound, basics.Address(addr))
+	if err != nil {
+		lib.ErrorResponse(w, http.StatusInternalServerError, err, errFailedLookingUpLedger, ctx.Log)
+		return
+	}
+	recordWithoutPendingRewards, _, err := ledger.LookupWithoutRewards(lastRound, basics.Address(addr))
 	if err != nil {
 		lib.ErrorResponse(w, http.StatusInternalServerError, err, errFailedLookingUpLedger, ctx.Log)
 		return
 	}
 
 	amount := record.MicroAlgos
+	amountWithoutPendingRewards := recordWithoutPendingRewards.MicroAlgos
 	pendingRewards, overflowed := basics.OSubA(amount, amountWithoutPendingRewards)
 	if overflowed {
 		err = fmt.Errorf("overflowed pending rewards: %v - %v", amount, amountWithoutPendingRewards)
@@ -1314,14 +1288,14 @@ func AssetInformation(ctx lib.ReqContext, context echo.Context) {
 	}
 
 	lastRound := ledger.Latest()
-	resource, err := ledger.LookupAsset(lastRound, creator, aidx)
+	record, err := ledger.Lookup(lastRound, creator)
 	if err != nil {
 		lib.ErrorResponse(w, http.StatusInternalServerError, err, errFailedLookingUpLedger, ctx.Log)
 		return
 	}
 
-	if resource.AssetParams != nil {
-		thisAssetParams := modelAssetParams(creator, *resource.AssetParams)
+	if asset, ok := record.AssetParams[aidx]; ok {
+		thisAssetParams := modelAssetParams(creator, asset)
 		SendJSON(AssetInformationResponse{&thisAssetParams}, w, ctx.Log)
 	} else {
 		lib.ErrorResponse(w, http.StatusBadRequest, fmt.Errorf(errFailedRetrievingAsset), errFailedRetrievingAsset, ctx.Log)
@@ -1414,18 +1388,20 @@ func Assets(ctx lib.ReqContext, context echo.Context) {
 	var result v1.AssetList
 	for _, aloc := range alocs {
 		// Fetch the asset parameters
-		record, err := ledger.LookupAsset(lastRound, aloc.Creator, basics.AssetIndex(aloc.Index))
+		creatorRecord, err := ledger.Lookup(lastRound, aloc.Creator)
 		if err != nil {
 			lib.ErrorResponse(w, http.StatusInternalServerError, err, errFailedLookingUpLedger, ctx.Log)
 			return
 		}
 
-		if record.AssetParams == nil {
+		// Ensure no race with asset deletion
+		rp, ok := creatorRecord.AssetParams[basics.AssetIndex(aloc.Index)]
+		if !ok {
 			continue
 		}
 
 		// Append the result
-		params := modelAssetParams(aloc.Creator, *record.AssetParams)
+		params := modelAssetParams(aloc.Creator, rp)
 		result.Assets = append(result.Assets, v1.Asset{
 			AssetIndex:  uint64(aloc.Index),
 			AssetParams: params,
@@ -1628,7 +1604,8 @@ func GetSupply(ctx lib.ReqContext, context echo.Context) {
 
 	w := context.Response().Writer
 
-	latest, totals, err := ctx.Node.Ledger().LatestTotals()
+	latest := ctx.Node.Ledger().Latest()
+	totals, err := ctx.Node.Ledger().Totals(latest)
 	if err != nil {
 		err = fmt.Errorf("GetSupply(): round %d failed: %v", latest, err)
 		lib.ErrorResponse(w, http.StatusInternalServerError, err, errInternalFailure, ctx.Log)

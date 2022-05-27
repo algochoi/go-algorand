@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2021 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -23,18 +23,13 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/test/framework/fixtures"
-	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
 const partitionRecoveryTime = 20 * time.Minute // If we hit step 9, worst case recovery time can be ~2^8 * 5 ~= 20 mins
 const inducePartitionTime = 6 * time.Second    // Try to minimize change of proceeding too many steps while stalled
 
 func TestBasicPartitionRecovery(t *testing.T) {
-	partitiontest.PartitionTest(t)
-	defer fixtures.ShutdownSynchronizedTest(t)
-
 	if testing.Short() {
 		t.Skip()
 	}
@@ -79,9 +74,6 @@ func TestBasicPartitionRecovery(t *testing.T) {
 }
 
 func TestPartitionRecoverySwapStartup(t *testing.T) {
-	partitiontest.PartitionTest(t)
-	defer fixtures.ShutdownSynchronizedTest(t)
-
 	if testing.Short() {
 		t.Skip()
 	}
@@ -102,9 +94,6 @@ func TestPartitionRecoverySwapStartup(t *testing.T) {
 }
 
 func TestPartitionRecoveryStaggerRestart(t *testing.T) {
-	partitiontest.PartitionTest(t)
-	defer fixtures.ShutdownSynchronizedTest(t)
-
 	if testing.Short() {
 		t.Skip()
 	}
@@ -139,10 +128,6 @@ func runTestWithStaggeredStopStart(t *testing.T, fixture *fixtures.RestClientFix
 	// Stop Node1
 	nc1.FullStop()
 
-	status, err := fixture.LibGoalClient.Status()
-	a.NoError(err)
-	roundAfterStop := status.LastRound
-
 	time.Sleep(inducePartitionTime)
 
 	// Use the fixture to start the node again so it supplies the correct peer addresses
@@ -160,19 +145,16 @@ func runTestWithStaggeredStopStart(t *testing.T, fixture *fixtures.RestClientFix
 	a.NoError(err)
 
 	// Now wait for us to make progress again.
-	status, err = fixture.LibGoalClient.Status()
+	status, err := fixture.LibGoalClient.Status()
 	a.NoError(err)
 
-	a.Equal(roundAfterStop, status.LastRound, "We should not have made progress since stopping the first node")
+	a.Equal(waitForRound, status.LastRound, "We should not have made progress since stopping the first node")
 
 	err = fixture.WaitForRound(status.LastRound+1, partitionRecoveryTime)
 	a.NoError(err)
 }
 
 func TestBasicPartitionRecoveryPartOffline(t *testing.T) {
-	partitiontest.PartitionTest(t)
-	defer fixtures.ShutdownSynchronizedTest(t)
-
 	if testing.Short() {
 		t.Skip()
 	}
@@ -202,10 +184,6 @@ func TestBasicPartitionRecoveryPartOffline(t *testing.T) {
 	// Stop Node1
 	nc1.FullStop()
 
-	status, err := fixture.LibGoalClient.Status()
-	a.NoError(err)
-	roundAfterStop := status.LastRound
-
 	// Stop the 2nd node and give network a chance to stall
 	nc2, err := fixture.GetNodeController("Node2")
 	a.NoError(err)
@@ -218,19 +196,16 @@ func TestBasicPartitionRecoveryPartOffline(t *testing.T) {
 	a.NoError(err)
 
 	// Now wait for us to make progress again.
-	status, err = fixture.LibGoalClient.Status()
+	status, err := fixture.LibGoalClient.Status()
 	a.NoError(err)
 
-	a.Equal(roundAfterStop, status.LastRound, "We should not have made progress since stopping the first node")
+	a.Equal(waitForRound, status.LastRound, "We should not have made progress since stopping the first node")
 
 	err = fixture.WaitForRound(status.LastRound+1, partitionRecoveryTime)
 	a.NoError(err)
 }
 
 func TestPartitionHalfOffline(t *testing.T) {
-	partitiontest.PartitionTest(t)
-	defer fixtures.ShutdownSynchronizedTest(t)
-
 	if testing.Short() {
 		t.Skip()
 	}
@@ -245,16 +220,7 @@ func TestPartitionHalfOffline(t *testing.T) {
 	// Start all but 10% of stake and verify we recover
 
 	var fixture fixtures.RestClientFixture
-	fixture.SetupNoStart(t, filepath.Join("nettemplates", "TenNodesDistributedMultiWallet.json"))
-	for _, nodeDir := range fixture.NodeDataDirs() {
-		cfg, err := config.LoadConfigFromDisk(nodeDir)
-		a.NoError(err)
-		// adjust the refresh interval for one hour, so that we won't be reloading the participation key during this test.
-		cfg.ParticipationKeysRefreshInterval = time.Hour
-		cfg.SaveToDisk(nodeDir)
-	}
-	fixture.Start()
-
+	fixture.Setup(t, filepath.Join("nettemplates", "TenNodesDistributedMultiWallet.json"))
 	defer fixture.Shutdown()
 
 	// Get the 1st node (with Node1-3 wallets) so we can wait until it has reached the target round
@@ -276,16 +242,12 @@ func TestPartitionHalfOffline(t *testing.T) {
 	a.NoError(err)
 	nc3.FullStop()
 
-	status, err := client.Status()
-	a.NoError(err)
-	roundAfterStop := status.LastRound
-
 	time.Sleep(inducePartitionTime)
 
 	// Get main client to monitor
-	status, err = client.Status()
+	status, err := client.Status()
 	a.NoError(err)
-	a.Equal(roundAfterStop, status.LastRound, "We should not have made progress since stopping the nodes")
+	a.Equal(waitForRound, status.LastRound, "We should not have made progress since stopping the nodes")
 
 	// Start 40 of 50% of the stake
 	_, err = fixture.StartNode(nc1.GetDataDir())

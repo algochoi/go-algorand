@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2021 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -31,7 +31,6 @@ import (
 	"github.com/algorand/go-algorand/ledger"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/network"
-	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
 type dummyLedgerFetcherReporter struct {
@@ -41,8 +40,6 @@ func (lf *dummyLedgerFetcherReporter) updateLedgerFetcherProgress(*ledger.Catchp
 }
 
 func TestNoPeersAvailable(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	lf := makeLedgerFetcher(&mocks.MockNetwork{}, &mocks.MockCatchpointCatchupAccessor{}, logging.TestingLog(t), &dummyLedgerFetcherReporter{}, config.GetDefaultLocal())
 	var peer network.Peer
 	peer = &lf // The peer is an opaque interface.. we can add anything as a Peer.
@@ -51,8 +48,6 @@ func TestNoPeersAvailable(t *testing.T) {
 }
 
 func TestNonParsableAddress(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	lf := makeLedgerFetcher(&mocks.MockNetwork{}, &mocks.MockCatchpointCatchupAccessor{}, logging.TestingLog(t), &dummyLedgerFetcherReporter{}, config.GetDefaultLocal())
 	peer := testHTTPPeer(":def")
 	err := lf.getPeerLedger(context.Background(), &peer, basics.Round(0))
@@ -60,8 +55,6 @@ func TestNonParsableAddress(t *testing.T) {
 }
 
 func TestLedgerFetcherErrorResponseHandling(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	// create a dummy server.
 	mux := http.NewServeMux()
 	s := &http.Server{

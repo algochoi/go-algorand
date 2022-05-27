@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2021 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -19,13 +19,10 @@ package metrics
 import (
 	"testing"
 
-	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/stretchr/testify/require"
 )
 
 func TestParseNodeExporterArgs(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	passTestcases := map[string][]string{
 		"./node_exporter":                                                                           {"./node_exporter", "--web.listen-address=:9100", "--web.telemetry-path=/metrics"},                                               // simple case
 		"./node_exporter --collector.systemd":                                                       {"./node_exporter", "--collector.systemd", "--web.listen-address=:9100", "--web.telemetry-path=/metrics"},                        // extended case with one argument

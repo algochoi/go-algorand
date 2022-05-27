@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2021 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -38,7 +38,7 @@ func protoFromString(protoString string) (name string, proto config.ConsensusPar
 		var ok bool
 		proto, ok = config.Consensus[protocol.ConsensusVersion(protoString)]
 		if !ok {
-			err = fmt.Errorf("unknown protocol %s", protoString)
+			err = fmt.Errorf("Unknown protocol %s", protoString)
 			return
 		}
 		name = protoString
@@ -158,23 +158,10 @@ type evalResult struct {
 
 // AppState encapsulates information about execution of stateful teal program
 type AppState struct {
-	appIdx    basics.AppIndex
-	schemas   basics.StateSchemas
-	global    map[basics.AppIndex]basics.TealKeyValue
-	locals    map[basics.Address]map[basics.AppIndex]basics.TealKeyValue
-	logs      []string
-	innerTxns []transactions.SignedTxnWithAD
-}
-
-func cloneInners(a []transactions.SignedTxnWithAD) (b []transactions.SignedTxnWithAD) {
-	if a != nil {
-		b = make([]transactions.SignedTxnWithAD, len(a))
-		copy(b, a)
-		for i, itxn := range a {
-			b[i].EvalDelta.InnerTxns = cloneInners(itxn.EvalDelta.InnerTxns)
-		}
-	}
-	return
+	appIdx  basics.AppIndex
+	schemas basics.StateSchemas
+	global  map[basics.AppIndex]basics.TealKeyValue
+	locals  map[basics.Address]map[basics.AppIndex]basics.TealKeyValue
 }
 
 func (a *AppState) clone() (b AppState) {
@@ -190,18 +177,11 @@ func (a *AppState) clone() (b AppState) {
 			b.locals[addr][aid] = tkv.Clone()
 		}
 	}
-	b.logs = make([]string, len(a.logs))
-	copy(b.logs, a.logs)
-	b.innerTxns = cloneInners(a.innerTxns)
 	return
 }
 
 func (a *AppState) empty() bool {
-	return a.appIdx == 0 &&
-		len(a.global) == 0 &&
-		len(a.locals) == 0 &&
-		len(a.logs) == 0 &&
-		len(a.innerTxns) == 0
+	return a.appIdx == 0 && len(a.global) == 0 && len(a.locals) == 0
 }
 
 type modeType int
@@ -229,7 +209,7 @@ type evaluation struct {
 	source       string
 	offsetToLine map[int]int
 	name         string
-	groupIndex   uint64
+	groupIndex   int
 	mode         modeType
 	aidx         basics.AppIndex
 	ba           apply.Balances
@@ -237,13 +217,12 @@ type evaluation struct {
 	states       AppState
 }
 
-func (e *evaluation) eval(gi int, ep *logic.EvalParams) (pass bool, err error) {
+func (e *evaluation) eval(ep logic.EvalParams) (pass bool, err error) {
 	if e.mode == modeStateful {
-		pass, _, err = e.ba.StatefulEval(gi, ep, e.aidx, e.program)
+		pass, _, err = e.ba.StatefulEval(ep, e.aidx, e.program)
 		return
 	}
-	ep.TxnGroup[gi].Lsig.Logic = e.program
-	return logic.EvalSignature(gi, ep)
+	return logic.Eval(e.program, ep)
 }
 
 // LocalRunner runs local eval
@@ -258,8 +237,6 @@ type LocalRunner struct {
 func makeAppState() (states AppState) {
 	states.global = make(map[basics.AppIndex]basics.TealKeyValue)
 	states.locals = make(map[basics.Address]map[basics.AppIndex]basics.TealKeyValue)
-	states.logs = make([]string, 0)
-	states.innerTxns = make([]transactions.SignedTxnWithAD, 0)
 	return
 }
 
@@ -380,7 +357,7 @@ func (r *LocalRunner) Setup(dp *DebugParams) (err error) {
 				source := string(data)
 				ops, err := logic.AssembleString(source)
 				if ops.Version > r.proto.LogicSigVersion {
-					return fmt.Errorf("program version (%d) is beyond the maximum supported protocol version (%d)", ops.Version, r.proto.LogicSigVersion)
+					return fmt.Errorf("Program version (%d) is beyond the maximum supported protocol version (%d)", ops.Version, r.proto.LogicSigVersion)
 				}
 				if err != nil {
 					errorLines := ""
@@ -398,7 +375,7 @@ func (r *LocalRunner) Setup(dp *DebugParams) (err error) {
 					r.runs[i].source = source
 				}
 			}
-			r.runs[i].groupIndex = uint64(dp.GroupIndex)
+			r.runs[i].groupIndex = dp.GroupIndex
 			r.runs[i].name = dp.ProgramNames[i]
 
 			var mode modeType
@@ -441,7 +418,7 @@ func (r *LocalRunner) Setup(dp *DebugParams) (err error) {
 		if len(stxn.Lsig.Logic) > 0 {
 			run := evaluation{
 				program:    stxn.Lsig.Logic,
-				groupIndex: uint64(gi),
+				groupIndex: gi,
 				mode:       modeLogicsig,
 			}
 			r.runs = append(r.runs, run)
@@ -462,7 +439,7 @@ func (r *LocalRunner) Setup(dp *DebugParams) (err error) {
 					}
 					run := evaluation{
 						program:    stxn.Txn.ApprovalProgram,
-						groupIndex: uint64(gi),
+						groupIndex: gi,
 						mode:       modeStateful,
 						aidx:       appIdx,
 						ba:         b,
@@ -497,7 +474,7 @@ func (r *LocalRunner) Setup(dp *DebugParams) (err error) {
 							}
 							run := evaluation{
 								program:    program,
-								groupIndex: uint64(gi),
+								groupIndex: gi,
 								mode:       modeStateful,
 								aidx:       appIdx,
 								ba:         b,
@@ -530,39 +507,54 @@ func (r *LocalRunner) RunAll() error {
 		return fmt.Errorf("no program to debug")
 	}
 
-	configureDebugger := func(ep *logic.EvalParams) {
-		// Workaround for Go's nil/empty interfaces nil check after nil assignment, i.e.
-		// r.debugger = nil
-		// ep.Debugger = r.debugger
-		// if ep.Debugger != nil // FALSE
-		if r.debugger != nil {
-			ep.Debugger = r.debugger
-		}
-	}
-
-	txngroup := transactions.WrapSignedTxnsWithAD(r.txnGroup)
 	failed := 0
 	start := time.Now()
+	for _, run := range r.runs {
+		r.debugger.SaveProgram(run.name, run.program, run.source, run.offsetToLine, run.states)
 
-	ep := logic.NewEvalParams(txngroup, &r.proto, &transactions.SpecialAddresses{})
-	configureDebugger(ep)
-
-	var last error
-	for i := range r.runs {
-		run := &r.runs[i]
-		if r.debugger != nil {
-			r.debugger.SaveProgram(run.name, run.program, run.source, run.offsetToLine, run.states)
+		ep := logic.EvalParams{
+			Proto:      &r.proto,
+			Debugger:   r.debugger,
+			Txn:        &r.txnGroup[groupIndex],
+			TxnGroup:   r.txnGroup,
+			GroupIndex: run.groupIndex,
 		}
 
-		run.result.pass, run.result.err = run.eval(int(run.groupIndex), ep)
+		run.result.pass, run.result.err = run.eval(ep)
 		if run.result.err != nil {
 			failed++
-			last = run.result.err
 		}
 	}
 	elapsed := time.Since(start)
 	if failed == len(r.runs) && elapsed < time.Second {
-		return fmt.Errorf("all %d program(s) failed in less than a second, invocation error? %w", failed, last)
+		return fmt.Errorf("all %d program(s) failed in less than a second, invocation error?", failed)
 	}
 	return nil
+}
+
+// Run starts the first program in list
+func (r *LocalRunner) Run() (bool, error) {
+	if len(r.runs) < 1 {
+		return false, fmt.Errorf("no program to debug")
+	}
+
+	run := r.runs[0]
+
+	ep := logic.EvalParams{
+		Proto:      &r.proto,
+		Txn:        &r.txnGroup[groupIndex],
+		TxnGroup:   r.txnGroup,
+		GroupIndex: run.groupIndex,
+	}
+
+	// Workaround for Go's nil/empty interfaces nil check after nil assignment, i.e.
+	// r.debugger = nil
+	// ep.Debugger = r.debugger
+	// if ep.Debugger != nil // FALSE
+	if r.debugger != nil {
+		r.debugger.SaveProgram(run.name, run.program, run.source, run.offsetToLine, run.states)
+		ep.Debugger = r.debugger
+	}
+
+	return run.eval(ep)
 }

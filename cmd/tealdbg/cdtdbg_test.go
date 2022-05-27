@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2021 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -29,11 +29,9 @@ import (
 
 	"github.com/algorand/go-algorand/cmd/tealdbg/cdt"
 	"github.com/algorand/go-algorand/data/transactions/logic"
-	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
 func TestCdtHandlers(t *testing.T) {
-	partitiontest.PartitionTest(t)
 	params := CdtFrontendParams{
 		router:     mux.NewRouter(),
 		apiAddress: "127.0.0.1:12345",
@@ -106,12 +104,6 @@ type MockDebugControl struct {
 func (c *MockDebugControl) Step() {
 }
 
-func (c *MockDebugControl) StepOver() {
-}
-
-func (c *MockDebugControl) StepOut() {
-}
-
 func (c *MockDebugControl) Resume() {
 }
 
@@ -150,7 +142,6 @@ func (c *MockDebugControl) GetStates(s *logic.DebugState) AppState {
 }
 
 func TestCdtFrontendSessionStarted(t *testing.T) {
-	partitiontest.PartitionTest(t)
 	params := CdtFrontendParams{
 		router:     mux.NewRouter(),
 		apiAddress: "127.0.0.1:12345",
@@ -187,7 +178,6 @@ func TestCdtFrontendSessionStarted(t *testing.T) {
 }
 
 func TestCdtAdapterSessionEnded(t *testing.T) {
-	partitiontest.PartitionTest(t)
 	params := CdtFrontendParams{
 		router:     mux.NewRouter(),
 		apiAddress: "127.0.0.1:12345",

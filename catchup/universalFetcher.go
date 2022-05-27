@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2021 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -64,9 +64,6 @@ func (uf *universalBlockFetcher) fetchBlock(ctx context.Context, round basics.Ro
 			config: &uf.config,
 		}
 		fetchedBuf, err = fetcherClient.getBlockBytes(ctx, round)
-		if err != nil {
-			return nil, nil, time.Duration(0), err
-		}
 		address = fetcherClient.address()
 	} else if httpPeer, validHTTPPeer := peer.(network.HTTPPeer); validHTTPPeer {
 		fetcherClient := &HTTPFetcher{
@@ -77,14 +74,14 @@ func (uf *universalBlockFetcher) fetchBlock(ctx context.Context, round basics.Ro
 			log:     uf.log,
 			config:  &uf.config}
 		fetchedBuf, err = fetcherClient.getBlockBytes(ctx, round)
-		if err != nil {
-			return nil, nil, time.Duration(0), err
-		}
 		address = fetcherClient.address()
 	} else {
 		return nil, nil, time.Duration(0), fmt.Errorf("fetchBlock: UniversalFetcher only supports HTTPPeer and UnicastPeer")
 	}
 	downloadDuration = time.Now().Sub(blockDownloadStartTime)
+	if err != nil {
+		return nil, nil, time.Duration(0), err
+	}
 	block, cert, err := processBlockBytes(fetchedBuf, round, address)
 	if err != nil {
 		return nil, nil, time.Duration(0), err
@@ -93,21 +90,21 @@ func (uf *universalBlockFetcher) fetchBlock(ctx context.Context, round basics.Ro
 	return block, cert, downloadDuration, err
 }
 
-func processBlockBytes(fetchedBuf []byte, r basics.Round, peerAddr string) (blk *bookkeeping.Block, cert *agreement.Certificate, err error) {
+func processBlockBytes(fetchedBuf []byte, r basics.Round, debugStr string) (blk *bookkeeping.Block, cert *agreement.Certificate, err error) {
 	var decodedEntry rpcs.EncodedBlockCert
 	err = protocol.Decode(fetchedBuf, &decodedEntry)
 	if err != nil {
-		err = makeErrCannotDecodeBlock(r, peerAddr, err)
+		err = fmt.Errorf("fetchBlock(%d): cannot decode block from peer %v: %v", r, debugStr, err)
 		return
 	}
 
 	if decodedEntry.Block.Round() != r {
-		err = makeErrWrongBlockFromPeer(r, decodedEntry.Block.Round(), peerAddr)
+		err = fmt.Errorf("fetchBlock(%d): got wrong block from peer %v: wanted %v, got %v", r, debugStr, r, decodedEntry.Block.Round())
 		return
 	}
 
 	if decodedEntry.Certificate.Round != r {
-		err = makeErrWrongCertFromPeer(r, decodedEntry.Certificate.Round, peerAddr)
+		err = fmt.Errorf("fetchBlock(%d): got wrong cert from peer %v: wanted %v, got %v", r, debugStr, r, decodedEntry.Certificate.Round)
 		return
 	}
 	return &decodedEntry.Block, &decodedEntry.Certificate, nil
@@ -140,7 +137,7 @@ func (w *wsFetcherClient) getBlockBytes(ctx context.Context, r basics.Round) ([]
 	if err != nil {
 		return nil, err
 	}
-	if len(blockBytes) == 0 { // This case may never happen
+	if len(blockBytes) == 0 {
 		return nil, fmt.Errorf("wsFetcherClient(%d): empty response", r)
 	}
 	return blockBytes, nil
@@ -148,7 +145,7 @@ func (w *wsFetcherClient) getBlockBytes(ctx context.Context, r basics.Round) ([]
 
 // Address implements FetcherClient
 func (w *wsFetcherClient) address() string {
-	return fmt.Sprintf("[ws] (%s)", w.target.GetAddress())
+	return fmt.Sprintf("[ws] (%v)", w.target.GetAddress())
 }
 
 // requestBlock send a request for block <round> and wait until it receives a response or a context expires.
@@ -164,20 +161,20 @@ func (w *wsFetcherClient) requestBlock(ctx context.Context, round basics.Round) 
 	}
 	resp, err := w.target.Request(ctx, protocol.UniEnsBlockReqTag, topics)
 	if err != nil {
-		return nil, makeErrWsFetcherRequestFailed(round, w.target.GetAddress(), err.Error())
+		return nil, fmt.Errorf("wsFetcherClient(%s).requestBlock(%d): Request failed, %v", w.target.GetAddress(), round, err)
 	}
 
 	if errMsg, found := resp.Topics.GetValue(network.ErrorKey); found {
-		return nil, makeErrWsFetcherRequestFailed(round, w.target.GetAddress(), string(errMsg))
+		return nil, fmt.Errorf("wsFetcherClient(%s).requestBlock(%d): Request failed, %s", w.target.GetAddress(), round, string(errMsg))
 	}
 
 	blk, found := resp.Topics.GetValue(rpcs.BlockDataKey)
 	if !found {
-		return nil, makeErrWsFetcherRequestFailed(round, w.target.GetAddress(), "Block data not found")
+		return nil, fmt.Errorf("wsFetcherClient(%s): request failed: block data not found", w.target.GetAddress())
 	}
 	cert, found := resp.Topics.GetValue(rpcs.CertDataKey)
 	if !found {
-		return nil, makeErrWsFetcherRequestFailed(round, w.target.GetAddress(), "Cert data not found")
+		return nil, fmt.Errorf("wsFetcherClient(%s): request failed: cert data not found", w.target.GetAddress())
 	}
 
 	blockCertBytes := protocol.EncodeReflect(rpcs.PreEncodedBlockCert{
@@ -239,9 +236,9 @@ func (hf *HTTPFetcher) getBlockBytes(ctx context.Context, r basics.Round) (data 
 		bodyBytes, err := rpcs.ResponseBytes(response, hf.log, fetcherMaxBlockBytes)
 		hf.log.Warnf("HTTPFetcher.getBlockBytes: response status code %d from '%s'. Response body '%s' ", response.StatusCode, blockURL, string(bodyBytes))
 		if err == nil {
-			err = makeErrHTTPResponse(response.StatusCode, blockURL, fmt.Sprintf("Response body '%s'", string(bodyBytes)))
+			err = fmt.Errorf("getBlockBytes error response status code %d when requesting '%s'. Response body '%s'", response.StatusCode, blockURL, string(bodyBytes))
 		} else {
-			err = makeErrHTTPResponse(response.StatusCode, blockURL, err.Error())
+			err = fmt.Errorf("getBlockBytes error response status code %d when requesting '%s'. %w", response.StatusCode, blockURL, err)
 		}
 		return nil, err
 	}
@@ -250,7 +247,7 @@ func (hf *HTTPFetcher) getBlockBytes(ctx context.Context, r basics.Round) (data 
 	// response content type is what we'd like it to be.
 	contentTypes := response.Header["Content-Type"]
 	if len(contentTypes) != 1 {
-		err = errHTTPResponseContentType{contentTypeCount: len(contentTypes)}
+		err = fmt.Errorf("http block fetcher invalid content type count %d", len(contentTypes))
 		hf.log.Warn(err)
 		response.Body.Close()
 		return nil, err
@@ -262,7 +259,7 @@ func (hf *HTTPFetcher) getBlockBytes(ctx context.Context, r basics.Round) (data 
 	if contentTypes[0] != rpcs.BlockResponseContentType && contentTypes[0] != blockResponseContentTypeOld {
 		hf.log.Warnf("http block fetcher response has an invalid content type : %s", contentTypes[0])
 		response.Body.Close()
-		return nil, errHTTPResponseContentType{contentTypeCount: 1, contentType: contentTypes[0]}
+		return nil, fmt.Errorf("http block fetcher invalid content type '%s'", contentTypes[0])
 	}
 
 	return rpcs.ResponseBytes(response, hf.log, fetcherMaxBlockBytes)
@@ -272,109 +269,4 @@ func (hf *HTTPFetcher) getBlockBytes(ctx context.Context, r basics.Round) (data 
 // Returns the root URL of the connected peer.
 func (hf *HTTPFetcher) address() string {
 	return hf.rootURL
-}
-
-type errWrongCertFromPeer struct {
-	round     basics.Round
-	peer      string
-	certRound basics.Round
-}
-
-func makeErrWrongCertFromPeer(round, certRound basics.Round, peer string) errWrongCertFromPeer {
-	return errWrongCertFromPeer{
-		round:     round,
-		peer:      peer,
-		certRound: certRound}
-}
-
-func (wcfpe errWrongCertFromPeer) Error() string {
-	return fmt.Sprintf("processBlockBytes: got wrong cert from peer %s: wanted %d, got %d",
-		wcfpe.peer, wcfpe.round, wcfpe.certRound)
-}
-
-type errWrongBlockFromPeer struct {
-	round     basics.Round
-	peer      string
-	certRound basics.Round
-}
-
-func makeErrWrongBlockFromPeer(round, certRound basics.Round, peer string) errWrongBlockFromPeer {
-	return errWrongBlockFromPeer{
-		round:     round,
-		peer:      peer,
-		certRound: certRound}
-}
-
-func (wbfpe errWrongBlockFromPeer) Error() string {
-	return fmt.Sprintf("processBlockBytes: got wrong block from peer %s: wanted %d, got %d",
-		wbfpe.peer, wbfpe.round, wbfpe.certRound)
-}
-
-type errCannotDecodeBlock struct {
-	round basics.Round
-	peer  string
-	err   error
-}
-
-func makeErrCannotDecodeBlock(round basics.Round, peer string, err error) errCannotDecodeBlock {
-	return errCannotDecodeBlock{
-		round: round,
-		peer:  peer,
-		err:   err}
-}
-
-func (cdbe errCannotDecodeBlock) Error() string {
-	return fmt.Sprintf("processBlockBytes: cannot decode block %d from peer %s: %s",
-		cdbe.round, cdbe.peer, cdbe.err.Error())
-}
-
-func (cdbe errCannotDecodeBlock) Unwrap() error {
-	return cdbe.err
-}
-
-type errWsFetcherRequestFailed struct {
-	round basics.Round
-	peer  string
-	cause string
-}
-
-func makeErrWsFetcherRequestFailed(round basics.Round, peer, cause string) errWsFetcherRequestFailed {
-	return errWsFetcherRequestFailed{
-		round: round,
-		peer:  peer,
-		cause: cause}
-}
-
-func (wrfe errWsFetcherRequestFailed) Error() string {
-	return fmt.Sprintf("wsFetcherClient(%s).requestBlock(%d): Request failed: %s",
-		wrfe.peer, wrfe.round, wrfe.cause)
-}
-
-type errHTTPResponse struct {
-	responseStatus int
-	blockURL       string
-	cause          string
-}
-
-func makeErrHTTPResponse(responseStatus int, blockURL string, cause string) errHTTPResponse {
-	return errHTTPResponse{
-		responseStatus: responseStatus,
-		blockURL:       blockURL,
-		cause:          cause}
-}
-
-func (hre errHTTPResponse) Error() string {
-	return fmt.Sprintf("HTTPFetcher.getBlockBytes: error response status code %d when requesting '%s': %s", hre.responseStatus, hre.blockURL, hre.cause)
-}
-
-type errHTTPResponseContentType struct {
-	contentTypeCount int
-	contentType      string
-}
-
-func (cte errHTTPResponseContentType) Error() string {
-	if cte.contentTypeCount == 1 {
-		return fmt.Sprintf("HTTPFetcher.getBlockBytes: invalid content type: %s", cte.contentType)
-	}
-	return fmt.Sprintf("HTTPFetcher.getBlockBytes: invalid content type count: %d", cte.contentTypeCount)
 }

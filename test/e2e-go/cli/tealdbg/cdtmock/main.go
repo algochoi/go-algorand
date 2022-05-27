@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2021 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -87,9 +87,9 @@ func main() {
 		os.Exit(1)
 	}
 
-	var counter int64
-	counter++
+	var counter int64 = 1
 	req := cdt.ChromeRequest{ID: counter, Method: "Debugger.Enable"}
+	counter++
 
 	if err = client.SendJSON(req); err != nil {
 		fmt.Printf("Send error: %v", err)
@@ -101,8 +101,8 @@ func main() {
 	}
 	fmt.Printf("%s\n", string(data))
 
-	counter++
 	req = cdt.ChromeRequest{ID: counter, Method: "Runtime.runIfWaitingForDebugger"}
+	counter++
 
 	if err = client.SendJSON(req); err != nil {
 		fmt.Printf("Send error: %v", err)
@@ -114,8 +114,8 @@ func main() {
 	}
 	fmt.Printf("%s\n", string(data))
 
-	counter++
 	req = cdt.ChromeRequest{ID: counter, Method: "Debugger.resume"}
+	counter++
 
 	if err = client.SendJSON(req); err != nil {
 		fmt.Printf("Send error: %v", err)

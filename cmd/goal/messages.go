@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2021 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -24,8 +24,8 @@ const (
 	errorGenesisIDFail          = "Error determining kmd folder (%s). Ensure the node is running in %s."
 	errorDirectoryNotExist      = "Specified directory '%s' does not exist."
 	errorParseAddr              = "Failed to parse addr: %v"
-	errorNonPrintableCharacters = "One or more non-printable characters were omitted from the following error message:"
-	infoNonPrintableCharacters  = "One or more non-printable characters were omitted from the subsequent line:"
+	errorNonPrintableCharacters = "One or more non-printable characters were ommited from the following error message:"
+	infoNonPrintableCharacters  = "One or more non-printable characters were ommited from the subsequent line:"
 
 	// Account
 	infoNoAccounts                 = "Did not find any account. Please import or create a new one."
@@ -75,7 +75,7 @@ const (
 	errorNodeRunning                  = "Node must be stopped before writing APIToken"
 	errorNodeFailGenToken             = "Cannot generate API token: %s"
 	errorNodeCreation                 = "Error during node creation: %v"
-	errorNodeManagedBySystemd         = "This node is using systemd and should be managed with systemctl. For additional information refer to https://developer.algorand.org/docs/run-a-node/setup/install/#installing-algod-as-a-systemd-service"
+	errorNodeManagedBySystemd         = "This node is managed by systemd, you must run the following command to make your desired state change to your node:\n\nsystemctl %s algorand.service"
 	errorKill                         = "Cannot kill node: %s"
 	errorCloningNode                  = "Error cloning the node: %s"
 	infoNodeCloned                    = "Node cloned successfully to: %s"
@@ -131,7 +131,7 @@ const (
 	loggingNotEnabled    = "Remote logging is current disabled"
 	loggingEnabled       = "Remote logging is enabled.  Node = %s, Guid = %s"
 
-	infoNetworkAlreadyExists = "Network Root Directory '%s' already exists and is not empty"
+	infoNetworkAlreadyExists = "Network Root Directory '%s' already exists"
 	errorCreateNetwork       = "Error creating private network: %s"
 	infoNetworkCreated       = "Network %s created under %s"
 	errorLoadingNetwork      = "Error loading deployed network: %s"
@@ -169,7 +169,6 @@ const (
 	infoCreatedWallet            = "Created wallet '%s'"
 	infoBackupExplanation        = "Your new wallet has a backup phrase that can be used for recovery.\nKeeping this backup phrase safe is extremely important.\nWould you like to see it now? (Y/n): "
 	infoPrintedBackupPhrase      = "Your backup phrase is printed below.\nKeep this information safe -- never share it with anyone!"
-	infoBackupPhrase             = "\n%s"
 	infoNoWallets                = "No wallets found. You can create a wallet with `goal wallet new`"
 	errorCouldntCreateWallet     = "Couldn't create wallet: %s"
 	errorCouldntInitializeWallet = "Couldn't initialize wallet: %s"

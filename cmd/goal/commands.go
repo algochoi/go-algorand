@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2021 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -36,7 +36,6 @@ import (
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/daemon/algod/api/spec/common"
 	"github.com/algorand/go-algorand/data/bookkeeping"
-	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/libgoal"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
@@ -372,25 +371,17 @@ func ensureFullClient(dataDir string) libgoal.Client {
 	return ensureGoalClient(dataDir, libgoal.FullClient)
 }
 
-func getGoalClient(dataDir string, clientType libgoal.ClientType) (client libgoal.Client, err error) {
+func ensureGoalClient(dataDir string, clientType libgoal.ClientType) libgoal.Client {
 	clientConfig := libgoal.ClientConfig{
 		AlgodDataDir: dataDir,
 		KMDDataDir:   resolveKmdDataDir(dataDir),
 		CacheDir:     ensureCacheDir(dataDir),
 	}
-	client, err = libgoal.MakeClientFromConfig(clientConfig, clientType)
-	if err != nil {
-		return
-	}
-	client.SetAPIVersionAffinity(algodclient.APIVersionV2, kmdclient.APIVersionV1)
-	return
-}
-
-func ensureGoalClient(dataDir string, clientType libgoal.ClientType) libgoal.Client {
-	client, err := getGoalClient(dataDir, clientType)
+	client, err := libgoal.MakeClientFromConfig(clientConfig, clientType)
 	if err != nil {
 		reportErrorf(errorNodeStatus, err)
 	}
+	client.SetAPIVersionAffinity(algodclient.APIVersionV2, kmdclient.APIVersionV1)
 	return client
 }
 
@@ -413,10 +404,7 @@ func getWalletHandleMaybePassword(dataDir string, walletName string, getPassword
 	var dup bool
 
 	accountList := makeAccountsList(dataDir)
-	kmd, err := getGoalClient(dataDir, libgoal.KmdClient)
-	if err != nil {
-		return nil, nil, fmt.Errorf("kmd client init error: %w", err)
-	}
+	kmd := ensureKmdClient(dataDir)
 
 	// If the user didn't manually specify a wallet, use the default wallet ID
 	if walletName == "" {
@@ -517,33 +505,19 @@ func reportInfof(format string, args ...interface{}) {
 	reportInfoln(fmt.Sprintf(format, args...))
 }
 
-// reportWarnRawln prints a warning message to stderr. Only use this function if that warning
-// message already indicates that it's a warning. Otherwise, use reportWarnln
-func reportWarnRawln(args ...interface{}) {
+func reportWarnln(args ...interface{}) {
+	fmt.Print("Warning: ")
+
 	for _, line := range strings.Split(fmt.Sprint(args...), "\n") {
 		printable, line := unicodePrintable(line)
 		if !printable {
-			fmt.Fprintln(os.Stderr, infoNonPrintableCharacters)
+			fmt.Println(infoNonPrintableCharacters)
 		}
 
-		fmt.Fprintln(os.Stderr, line)
+		fmt.Println(line)
 	}
 }
 
-// reportWarnRawf prints a warning message to stderr. Only use this function if that warning message
-// already indicates that it's a warning. Otherwise, use reportWarnf
-func reportWarnRawf(format string, args ...interface{}) {
-	reportWarnRawln(fmt.Sprintf(format, args...))
-}
-
-// reportWarnln prints a warning message to stderr. The message will be prefixed with "Warning: ".
-// If you don't want this prefix, use reportWarnRawln
-func reportWarnln(args ...interface{}) {
-	reportWarnRawf("Warning: %s", fmt.Sprint(args...))
-}
-
-// reportWarnf prints a warning message to stderr. The message will be prefixed with "Warning: ". If
-// you don't want this prefix, use reportWarnRawf
 func reportWarnf(format string, args ...interface{}) {
 	reportWarnln(fmt.Sprintf(format, args...))
 }
@@ -578,22 +552,7 @@ func writeFile(filename string, data []byte, perm os.FileMode) error {
 	return ioutil.WriteFile(filename, data, perm)
 }
 
-// writeDryrunReqToFile creates dryrun request object and writes to a file
-func writeDryrunReqToFile(client libgoal.Client, txnOrStxn interface{}, outFilename string) (err error) {
-	proto, _ := getProto(protoVersion)
-	accts, err := unmarshalSlice(dumpForDryrunAccts)
-	if err != nil {
-		reportErrorf(err.Error())
-	}
-	data, err := libgoal.MakeDryrunStateBytes(client, txnOrStxn, []transactions.SignedTxn{}, accts, string(proto), dumpForDryrunFormat.String())
-	if err != nil {
-		reportErrorf(err.Error())
-	}
-	err = writeFile(outFilename, data, 0600)
-	return
-}
-
-// readFile is a wrapper of ioutil.ReadFile which considers the
+// readFile is a wrapper of ioutil.ReadFile which consniders the
 // special case of stdin filename
 func readFile(filename string) ([]byte, error) {
 	if filename == stdinFileNameValue {

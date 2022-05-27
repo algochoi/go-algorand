@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2021 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -50,20 +50,15 @@ var versionCheck = flag.Bool("v", false, "Display and write current build versio
 var branchCheck = flag.Bool("b", false, "Display the git branch behind the build")
 var channelCheck = flag.Bool("c", false, "Display and release channel behind the build")
 var initAndExit = flag.Bool("x", false, "Initialize the ledger and exit")
-var logToStdout = flag.Bool("o", false, "Write to stdout instead of node.log by overriding config.LogSizeLimit to 0")
 var peerOverride = flag.String("p", "", "Override phonebook with peer ip:port (or semicolon separated list: ip:port;ip:port;ip:port...)")
 var listenIP = flag.String("l", "", "Override config.EndpointAddress (REST listening address) with ip:port")
 var sessionGUID = flag.String("s", "", "Telemetry Session GUID to use")
-var telemetryOverride = flag.String("t", "", `Override telemetry setting if supported (Use "true", "false", "0" or "1")`)
+var telemetryOverride = flag.String("t", "", `Override telemetry setting if supported (Use "true", "false", "0" or "1"`)
 var seed = flag.String("seed", "", "input to math/rand.Seed()")
 
 func main() {
 	flag.Parse()
-	exitCode := run()
-	os.Exit(exitCode)
-}
 
-func run() int {
 	dataDir := resolveDataDir()
 	absolutePath, absPathErr := filepath.Abs(dataDir)
 	config.UpdateVersionDataDir(absolutePath)
@@ -72,7 +67,8 @@ func run() int {
 		seedVal, err := strconv.ParseInt(*seed, 10, 64)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "bad seed %#v: %s\n", *seed, err)
-			return 1
+			os.Exit(1)
+			return
 		}
 		rand.Seed(seedVal)
 	} else {
@@ -81,66 +77,65 @@ func run() int {
 
 	if *versionCheck {
 		fmt.Println(config.FormatVersionAndLicense())
-		return 0
+		return
 	}
 
 	version := config.GetCurrentVersion()
-	var baseHeartbeatEvent telemetryspec.HeartbeatEventDetails
-	baseHeartbeatEvent.Info.Version = version.String()
-	baseHeartbeatEvent.Info.VersionNum = strconv.FormatUint(version.AsUInt64(), 10)
-	baseHeartbeatEvent.Info.Channel = version.Channel
-	baseHeartbeatEvent.Info.Branch = version.Branch
-	baseHeartbeatEvent.Info.CommitHash = version.GetCommitHash()
+	heartbeatGauge := metrics.MakeStringGauge()
+	heartbeatGauge.Set("version", version.String())
+	heartbeatGauge.Set("version-num", strconv.FormatUint(version.AsUInt64(), 10))
+	heartbeatGauge.Set("channel", version.Channel)
+	heartbeatGauge.Set("branch", version.Branch)
+	heartbeatGauge.Set("commit-hash", version.GetCommitHash())
 
 	if *branchCheck {
 		fmt.Println(config.Branch)
-		return 0
+		return
 	}
 
 	if *channelCheck {
 		fmt.Println(config.Channel)
-		return 0
+		return
 	}
 
 	// Don't fallback anymore - if not specified, we want to panic to force us to update our tooling and/or processes
 	if len(dataDir) == 0 {
 		fmt.Fprintln(os.Stderr, "Data directory not specified.  Please use -d or set $ALGORAND_DATA in your environment.")
-		return 1
+		os.Exit(1)
 	}
 
 	if absPathErr != nil {
 		fmt.Fprintf(os.Stderr, "Can't convert data directory's path to absolute, %v\n", dataDir)
-		return 1
+		os.Exit(1)
 	}
 
-	genesisPath := *genesisFile
-	if genesisPath == "" {
-		genesisPath = filepath.Join(dataDir, config.GenesisJSONFile)
+	if *genesisFile == "" {
+		*genesisFile = filepath.Join(dataDir, config.GenesisJSONFile)
 	}
 
 	// Load genesis
-	genesisText, err := ioutil.ReadFile(genesisPath)
+	genesisText, err := ioutil.ReadFile(*genesisFile)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Cannot read genesis file %s: %v\n", genesisPath, err)
-		return 1
+		fmt.Fprintf(os.Stderr, "Cannot read genesis file %s: %v\n", *genesisFile, err)
+		os.Exit(1)
 	}
 
 	var genesis bookkeeping.Genesis
 	err = protocol.DecodeJSON(genesisText, &genesis)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Cannot parse genesis file %s: %v\n", genesisPath, err)
-		return 1
+		fmt.Fprintf(os.Stderr, "Cannot parse genesis file %s: %v\n", *genesisFile, err)
+		os.Exit(1)
 	}
 
 	if *genesisPrint {
 		fmt.Println(genesis.ID())
-		return 0
+		return
 	}
 
 	// If data directory doesn't exist, we can't run. Don't bother trying.
 	if _, err := os.Stat(absolutePath); err != nil {
 		fmt.Fprintf(os.Stderr, "Data directory %s does not appear to be valid\n", dataDir)
-		return 1
+		os.Exit(1)
 	}
 
 	log := logging.Base()
@@ -151,11 +146,11 @@ func run() int {
 	locked, err := fileLock.TryLock()
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "unexpected failure in establishing algod.lock: %s \n", err.Error())
-		return 1
+		os.Exit(1)
 	}
 	if !locked {
 		fmt.Fprintln(os.Stderr, "failed to lock algod.lock; is an instance of algod already running in this data directory?")
-		return 1
+		os.Exit(1)
 	}
 	defer fileLock.Unlock()
 
@@ -182,7 +177,7 @@ func run() int {
 		}
 		if os.IsPermission(err) {
 			fmt.Fprintf(os.Stderr, "Permission error on accessing telemetry config: %v", err)
-			return 1
+			os.Exit(1)
 		}
 		fmt.Fprintf(os.Stdout, "Telemetry configured from '%s'\n", telemetryConfig.FilePath)
 
@@ -261,7 +256,8 @@ func run() int {
 			url, err := network.ParseHostOrURL(peer)
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "Provided command line parameter '%s' is not a valid host:port pair\n", peer)
-				return 1
+				os.Exit(1)
+				return
 			}
 			peerOverrideArray[idx] = url.Host
 		}
@@ -293,19 +289,16 @@ func run() int {
 		}
 	}
 
-	if logToStdout != nil && *logToStdout {
-		cfg.LogSizeLimit = 0
-	}
-
 	err = s.Initialize(cfg, phonebookAddresses, string(genesisText))
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		log.Error(err)
-		return 1
+		os.Exit(1)
+		return
 	}
 
 	if *initAndExit {
-		return 0
+		return
 	}
 
 	deadlockState := "enabled"
@@ -344,11 +337,12 @@ func run() int {
 			defer ticker.Stop()
 
 			sendHeartbeat := func() {
-				values := make(map[string]float64)
+				values := make(map[string]string)
 				metrics.DefaultRegistry().AddMetrics(values)
 
-				heartbeatDetails := baseHeartbeatEvent
-				heartbeatDetails.Metrics = values
+				heartbeatDetails := telemetryspec.HeartbeatEventDetails{
+					Metrics: values,
+				}
 
 				log.EventWithDetails(telemetryspec.ApplicationState, telemetryspec.HeartbeatEvent, heartbeatDetails)
 			}
@@ -367,7 +361,6 @@ func run() int {
 	}
 
 	s.Start()
-	return 0
 }
 
 func resolveDataDir() string {

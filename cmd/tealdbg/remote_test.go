@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2021 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -28,11 +28,9 @@ import (
 
 	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/protocol"
-	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
 func TestRemoteAdapterHandlers(t *testing.T) {
-	partitiontest.PartitionTest(t)
 	d := MakeDebugger()
 	a := MakeRemoteHook(d)
 	router := mux.NewRouter()

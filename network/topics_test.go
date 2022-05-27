@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2021 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -21,13 +21,11 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/stretchr/testify/require"
 )
 
 // Test the marshall/unmarshall of Topics
 func TestTopics(t *testing.T) {
-	partitiontest.PartitionTest(t)
 
 	topics := Topics{
 		Topic{
@@ -71,7 +69,6 @@ func TestTopics(t *testing.T) {
 // TestCurruptedTopics checks the errors
 // Makes sure UnmarshallTopics will not attempt to read beyond the buffer limits
 func TestCurruptedTopics(t *testing.T) {
-	partitiontest.PartitionTest(t)
 
 	var buffer []byte
 

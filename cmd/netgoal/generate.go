@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2021 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -50,7 +50,6 @@ var roundTxnCount uint64
 var accountsCount uint64
 var assetsCount uint64
 var applicationCount uint64
-var balRange []string
 
 func init() {
 	rootCmd.AddCommand(generateCmd)
@@ -74,7 +73,6 @@ func init() {
 	generateCmd.Flags().Uint64VarP(&accountsCount, "naccounts", "", 31, "Account count")
 	generateCmd.Flags().Uint64VarP(&assetsCount, "nassets", "", 5, "Asset count")
 	generateCmd.Flags().Uint64VarP(&applicationCount, "napps", "", 7, "Application Count")
-	generateCmd.Flags().StringArrayVar(&balRange, "bal", []string{}, "Application Count")
 
 	longParts := make([]string, len(generateTemplateLines)+1)
 	longParts[0] = generateCmd.Long
@@ -176,10 +174,8 @@ template modes for -t:`,
 			if sourceWallet == "" {
 				reportErrorf("must specify source wallet name with -wname.")
 			}
-			if len(balRange) < 2 {
-				reportErrorf("must specify account balance range with --bal.")
-			}
-			err = generateAccountsLoadingFileTemplate(outputFilename, sourceWallet, rounds, roundTxnCount, accountsCount, assetsCount, applicationCount, balRange)
+
+			err = generateAccountsLoadingFileTemplate(outputFilename, sourceWallet, rounds, roundTxnCount, accountsCount, assetsCount, applicationCount)
 		default:
 			reportInfoln("Please specify a valid template name.\nSupported templates are:")
 			for _, line := range generateTemplateLines {
@@ -285,7 +281,7 @@ func generateNetworkGoalTemplate(templateFilename string, wallets, relays, nodes
 	}
 
 	if npnHosts > 0 {
-		for walletIndex < npnHosts {
+		for walletIndex < wallets {
 			for nodei, node := range template.Nodes {
 				if node.Name[0:4] != "nonP" {
 					continue
@@ -296,11 +292,11 @@ func generateNetworkGoalTemplate(templateFilename string, wallets, relays, nodes
 				}
 				template.Nodes[nodei].Wallets = append(template.Nodes[nodei].Wallets, wallet)
 				walletIndex++
-				if walletIndex >= npnHosts {
+				if walletIndex >= wallets {
 					break
 				}
 			}
-			if walletIndex >= npnHosts {
+			if walletIndex >= wallets {
 				break
 			}
 		}
@@ -399,10 +395,9 @@ func generateNetworkTemplate(templateFilename string, wallets, relays, nodeHosts
 		}
 	}
 
-	// one wallet per NPN host to concentrate stake
 	if npnHosts > 0 {
 		walletIndex := 0
-		for walletIndex < npnHosts {
+		for walletIndex < wallets {
 			for hosti := range network.Hosts {
 				for nodei, node := range network.Hosts[hosti].Nodes {
 					if node.Name[0:4] != "nonP" {
@@ -414,27 +409,12 @@ func generateNetworkTemplate(templateFilename string, wallets, relays, nodeHosts
 					}
 					network.Hosts[hosti].Nodes[nodei].Wallets = append(network.Hosts[hosti].Nodes[nodei].Wallets, wallet)
 					walletIndex++
-					if walletIndex >= npnHosts {
+					if walletIndex >= wallets {
 						break
 					}
 				}
-				if walletIndex >= npnHosts {
+				if walletIndex >= wallets {
 					break
-				}
-			}
-		}
-	}
-
-	// ensure that at most one node per host claims any APIEndpoint port
-	for hosti, host := range network.Hosts {
-		seenAPIEndpoint := make(map[string]bool, 4)
-		for nodei, node := range host.Nodes {
-			if node.APIEndpoint != "" {
-				if seenAPIEndpoint[node.APIEndpoint] {
-					// squash dup
-					network.Hosts[hosti].Nodes[nodei].APIEndpoint = ""
-				} else {
-					seenAPIEndpoint[node.APIEndpoint] = true
 				}
 			}
 		}
@@ -466,29 +446,19 @@ func saveGoalTemplateToDisk(template netdeploy.NetworkTemplate, filename string)
 }
 
 func generateWalletGenesisData(wallets, npnHosts int) gen.GenesisData {
+	data := gen.DefaultGenesis
+	if npnHosts > 0 {
+		wallets = 2 * wallets
+	}
+	data.Wallets = make([]gen.WalletData, wallets)
+	stake := big.NewRat(int64(100), int64(wallets))
+
 	ratZero := big.NewRat(int64(0), int64(1))
 	ratHundred := big.NewRat(int64(100), int64(1))
-	data := gen.DefaultGenesis
-	totalWallets := wallets + npnHosts
-	data.Wallets = make([]gen.WalletData, totalWallets)
-	participatingNodeStake := big.NewRat(int64(100), int64(wallets))
-	nonParticipatingNodeStake := ratZero
-	if npnHosts > 0 {
-		// split participating an non participating stake evenly
-		participatingNodeStake = big.NewRat(int64(50), int64(wallets))
-		nonParticipatingNodeStake = big.NewRat(int64(50), int64(npnHosts))
-	}
 
-	stake := ratZero
 	stakeSum := new(big.Rat).Set(ratZero)
-	for i := 0; i < totalWallets; i++ {
-
-		if i < wallets {
-			stake = participatingNodeStake
-		} else {
-			stake = nonParticipatingNodeStake
-		}
-		if i == (totalWallets - 1) {
+	for i := 0; i < wallets; i++ {
+		if i == (wallets - 1) {
 			// use the last wallet to workaround roundoff and get back to 1.0
 			stake = stake.Sub(new(big.Rat).Set(ratHundred), stakeSum)
 		}
@@ -497,7 +467,7 @@ func generateWalletGenesisData(wallets, npnHosts int) gen.GenesisData {
 			Name:  "Wallet" + strconv.Itoa(i+1), // Wallet names are 1-based for this template
 			Stake: floatStake,
 		}
-		if i < wallets {
+		if (i < (wallets / 2)) || (npnHosts == 0) {
 			w.Online = true
 		}
 		stakeSum = stakeSum.Add(stakeSum, stake)
@@ -522,16 +492,7 @@ func saveGenesisDataToDisk(genesisData gen.GenesisData, filename string) error {
 	return err
 }
 
-func generateAccountsLoadingFileTemplate(templateFilename, sourceWallet string, rounds, roundTxnCount, accountsCount, assetsCount, applicationCount uint64, balRange []string) error {
-
-	min, err := strconv.ParseInt(balRange[0], 0, 64)
-	if err != nil {
-		return err
-	}
-	max, err := strconv.ParseInt(balRange[1], 0, 64)
-	if err != nil {
-		return err
-	}
+func generateAccountsLoadingFileTemplate(templateFilename, sourceWallet string, rounds, roundTxnCount, accountsCount, assetsCount, applicationCount uint64) error {
 
 	var data = remote.BootstrappedNetwork{
 		NumRounds:                 rounds,
@@ -540,7 +501,6 @@ func generateAccountsLoadingFileTemplate(templateFilename, sourceWallet string, 
 		GeneratedAssetsCount:      assetsCount,
 		GeneratedApplicationCount: applicationCount,
 		SourceWalletName:          sourceWallet,
-		BalanceRange:              []int64{min, max},
 	}
 	return saveLoadingFileDataToDisk(data, templateFilename)
 }

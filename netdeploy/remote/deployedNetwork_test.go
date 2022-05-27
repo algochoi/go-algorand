@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2021 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -24,12 +24,9 @@ import (
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/protocol"
-	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
 func TestCreateSignedTx(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	var networkState netState
 	networkState.nApplications = 2
 	networkState.nAssets = 2
@@ -115,8 +112,6 @@ func TestCreateSignedTx(t *testing.T) {
 }
 
 func TestAccountsNeeded(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	params := config.Consensus[protocol.ConsensusCurrentVersion]
 	params.MaxAppsCreated = 10
 	params.MaxAssetsPerAccount = 20

@@ -2,10 +2,14 @@
 
 PKG_DIR = $(SRCPATH)/tmp/node_pkgs/$(OS_TYPE)/$(ARCH)
 
-.PHONY: ci-clean ci-setup ci-build
+.PHONY: ci-clean ci-deps ci-setup ci-build
 
-ci-clean: clean
+ci-clean:
 	rm -rf tmp
+
+ci-deps:
+	scripts/configure_dev-deps.sh && \
+	scripts/check_deps.sh
 
 ci-setup:
 	mkdir -p $(PKG_DIR)
@@ -28,7 +32,7 @@ ci-integration:
 	SRCROOT=$(SRCPATH) \
 	test/scripts/e2e.sh -c $(CHANNEL) -n
 
-ci-build: ci-clean buildsrc ci-setup
+ci-build: buildsrc gen ci-setup
 	CHANNEL=$(CHANNEL) PKG_ROOT=$(PKG_DIR) NO_BUILD=True VARIATIONS=$(OS_TYPE)-$(ARCH) \
 	scripts/build_packages.sh $(OS_TYPE)/$(ARCH) && \
 	mkdir -p $(PKG_DIR)/data && \
@@ -47,9 +51,9 @@ mule-docker:
 
 mule-package-%: PKG_TYPE=$*
 mule-package-%:
-	echo Building algorand package $(PKG_TYPE)...
+	echo Building algorand package...
 	scripts/release/mule/package/$(PKG_TYPE)/package.sh algorand
-	echo Building algorand-devtools package $(PKG_TYPE)...
+	echo Building algorand-devtools package...
 	scripts/release/mule/package/$(PKG_TYPE)/package.sh algorand-devtools
 
 mule-releases-page:

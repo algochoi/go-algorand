@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2021 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -163,6 +163,8 @@ func (ls *LedgerService) ServeHTTP(response http.ResponseWriter, request *http.R
 				response.Write([]byte(fmt.Sprintf("invalid number of version specified %d", len(versionStrs))))
 				return
 			}
+		} else {
+			versionStr = "1"
 		}
 	}
 	round, err := strconv.ParseUint(roundStr, 36, 64)

@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2021 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -24,13 +24,9 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/test/framework/fixtures"
-	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
 func TestClerkSendNoteEncoding(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
-	defer fixtures.ShutdownSynchronizedTest(t)
 	defer fixture.SetTestContext(t)()
 	a := require.New(fixtures.SynchronizedTest(t))
 
@@ -48,14 +44,14 @@ func TestClerkSendNoteEncoding(t *testing.T) {
 	account := accounts[0].Address
 
 	const noteText = "Sample Text-based Note"
-	txID, err := fixture.ClerkSend(account, account, 100, 1000, noteText)
+	txID, err := fixture.ClerkSend(account, account, 100, 1, noteText)
 	a.NoError(err)
 	a.NotEmpty(txID)
 
 	// Send 2nd txn using the note encoded as base-64 (using --noteb64)
 	originalNoteb64Text := "Noteb64-encoded text With Binary \u0001x1x0x3"
 	noteb64 := base64.StdEncoding.EncodeToString([]byte(originalNoteb64Text))
-	txID2, err := fixture.ClerkSendNoteb64(account, account, 100, 1000, noteb64)
+	txID2, err := fixture.ClerkSendNoteb64(account, account, 100, 1, noteb64)
 	a.NoError(err)
 	a.NotEmpty(txID2)
 

@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2021 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -26,7 +26,6 @@ import (
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/protocol"
-	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
 // Current implementation uses LegderForCowBase interface to plug into evaluator.
@@ -35,7 +34,6 @@ import (
 // This test ensures TEAL program sees data provided by LegderForCowBase, and sees all
 // intermediate changes.
 func TestBalanceAdapterStateChanges(t *testing.T) {
-	partitiontest.PartitionTest(t)
 	a := require.New(t)
 
 	source := `#pragma version 2
@@ -90,7 +88,6 @@ int 2
 	// make transaction group: app call + sample payment
 	txn := transactions.SignedTxn{
 		Txn: transactions.Transaction{
-			Type: protocol.ApplicationCallTx,
 			Header: transactions.Header{
 				Sender: addr,
 				Fee:    basics.MicroAlgos{Raw: 100},
@@ -110,15 +107,20 @@ int 2
 	a.NoError(err)
 
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
-	ep := logic.NewEvalParams([]transactions.SignedTxnWithAD{{SignedTxn: txn}}, &proto, &transactions.SpecialAddresses{})
-	pass, delta, err := ba.StatefulEval(0, ep, appIdx, program)
+	ep := logic.EvalParams{
+		Txn:        &txn,
+		Proto:      &proto,
+		TxnGroup:   []transactions.SignedTxn{txn},
+		GroupIndex: 0,
+	}
+	pass, delta, err := ba.StatefulEval(ep, appIdx, program)
 	a.NoError(err)
 	a.True(pass)
-	a.Len(delta.GlobalDelta, 1)
+	a.Equal(1, len(delta.GlobalDelta))
 	a.Equal(basics.SetUintAction, delta.GlobalDelta["gkeyint"].Action)
 	a.Equal(uint64(3), delta.GlobalDelta["gkeyint"].Uint)
-	a.Len(delta.LocalDeltas, 1)
-	a.Len(delta.LocalDeltas[0], 1)
+	a.Equal(1, len(delta.LocalDeltas))
+	a.Equal(1, len(delta.LocalDeltas[0]))
 	a.Equal(basics.SetUintAction, delta.LocalDeltas[0]["lkeyint"].Action)
 	a.Equal(uint64(2), delta.LocalDeltas[0]["lkeyint"].Uint)
 }

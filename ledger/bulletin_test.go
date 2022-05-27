@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2021 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -17,7 +17,6 @@
 package ledger
 
 import (
-	"github.com/algorand/go-algorand/test/partitiontest"
 	"testing"
 	"time"
 )
@@ -25,8 +24,6 @@ import (
 const epsilon = 5 * time.Millisecond
 
 func TestBulletin(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	bul := makeBulletin()
 
 	bul.committedUpTo(1)

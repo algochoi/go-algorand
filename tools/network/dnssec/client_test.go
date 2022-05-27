@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2021 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -21,14 +21,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/miekg/dns"
 	"github.com/stretchr/testify/require"
 )
 
 func TestEmptyClient(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	a := require.New(t)
 
 	c := MakeDNSClient(nil, time.Second)
@@ -59,8 +56,6 @@ func (t ttr) queryServer(ctx context.Context, server ResolverAddress, msg *dns.M
 }
 
 func TestMockedClient(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	a := require.New(t)
 
 	qs := ttr{}

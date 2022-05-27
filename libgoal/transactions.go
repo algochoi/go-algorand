@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2021 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -229,7 +229,7 @@ func (c *Client) MakeUnsignedGoOnlineTx(address string, part *account.Participat
 	parsedLastValid := basics.Round(lastValid)
 	parsedFee := basics.MicroAlgos{Raw: fee}
 
-	goOnlineTransaction := part.GenerateRegistrationTransaction(parsedFee, parsedFrstValid, parsedLastValid, leaseBytes, cparams.EnableStateProofKeyregCheck)
+	goOnlineTransaction := part.GenerateRegistrationTransaction(parsedFee, parsedFrstValid, parsedLastValid, leaseBytes)
 	if cparams.SupportGenesisHash {
 		var genHash crypto.Digest
 		copy(genHash[:], params.GenesisHash)
@@ -410,50 +410,50 @@ func (c *Client) FillUnsignedTxTemplate(sender string, firstValid, lastValid, fe
 }
 
 // MakeUnsignedAppCreateTx makes a transaction for creating an application
-func (c *Client) MakeUnsignedAppCreateTx(onComplete transactions.OnCompletion, approvalProg []byte, clearProg []byte, globalSchema basics.StateSchema, localSchema basics.StateSchema, appArgs [][]byte, accounts []string, foreignApps []uint64, foreignAssets []uint64, extrapages uint32) (tx transactions.Transaction, err error) {
-	return c.MakeUnsignedApplicationCallTx(0, appArgs, accounts, foreignApps, foreignAssets, onComplete, approvalProg, clearProg, globalSchema, localSchema, extrapages)
+func (c *Client) MakeUnsignedAppCreateTx(onComplete transactions.OnCompletion, approvalProg []byte, clearProg []byte, globalSchema basics.StateSchema, localSchema basics.StateSchema, appArgs [][]byte, accounts []string, foreignApps []uint64, foreignAssets []uint64) (tx transactions.Transaction, err error) {
+	return c.MakeUnsignedApplicationCallTx(0, appArgs, accounts, foreignApps, foreignAssets, onComplete, approvalProg, clearProg, globalSchema, localSchema)
 }
 
 // MakeUnsignedAppUpdateTx makes a transaction for updating an application's programs
 func (c *Client) MakeUnsignedAppUpdateTx(appIdx uint64, appArgs [][]byte, accounts []string, foreignApps []uint64, foreignAssets []uint64, approvalProg []byte, clearProg []byte) (tx transactions.Transaction, err error) {
-	return c.MakeUnsignedApplicationCallTx(appIdx, appArgs, accounts, foreignApps, foreignAssets, transactions.UpdateApplicationOC, approvalProg, clearProg, emptySchema, emptySchema, 0)
+	return c.MakeUnsignedApplicationCallTx(appIdx, appArgs, accounts, foreignApps, foreignAssets, transactions.UpdateApplicationOC, approvalProg, clearProg, emptySchema, emptySchema)
 }
 
 // MakeUnsignedAppDeleteTx makes a transaction for deleting an application
 func (c *Client) MakeUnsignedAppDeleteTx(appIdx uint64, appArgs [][]byte, accounts []string, foreignApps []uint64, foreignAssets []uint64) (tx transactions.Transaction, err error) {
-	return c.MakeUnsignedApplicationCallTx(appIdx, appArgs, accounts, foreignApps, foreignAssets, transactions.DeleteApplicationOC, nil, nil, emptySchema, emptySchema, 0)
+	return c.MakeUnsignedApplicationCallTx(appIdx, appArgs, accounts, foreignApps, foreignAssets, transactions.DeleteApplicationOC, nil, nil, emptySchema, emptySchema)
 }
 
 // MakeUnsignedAppOptInTx makes a transaction for opting in to (allocating
 // some account-specific state for) an application
 func (c *Client) MakeUnsignedAppOptInTx(appIdx uint64, appArgs [][]byte, accounts []string, foreignApps []uint64, foreignAssets []uint64) (tx transactions.Transaction, err error) {
-	return c.MakeUnsignedApplicationCallTx(appIdx, appArgs, accounts, foreignApps, foreignAssets, transactions.OptInOC, nil, nil, emptySchema, emptySchema, 0)
+	return c.MakeUnsignedApplicationCallTx(appIdx, appArgs, accounts, foreignApps, foreignAssets, transactions.OptInOC, nil, nil, emptySchema, emptySchema)
 }
 
 // MakeUnsignedAppCloseOutTx makes a transaction for closing out of
 // (deallocating all account-specific state for) an application
 func (c *Client) MakeUnsignedAppCloseOutTx(appIdx uint64, appArgs [][]byte, accounts []string, foreignApps []uint64, foreignAssets []uint64) (tx transactions.Transaction, err error) {
-	return c.MakeUnsignedApplicationCallTx(appIdx, appArgs, accounts, foreignApps, foreignAssets, transactions.CloseOutOC, nil, nil, emptySchema, emptySchema, 0)
+	return c.MakeUnsignedApplicationCallTx(appIdx, appArgs, accounts, foreignApps, foreignAssets, transactions.CloseOutOC, nil, nil, emptySchema, emptySchema)
 }
 
 // MakeUnsignedAppClearStateTx makes a transaction for clearing out all
 // account-specific state for an application. It may not be rejected by the
 // application's logic.
 func (c *Client) MakeUnsignedAppClearStateTx(appIdx uint64, appArgs [][]byte, accounts []string, foreignApps []uint64, foreignAssets []uint64) (tx transactions.Transaction, err error) {
-	return c.MakeUnsignedApplicationCallTx(appIdx, appArgs, accounts, foreignApps, foreignAssets, transactions.ClearStateOC, nil, nil, emptySchema, emptySchema, 0)
+	return c.MakeUnsignedApplicationCallTx(appIdx, appArgs, accounts, foreignApps, foreignAssets, transactions.ClearStateOC, nil, nil, emptySchema, emptySchema)
 }
 
 // MakeUnsignedAppNoOpTx makes a transaction for interacting with an existing
 // application, potentially updating any account-specific local state and
 // global state associated with it.
 func (c *Client) MakeUnsignedAppNoOpTx(appIdx uint64, appArgs [][]byte, accounts []string, foreignApps []uint64, foreignAssets []uint64) (tx transactions.Transaction, err error) {
-	return c.MakeUnsignedApplicationCallTx(appIdx, appArgs, accounts, foreignApps, foreignAssets, transactions.NoOpOC, nil, nil, emptySchema, emptySchema, 0)
+	return c.MakeUnsignedApplicationCallTx(appIdx, appArgs, accounts, foreignApps, foreignAssets, transactions.NoOpOC, nil, nil, emptySchema, emptySchema)
 }
 
 // MakeUnsignedApplicationCallTx is a helper for the above ApplicationCall
 // transaction constructors. A fully custom ApplicationCall transaction may
 // be constructed using this method.
-func (c *Client) MakeUnsignedApplicationCallTx(appIdx uint64, appArgs [][]byte, accounts []string, foreignApps []uint64, foreignAssets []uint64, onCompletion transactions.OnCompletion, approvalProg []byte, clearProg []byte, globalSchema basics.StateSchema, localSchema basics.StateSchema, extrapages uint32) (tx transactions.Transaction, err error) {
+func (c *Client) MakeUnsignedApplicationCallTx(appIdx uint64, appArgs [][]byte, accounts []string, foreignApps []uint64, foreignAssets []uint64, onCompletion transactions.OnCompletion, approvalProg []byte, clearProg []byte, globalSchema basics.StateSchema, localSchema basics.StateSchema) (tx transactions.Transaction, err error) {
 	tx.Type = protocol.ApplicationCallTx
 	tx.ApplicationID = basics.AppIndex(appIdx)
 	tx.OnCompletion = onCompletion
@@ -470,7 +470,6 @@ func (c *Client) MakeUnsignedApplicationCallTx(appIdx uint64, appArgs [][]byte, 
 	tx.ClearStateProgram = clearProg
 	tx.LocalStateSchema = localSchema
 	tx.GlobalStateSchema = globalSchema
-	tx.ExtraProgramPages = extrapages
 
 	return tx, nil
 }
@@ -752,7 +751,7 @@ func (c *Client) GroupID(txgroup []transactions.Transaction) (gid crypto.Digest,
 			return
 		}
 
-		group.TxGroupHashes = append(group.TxGroupHashes, crypto.Digest(tx.ID()))
+		group.TxGroupHashes = append(group.TxGroupHashes, crypto.HashObj(tx))
 	}
 
 	return crypto.HashObj(group), nil

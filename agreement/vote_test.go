@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2021 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -28,7 +28,6 @@ import (
 	"github.com/algorand/go-algorand/data/committee"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
-	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
 // error is set if this address is not selected
@@ -44,8 +43,6 @@ func makeVoteTesting(addr basics.Address, vrfSecs *crypto.VRFSecrets, otSecs cry
 }
 
 func TestVoteValidation(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	numAddresses := 50
 	ledger, addresses, vrfSecrets, otSecrets := readOnlyFixture100()
 	round := ledger.NextRound()
@@ -118,8 +115,6 @@ func TestVoteValidation(t *testing.T) {
 }
 
 func TestVoteReproposalValidation(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	numAddresses := 50
 	ledger, addresses, vrfSecrets, otSecrets := readOnlyFixture100()
 	round := ledger.NextRound()
@@ -178,8 +173,6 @@ func TestVoteReproposalValidation(t *testing.T) {
 }
 
 func TestVoteMakeVote(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	ledger, addresses, vrfSecrets, otSecrets := readOnlyFixture100()
 
 	round := ledger.NextRound()
@@ -219,7 +212,6 @@ func makeVotePanicWrapper(t *testing.T, message string, rv rawVote, voting crypt
 }
 
 func TestVoteValidationStepCertAndProposalBottom(t *testing.T) {
-	partitiontest.PartitionTest(t)
 
 	ledger, addresses, vrfSecrets, otSecrets := readOnlyFixture100()
 	round := ledger.NextRound()
@@ -250,8 +242,6 @@ func TestVoteValidationStepCertAndProposalBottom(t *testing.T) {
 
 // Test Equivocation Vote Validation
 func TestEquivocationVoteValidation(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	numAddresses := 50
 	ledger, addresses, vrfSecrets, otSecrets := readOnlyFixture100()
 	round := ledger.NextRound()

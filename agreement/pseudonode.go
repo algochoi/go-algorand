@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2021 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -18,34 +18,28 @@ package agreement
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"sync"
 	"time"
 
+	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/data/account"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/logging/logspec"
 	"github.com/algorand/go-algorand/logging/telemetryspec"
 	"github.com/algorand/go-algorand/protocol"
-	"github.com/algorand/go-algorand/util/metrics"
 )
 
 // TODO put these in config
 const (
-	pseudonodeVerificationBacklog       = 32
-	maxPseudonodeOutputWaitDuration     = 2 * time.Second
-	votingKeysLoggingDurationThreashold = 200 * time.Millisecond
+	pseudonodeVerificationBacklog = 32
 )
 
 var errPseudonodeBacklogFull = fmt.Errorf("pseudonode input channel is full")
-var errPseudonodeVerifierClosedChannel = errors.New("crypto verifier closed the output channel prematurely")
-var errPseudonodeNoVotes = errors.New("no valid participation keys to generate votes for given round")
-var errPseudonodeNoProposals = errors.New("no valid participation keys to generate proposals for given round")
-
-var pseudonodeBacklogFullByType = metrics.NewTagCounter("algod_agreement_pseudonode_tasks_dropped_{TAG}", "Number of pseudonode tasks dropped per type")
-var pseudonodeResultTimeoutsByType = metrics.NewTagCounter("algod_agreement_pseudonode_tasks_timeouts_{TAG}", "Number of pseudonode task result timeouts per type")
+var errPseudonodeVerifierClosedChannel = fmt.Errorf("crypto verifier closed the output channel prematurely")
+var errPseudonodeNoVotes = fmt.Errorf("no valid participation keys to generate votes for given round")
+var errPseudonodeNoProposals = fmt.Errorf("no valid participation keys to generate proposals for given round")
 
 // A pseudonode creates proposals and votes with a KeyManager which holds participation keys.
 //
@@ -81,8 +75,8 @@ type asyncPseudonode struct {
 	quit                   chan struct{}   // a quit signal for the verifier goroutines
 	closeWg                *sync.WaitGroup // frontend waitgroup to get notified when all the verifier goroutines are done.
 	monitor                *coserviceMonitor
-	participationKeysRound basics.Round                          // the round to which the participationKeys matches
-	participationKeys      []account.ParticipationRecordForRound // the list of the participation keys for round participationKeysRound
+	participationKeysRound basics.Round            // the round to which the participationKeys matches
+	participationKeys      []account.Participation // the list of the participation keys for round participationKeysRound
 
 	proposalsVerifier *pseudonodeVerifier // dynamically generated verifier goroutine that manages incoming proposals making request.
 	votesVerifier     *pseudonodeVerifier // dynamically generated verifier goroutine that manages incoming votes making request.
@@ -98,7 +92,7 @@ type pseudonodeBaseTask struct {
 	node          *asyncPseudonode
 	context       context.Context // the context associated with that task; context might expire for a single task but remain valid for others.
 	out           chan externalEvent
-	participation []account.ParticipationRecordForRound
+	participation []account.Participation
 }
 
 type pseudonodeVotesTask struct {
@@ -180,8 +174,7 @@ func (n asyncPseudonode) MakeProposals(ctx context.Context, r round, p period) (
 		return proposalTask.outputChannel(), nil
 	default:
 		proposalTask.close()
-		pseudonodeBacklogFullByType.Add("proposal", 1)
-		return nil, fmt.Errorf("unable to make proposal for (%d, %d): %w", r, p, errPseudonodeBacklogFull)
+		return nil, errPseudonodeBacklogFull
 	}
 }
 
@@ -198,14 +191,13 @@ func (n asyncPseudonode) MakeVotes(ctx context.Context, r round, p period, s ste
 		return proposalTask.outputChannel(), nil
 	default:
 		proposalTask.close()
-		pseudonodeBacklogFullByType.Add("vote", 1)
-		return nil, fmt.Errorf("unable to make vote for (%d, %d, %d): %w", r, p, s, errPseudonodeBacklogFull)
+		return nil, errPseudonodeBacklogFull
 	}
 }
 
 // load the participation keys from the account manager ( as needed ) for the
 // current round.
-func (n *asyncPseudonode) loadRoundParticipationKeys(voteRound basics.Round) []account.ParticipationRecordForRound {
+func (n *asyncPseudonode) loadRoundParticipationKeys(voteRound basics.Round) []account.Participation {
 	// if we've already loaded up the keys, then just skip loading them.
 	if n.participationKeysRound == voteRound {
 		return n.participationKeys
@@ -222,18 +214,9 @@ func (n *asyncPseudonode) loadRoundParticipationKeys(voteRound basics.Round) []a
 	}
 	balanceRound := balanceRound(voteRound, cparams)
 
-	// measure the time it takes to acquire the voting keys.
-	beforeVotingKeysTime := time.Now()
-
 	// otherwise, we want to load the participation keys.
 	n.participationKeys = n.keys.VotingKeys(voteRound, balanceRound)
 	n.participationKeysRound = voteRound
-
-	votingKeysDuration := time.Since(beforeVotingKeysTime)
-	if votingKeysDuration > votingKeysLoggingDurationThreashold {
-		n.log.Warnf("asyncPseudonode: acquiring the %d voting keys for round %d took %v", len(n.participationKeys), voteRound, votingKeysDuration)
-	}
-
 	return n.participationKeys
 }
 
@@ -283,8 +266,9 @@ func (n asyncPseudonode) makePseudonodeVerifier(voteVerifier *AsyncVoteVerifier)
 }
 
 // makeProposals creates a slice of block proposals for the given round and period.
-func (n asyncPseudonode) makeProposals(round basics.Round, period period, accounts []account.ParticipationRecordForRound) ([]proposal, []unauthenticatedVote) {
-	ve, err := n.factory.AssembleBlock(round)
+func (n asyncPseudonode) makeProposals(round basics.Round, period period, accounts []account.Participation) ([]proposal, []unauthenticatedVote) {
+	deadline := time.Now().Add(config.ProposalAssemblyTime)
+	ve, err := n.factory.AssembleBlock(round, deadline)
 	if err != nil {
 		if err != ErrAssembleBlockRoundStale {
 			n.log.Errorf("pseudonode.makeProposals: could not generate a proposal for round %d: %v", round, err)
@@ -294,16 +278,16 @@ func (n asyncPseudonode) makeProposals(round basics.Round, period period, accoun
 
 	votes := make([]unauthenticatedVote, 0, len(accounts))
 	proposals := make([]proposal, 0, len(accounts))
-	for _, acc := range accounts {
-		payload, proposal, err := proposalForBlock(acc.Account, acc.VRF, ve, period, n.ledger)
+	for _, account := range accounts {
+		payload, proposal, err := proposalForBlock(account.Address(), account.VRFSecrets(), ve, period, n.ledger)
 		if err != nil {
-			n.log.Errorf("pseudonode.makeProposals: could not create proposal for block (address %v): %v", acc.Account, err)
+			n.log.Errorf("pseudonode.makeProposals: could not create proposal for block (address %v): %v", account.Address(), err)
 			continue
 		}
 
 		// attempt to make the vote
-		rv := rawVote{Sender: acc.Account, Round: round, Period: period, Step: propose, Proposal: proposal}
-		uv, err := makeVote(rv, acc.VotingSigner(), acc.VRF, n.ledger)
+		rv := rawVote{Sender: account.Address(), Round: round, Period: period, Step: propose, Proposal: proposal}
+		uv, err := makeVote(rv, account.VotingSigner(), account.VRFSecrets(), n.ledger)
 		if err != nil {
 			n.log.Warnf("pseudonode.makeProposals: could not create vote: %v", err)
 			continue
@@ -319,11 +303,11 @@ func (n asyncPseudonode) makeProposals(round basics.Round, period period, accoun
 
 // makeVotes creates a slice of votes for a given proposal value in a given
 // round, period, and step.
-func (n asyncPseudonode) makeVotes(round basics.Round, period period, step step, proposal proposalValue, participation []account.ParticipationRecordForRound) []unauthenticatedVote {
+func (n asyncPseudonode) makeVotes(round basics.Round, period period, step step, proposal proposalValue, participation []account.Participation) []unauthenticatedVote {
 	votes := make([]unauthenticatedVote, 0)
-	for _, part := range participation {
-		rv := rawVote{Sender: part.Account, Round: round, Period: period, Step: step, Proposal: proposal}
-		uv, err := makeVote(rv, part.VotingSigner(), part.VRF, n.ledger)
+	for _, account := range participation {
+		rv := rawVote{Sender: account.Address(), Round: round, Period: period, Step: step, Proposal: proposal}
+		uv, err := makeVote(rv, account.VotingSigner(), account.VRFSecrets(), n.ledger)
 		if err != nil {
 			n.log.Warnf("pseudonode.makeVotes: could not create vote: %v", err)
 			continue
@@ -383,20 +367,13 @@ func (t pseudonodeVotesTask) execute(verifier *AsyncVoteVerifier, quit chan stru
 	unverifiedVotes := t.node.makeVotes(t.round, t.period, t.step, t.prop, t.participation)
 	t.node.log.Infof("pseudonode: made %v votes", len(unverifiedVotes))
 	results := make(chan asyncVerifyVoteResponse, len(unverifiedVotes))
-	orderedResults := make([]asyncVerifyVoteResponse, len(unverifiedVotes))
-	asyncVerifyingVotes := len(unverifiedVotes)
 	for i, uv := range unverifiedVotes {
 		msg := message{Tag: protocol.AgreementVoteTag, UnauthenticatedVote: uv}
-		err := verifier.verifyVote(context.TODO(), t.node.ledger, uv, i, msg, results)
-		if err != nil {
-			orderedResults[i].err = err
-			t.node.log.Infof("pseudonode.makeVotes: failed to enqueue vote verification for (%d, %d): %v", t.round, t.period, err)
-			asyncVerifyingVotes--
-			continue
-		}
+		verifier.verifyVote(context.TODO(), t.node.ledger, uv, i, msg, results)
 	}
 
-	for i := 0; i < asyncVerifyingVotes; i++ {
+	orderedResults := make([]asyncVerifyVoteResponse, len(unverifiedVotes))
+	for i := 0; i < len(unverifiedVotes); i++ {
 		resp := <-results
 		orderedResults[resp.index] = resp
 	}
@@ -463,27 +440,15 @@ func (t pseudonodeVotesTask) execute(verifier *AsyncVoteVerifier, quit chan stru
 	}
 	t.node.monitor.dec(pseudonodeCoserviceType)
 
-	outputTimeout := time.After(maxPseudonodeOutputWaitDuration)
-
 	// push results into channel.
-verifiedVotesLoop:
 	for _, r := range verifiedResults {
-		for {
-			select {
-			case t.out <- messageEvent{T: voteVerified, Input: r.message, Err: makeSerErr(r.err)}:
-				t.node.keys.Record(r.v.R.Sender, r.v.R.Round, account.Vote)
-				continue verifiedVotesLoop
-			case <-quit:
-				return
-			case <-t.context.Done():
-				// we done care about the output anymore; just exit.
-				return
-			case <-outputTimeout:
-				// we've been waiting for too long for this vote to be written to the output.
-				pseudonodeResultTimeoutsByType.Add("vote", 1)
-				t.node.log.Warnf("pseudonode.makeVotes: unable to write vote to output channel for round %d, period %d", t.round, t.period)
-				outputTimeout = nil
-			}
+		select {
+		case t.out <- messageEvent{T: voteVerified, Input: r.message, Err: makeSerErr(r.err)}:
+		case <-quit:
+			return
+		case <-t.context.Done():
+			// we done care about the output anymore; just exit.
+			return
 		}
 	}
 }
@@ -498,6 +463,7 @@ func (t pseudonodeProposalsTask) execute(verifier *AsyncVoteVerifier, quit chan 
 
 	payloads, votes := t.node.makeProposals(t.round, t.period, t.participation)
 	fields := logging.Fields{
+		"Context":      "Agreement",
 		"Type":         logspec.ProposalAssembled.String(),
 		"ObjectRound":  t.round,
 		"ObjectPeriod": t.period,
@@ -511,20 +477,13 @@ func (t pseudonodeProposalsTask) execute(verifier *AsyncVoteVerifier, quit chan 
 	// For now, don't log at all, and revisit when the metric becomes more important.
 
 	results := make(chan asyncVerifyVoteResponse, len(votes))
-	cryptoOutputs := make([]asyncVerifyVoteResponse, len(votes))
-	asyncVerifyingVotes := len(votes)
 	for i, uv := range votes {
 		msg := message{Tag: protocol.AgreementVoteTag, UnauthenticatedVote: uv}
-		err := verifier.verifyVote(context.TODO(), t.node.ledger, uv, i, msg, results)
-		if err != nil {
-			cryptoOutputs[i].err = err
-			t.node.log.Infof("pseudonode.makeProposals: failed to enqueue vote verification for (%d, %d): %v", t.round, t.period, err)
-			asyncVerifyingVotes--
-			continue
-		}
+		verifier.verifyVote(context.TODO(), t.node.ledger, uv, i, msg, results)
 	}
 
-	for i := 0; i < asyncVerifyingVotes; i++ {
+	cryptoOutputs := make([]asyncVerifyVoteResponse, len(votes))
+	for i := 0; i < len(votes); i++ {
 		resp := <-results
 		cryptoOutputs[resp.index] = resp
 	}
@@ -568,47 +527,27 @@ func (t pseudonodeProposalsTask) execute(verifier *AsyncVoteVerifier, quit chan 
 	}
 	t.node.monitor.dec(pseudonodeCoserviceType)
 
-	outputTimeout := time.After(maxPseudonodeOutputWaitDuration)
 	// push results into channel.
-verifiedVotesLoop:
 	for _, r := range verifiedVotes {
-		for {
-			select {
-			case t.out <- messageEvent{T: voteVerified, Input: r.message, Err: makeSerErr(r.err)}:
-				t.node.keys.Record(r.v.R.Sender, r.v.R.Round, account.BlockProposal)
-				continue verifiedVotesLoop
-			case <-quit:
-				return
-			case <-t.context.Done():
-				// we done care about the output anymore; just exit.
-				return
-			case <-outputTimeout:
-				// we've been waiting for too long for this vote to be written to the output.
-				pseudonodeResultTimeoutsByType.Add("pvote", 1)
-				t.node.log.Warnf("pseudonode.makeProposals: unable to write proposal vote to output channel for round %d, period %d", t.round, t.period)
-				outputTimeout = nil
-			}
+		select {
+		case t.out <- messageEvent{T: voteVerified, Input: r.message, Err: makeSerErr(r.err)}:
+		case <-quit:
+			return
+		case <-t.context.Done():
+			// we done care about the output anymore; just exit.
+			return
 		}
 	}
 
-verifiedPayloadsLoop:
 	for _, payload := range verifiedPayloads {
 		msg := message{Tag: protocol.ProposalPayloadTag, UnauthenticatedProposal: payload.u(), Proposal: payload}
-		for {
-			select {
-			case t.out <- messageEvent{T: payloadVerified, Input: msg}:
-				continue verifiedPayloadsLoop
-			case <-quit:
-				return
-			case <-t.context.Done():
-				// we done care about the output anymore; just exit.
-				return
-			case <-outputTimeout:
-				// we've been waiting for too long for this vote to be written to the output.
-				pseudonodeResultTimeoutsByType.Add("ppayload", 1)
-				t.node.log.Warnf("pseudonode.makeProposals: unable to write proposal payload to output channel for round %d, period %d", t.round, t.period)
-				outputTimeout = nil
-			}
+		select {
+		case t.out <- messageEvent{T: payloadVerified, Input: msg}:
+		case <-quit:
+			return
+		case <-t.context.Done():
+			// we done care about the output anymore; just exit.
+			return
 		}
 	}
 }

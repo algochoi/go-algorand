@@ -2,7 +2,6 @@
   "Genesis": {
     "NetworkName": "tbd",
     "ConsensusProtocol": "future",
-    "LastPartKeyRound": 3000,
     "Wallets": [
       {
         "Name": "Offline1",

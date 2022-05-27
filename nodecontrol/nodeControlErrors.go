@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2021 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -34,6 +34,6 @@ func (e *errAlgodExitedEarly) Error() string {
 	return fmt.Sprintf("node exited with an error code, check node.log for more details : %v", e.innerError)
 }
 
-func (e *errAlgodExitedEarly) Unwrap() error {
+func (e *errAlgodExitedEarly) Unwrap(err error) error {
 	return e.innerError
 }

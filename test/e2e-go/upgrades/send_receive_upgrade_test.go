@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2021 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -27,7 +27,6 @@ import (
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/framework/fixtures"
-	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
 func GenerateRandomBytes(n int) []byte {
@@ -44,37 +43,22 @@ func GenerateRandomBytes(n int) []byte {
 // this test checks that two accounts can send money to one another
 // across a protocol upgrade.
 func TestAccountsCanSendMoneyAcrossUpgradeV15toV16(t *testing.T) {
-	partitiontest.PartitionTest(t)
-	defer fixtures.ShutdownSynchronizedTest(t)
-
 	testAccountsCanSendMoneyAcrossUpgrade(t, filepath.Join("nettemplates", "TwoNodes50EachV15Upgrade.json"))
 }
 
 func TestAccountsCanSendMoneyAcrossUpgradeV21toV22(t *testing.T) {
-	partitiontest.PartitionTest(t)
-	defer fixtures.ShutdownSynchronizedTest(t)
-
 	testAccountsCanSendMoneyAcrossUpgrade(t, filepath.Join("nettemplates", "TwoNodes50EachV21Upgrade.json"))
 }
 
 func TestAccountsCanSendMoneyAcrossUpgradeV22toV23(t *testing.T) {
-	partitiontest.PartitionTest(t)
-	defer fixtures.ShutdownSynchronizedTest(t)
-
 	testAccountsCanSendMoneyAcrossUpgrade(t, filepath.Join("nettemplates", "TwoNodes50EachV22Upgrade.json"))
 }
 
 func TestAccountsCanSendMoneyAcrossUpgradeV23toV24(t *testing.T) {
-	partitiontest.PartitionTest(t)
-	defer fixtures.ShutdownSynchronizedTest(t)
-
 	testAccountsCanSendMoneyAcrossUpgrade(t, filepath.Join("nettemplates", "TwoNodes50EachV23Upgrade.json"))
 }
 
 func TestAccountsCanSendMoneyAcrossUpgradeV24toV25(t *testing.T) {
-	partitiontest.PartitionTest(t)
-	defer fixtures.ShutdownSynchronizedTest(t)
-
 	testAccountsCanSendMoneyAcrossUpgrade(t, filepath.Join("nettemplates", "TwoNodes50EachV24Upgrade.json"))
 }
 
@@ -122,26 +106,14 @@ func testAccountsCanSendMoneyAcrossUpgrade(t *testing.T, templatePath string) {
 	fixture.SetConsensus(consensus)
 	fixture.Setup(t, templatePath)
 	defer fixture.Shutdown()
-
-	verifyAccountsCanSendMoneyAcrossUpgrade(a, &fixture)
-}
-
-func verifyAccountsCanSendMoneyAcrossUpgrade(a *require.Assertions, fixture *fixtures.RestClientFixture) {
-	pingBalance, pongBalance, expectedPingBalance, expectedPongBalance := runUntilProtocolUpgrades(a, fixture)
-
-	a.True(expectedPingBalance <= pingBalance, "ping balance is different than expected")
-	a.True(expectedPongBalance <= pongBalance, "pong balance is different than expected")
-}
-
-func runUntilProtocolUpgrades(a *require.Assertions, fixture *fixtures.RestClientFixture) (uint64, uint64, uint64, uint64) {
 	c := fixture.LibGoalClient
+
 	initialStatus, err := c.Status()
 	a.NoError(err, "getting status")
 
 	pingClient := fixture.LibGoalClient
 	pingAccountList, err := fixture.GetWalletsSortedByBalance()
 	a.NoError(err, "fixture should be able to get wallets sorted by balance")
-	a.NotEmpty(pingAccountList)
 	pingAccount := pingAccountList[0].Address
 
 	pongClient := fixture.GetLibGoalClientForNamedNode("Node")
@@ -205,7 +177,7 @@ func runUntilProtocolUpgrades(a *require.Assertions, fixture *fixtures.RestClien
 			time.Sleep(500*time.Millisecond - iterationDuration)
 		}
 
-		if time.Now().After(startTime.Add(5 * time.Minute)) {
+		if time.Now().After(startTime.Add(3 * time.Minute)) {
 			a.Fail("upgrade taking too long")
 		}
 	}
@@ -268,5 +240,7 @@ func runUntilProtocolUpgrades(a *require.Assertions, fixture *fixtures.RestClien
 	a.NoError(err)
 	pongBalance, err = c.GetBalance(pongAccount)
 	a.NoError(err)
-	return pingBalance, pongBalance, expectedPingBalance, expectedPongBalance
+
+	a.True(expectedPingBalance <= pingBalance, "ping balance is different than expected")
+	a.True(expectedPongBalance <= pongBalance, "pong balance is different than expected")
 }

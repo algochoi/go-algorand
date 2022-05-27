@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2021 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -14,7 +14,6 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
 
-//go:build !windows
 // +build !windows
 
 package dnssec
@@ -24,13 +23,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/stretchr/testify/require"
 )
 
 func TestConfigEmpty(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	a := require.New(t)
 
 	s, tm, err := systemConfig(nil)
@@ -52,8 +48,6 @@ func TestConfigEmpty(t *testing.T) {
 }
 
 func TestConfig(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	a := require.New(t)
 
 	b := bytes.NewBuffer([]byte("nameserver 127.0.0.1\n"))

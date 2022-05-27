@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2021 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -25,12 +25,9 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/config"
-	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
 func TestSaveNetworkCfg(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	a := require.New(t)
 
 	cfg := NetworkCfg{
@@ -49,8 +46,6 @@ func TestSaveNetworkCfg(t *testing.T) {
 }
 
 func TestSaveConsensus(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	a := require.New(t)
 
 	tmpFolder, _ := ioutil.TempDir("", "tmp")

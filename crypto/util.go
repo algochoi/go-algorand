@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2021 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -34,8 +34,7 @@ type Hashable interface {
 	ToBeHashed() (protocol.HashID, []byte)
 }
 
-// HashRep appends the correct hashid before the message to be hashed.
-func HashRep(h Hashable) []byte {
+func hashRep(h Hashable) []byte {
 	hashid, data := h.ToBeHashed()
 	return append([]byte(hashid), data...)
 }
@@ -45,11 +44,6 @@ const DigestSize = sha512.Size256
 
 // Digest represents a 32-byte value holding the 256-bit Hash digest.
 type Digest [DigestSize]byte
-
-// ToSlice converts Digest to slice, is used by bookkeeping.PaysetCommit
-func (d Digest) ToSlice() []byte {
-	return d[:]
-}
 
 // String returns the digest in a human-readable Base32 string
 func (d Digest) String() string {
@@ -87,7 +81,7 @@ func Hash(data []byte) Digest {
 
 // HashObj computes a hash of a Hashable object and its type
 func HashObj(h Hashable) Digest {
-	return Hash(HashRep(h))
+	return Hash(hashRep(h))
 }
 
 // NewHash returns a sha512-256 object to do the same operation as Hash()

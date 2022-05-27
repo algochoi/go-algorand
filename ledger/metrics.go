@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2021 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -17,9 +17,6 @@
 package ledger
 
 import (
-	"context"
-	"database/sql"
-
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
@@ -32,7 +29,7 @@ type metricsTracker struct {
 	ledgerRound             *metrics.Gauge
 }
 
-func (mt *metricsTracker) loadFromDisk(l ledgerForTracker, _ basics.Round) error {
+func (mt *metricsTracker) loadFromDisk(l ledgerForTracker) error {
 	mt.ledgerTransactionsTotal = metrics.MakeCounter(metrics.LedgerTransactionsTotal)
 	mt.ledgerRewardClaimsTotal = metrics.MakeCounter(metrics.LedgerRewardClaimsTotal)
 	mt.ledgerRound = metrics.MakeGauge(metrics.LedgerRound)
@@ -40,18 +37,6 @@ func (mt *metricsTracker) loadFromDisk(l ledgerForTracker, _ basics.Round) error
 }
 
 func (mt *metricsTracker) close() {
-	if mt.ledgerTransactionsTotal != nil {
-		mt.ledgerTransactionsTotal.Deregister(nil)
-		mt.ledgerTransactionsTotal = nil
-	}
-	if mt.ledgerRewardClaimsTotal != nil {
-		mt.ledgerRewardClaimsTotal.Deregister(nil)
-		mt.ledgerRewardClaimsTotal = nil
-	}
-	if mt.ledgerRound != nil {
-		mt.ledgerRound.Deregister(nil)
-		mt.ledgerRound = nil
-	}
 }
 
 func (mt *metricsTracker) newBlock(blk bookkeeping.Block, delta ledgercore.StateDelta) {
@@ -62,27 +47,6 @@ func (mt *metricsTracker) newBlock(blk bookkeeping.Block, delta ledgercore.State
 	mt.ledgerRewardClaimsTotal.Add(float64(1), map[string]string{})
 }
 
-func (mt *metricsTracker) committedUpTo(committedRnd basics.Round) (retRound, lookback basics.Round) {
-	return committedRnd, basics.Round(0)
-}
-
-func (mt *metricsTracker) prepareCommit(dcc *deferredCommitContext) error {
-	return nil
-}
-
-func (mt *metricsTracker) commitRound(context.Context, *sql.Tx, *deferredCommitContext) error {
-	return nil
-}
-
-func (mt *metricsTracker) postCommit(ctx context.Context, dcc *deferredCommitContext) {
-}
-
-func (mt *metricsTracker) postCommitUnlocked(ctx context.Context, dcc *deferredCommitContext) {
-}
-
-func (mt *metricsTracker) handleUnorderedCommit(*deferredCommitContext) {
-}
-
-func (mt *metricsTracker) produceCommittingTask(committedRound basics.Round, dbRound basics.Round, dcr *deferredCommitRange) *deferredCommitRange {
-	return dcr
+func (mt *metricsTracker) committedUpTo(committedRnd basics.Round) basics.Round {
+	return committedRnd
 }

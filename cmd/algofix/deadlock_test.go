@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2021 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -25,7 +25,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/stretchr/testify/require"
 )
 
@@ -131,7 +130,6 @@ func main() {
 `
 
 func TestDeadlockRewrite(t *testing.T) {
-	partitiontest.PartitionTest(t)
 	t.Run("simple", func(t *testing.T) { testDeadlock(t, deadlockSimpleSrc, deadlockSimpleDest) })
 	t.Run("onoff", func(t *testing.T) { testDeadlock(t, deadlockTestSrc, deadlockTestFin) })
 }

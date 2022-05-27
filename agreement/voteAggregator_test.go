@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2021 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -27,7 +27,6 @@ import (
 	"github.com/algorand/go-algorand/data/committee"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
-	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
 var voteAggregatorTracer tracer
@@ -37,8 +36,6 @@ func init() {
 }
 
 func TestVoteAggregatorVotes(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	ledger, addresses, vrfSecrets, otSecrets := readOnlyFixture100()
 	round := ledger.NextRound()
 	period := period(0)
@@ -80,16 +77,12 @@ func TestVoteAggregatorVotes(t *testing.T) {
 				PlayerLastConcluding: 0,
 			}}
 
-			out := router.dispatch(&voteAggregatorTracer, player, e, playerMachine, voteMachine, round, period, step)
-			fev, ok := out.(filteredEvent)
-			assert.Falsef(t, ok, "voteAggregator should not return a filteredEvent: %v", fev.Err)
+			router.dispatch(&voteAggregatorTracer, player, e, playerMachine, voteMachine, round, period, step)
 		}
 	}
 }
 
 func TestVoteAggregatorBundles(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	ledger, addresses, vrfSecrets, otSecrets := readOnlyFixture100()
 	round := ledger.NextRound()
 	period := period(0)
@@ -140,7 +133,7 @@ func TestVoteAggregatorBundles(t *testing.T) {
 			Bundle:                bundle,
 			UnauthenticatedBundle: bundle.u(),
 		}
-		eM := messageEvent{T: bundleVerified, Input: msg, Proto: ConsensusVersionView{Version: protocol.ConsensusCurrentVersion}}
+		eM := messageEvent{T: voteVerified, Input: msg, Proto: ConsensusVersionView{Version: protocol.ConsensusCurrentVersion}}
 		e := filterableMessageEvent{messageEvent: eM, FreshnessData: freshnessData{
 			PlayerRound:          round,
 			PlayerPeriod:         period,
@@ -148,11 +141,7 @@ func TestVoteAggregatorBundles(t *testing.T) {
 			PlayerLastConcluding: 0,
 		}}
 
-		out := router.dispatch(&voteAggregatorTracer, player, e, playerMachine, voteMachine, bundle.U.Round, bundle.U.Period, bundle.U.Step)
-		if fev, ok := out.(filteredEvent); ok && fev.Err != nil {
-			assert.NotContainsf(t, fev.Err.String(), "rejected vote due to age: filtered vote from bad round",
-				"voteAggregator should not filter due to age for these events")
-		}
+		router.dispatch(&voteAggregatorTracer, player, e, playerMachine, voteMachine, bundle.U.Round, bundle.U.Period, bundle.U.Step)
 	}
 }
 
@@ -161,8 +150,6 @@ func TestVoteAggregatorBundles(t *testing.T) {
  */
 
 func TestVoteAggregatorFiltersVotePresentStale(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	// Set up a composed test machine
 	rRouter := new(rootRouter)
 	rRouter.update(player{}, 0, false)
@@ -247,8 +234,6 @@ func TestVoteAggregatorFiltersVotePresentStale(t *testing.T) {
 }
 
 func TestVoteAggregatorFiltersVoteVerifiedStale(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	// Set up a composed test machine
 	rRouter := new(rootRouter)
 	rRouter.update(player{}, 0, false)
@@ -324,8 +309,6 @@ func TestVoteAggregatorFiltersVoteVerifiedStale(t *testing.T) {
 }
 
 func TestVoteAggregatorFiltersVoteVerifiedThreshold(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	// Set up a composed test machine
 	rRouter := new(rootRouter)
 	rRouter.update(player{}, 0, false)
@@ -381,8 +364,6 @@ func TestVoteAggregatorFiltersVoteVerifiedThreshold(t *testing.T) {
 }
 
 func TestVoteAggregatorFiltersBundlePresent(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	// Set up a composed test machine
 	rRouter := new(rootRouter)
 	rRouter.update(player{}, 0, false)
@@ -485,8 +466,6 @@ func TestVoteAggregatorFiltersBundlePresent(t *testing.T) {
 }
 
 func TestVoteAggregatorFiltersBundleVerifiedThresholdStale(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	// Set up a composed test machine
 	rRouter := new(rootRouter)
 	rRouter.update(player{}, 0, false)
@@ -603,8 +582,6 @@ func TestVoteAggregatorFiltersBundleVerifiedThresholdStale(t *testing.T) {
 }
 
 func TestVoteAggregatorFiltersBundleVerifiedRelayStale(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	// Set up a composed test machine
 	rRouter := new(rootRouter)
 	rRouter.update(player{}, 0, false)
@@ -717,8 +694,6 @@ func TestVoteAggregatorFiltersBundleVerifiedRelayStale(t *testing.T) {
 }
 
 func TestVoteAggregatorFiltersVotePresentPeriod(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	// Set up a composed test machine
 	rRouter := new(rootRouter)
 	rRouter.update(player{}, 0, false)
@@ -804,8 +779,6 @@ func TestVoteAggregatorFiltersVotePresentPeriod(t *testing.T) {
 }
 
 func TestVoteAggregatorFiltersVoteNextRound(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	// Set up a composed test machine
 	rRouter := new(rootRouter)
 	rRouter.update(player{}, 0, false)
@@ -868,8 +841,6 @@ func TestVoteAggregatorFiltersVoteNextRound(t *testing.T) {
 }
 
 func TestVoteAggregatorOldVote(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	cparams := config.Consensus[protocol.ConsensusCurrentVersion]
 	maxNumBlocks := 2 * cparams.SeedRefreshInterval * cparams.SeedLookback
 	ledger := makeTestLedgerMaxBlocks(readOnlyGenesis100, maxNumBlocks)

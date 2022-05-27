@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2021 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -108,14 +108,14 @@ func (l agreementLedger) EnsureDigest(cert agreement.Certificate, verifier *agre
 	// The channel send to UnmatchedPendingCertificates is guaranteed to be non-blocking since due to the fact that -
 	// 1. the channel capacity is 1
 	// 2. we just cleared a single item off this channel ( if there was any )
-	// 3. the EnsureDigest method is being called with the agreement service guarantee
+	// 3. the EnsureDigest method is being called with the agreeement service guarantee
 	// 4. no other senders to this channel exists
 	l.UnmatchedPendingCertificates <- catchup.PendingUnmatchedCertificate{Cert: cert, VoteVerifier: verifier}
 }
 
 // Wrapping error with a LedgerDroppedRoundError when an old round is requested but the ledger has already dropped the entry
-func (l agreementLedger) LookupAgreement(rnd basics.Round, addr basics.Address) (basics.OnlineAccountData, error) {
-	record, err := l.Ledger.LookupAgreement(rnd, addr)
+func (l agreementLedger) Lookup(rnd basics.Round, addr basics.Address) (basics.AccountData, error) {
+	record, err := l.Ledger.Lookup(rnd, addr)
 	var e *ledger.RoundOffsetError
 	if errors.As(err, &e) {
 		err = &agreement.LedgerDroppedRoundError{

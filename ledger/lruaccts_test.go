@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2021 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -17,7 +17,6 @@
 package ledger
 
 import (
-	"encoding/binary"
 	"testing"
 	"time"
 
@@ -26,12 +25,9 @@ import (
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/logging"
-	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
-func TestLRUBasicAccounts(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
+func TestBasicLRUAccounts(t *testing.T) {
 	var baseAcct lruAccounts
 	baseAcct.init(logging.TestingLog(t), 10, 5)
 
@@ -42,12 +38,12 @@ func TestLRUBasicAccounts(t *testing.T) {
 			addr:        basics.Address(crypto.Hash([]byte{byte(i)})),
 			round:       basics.Round(i),
 			rowid:       int64(i),
-			accountData: baseAccountData{MicroAlgos: basics.MicroAlgos{Raw: uint64(i)}},
+			accountData: basics.AccountData{MicroAlgos: basics.MicroAlgos{Raw: uint64(i)}},
 		}
 		baseAcct.write(acct)
 	}
 
-	// verify that all these accounts are truly there.
+	// verify that all these accounts are truely there.
 	for i := 0; i < accountsNum; i++ {
 		addr := basics.Address(crypto.Hash([]byte{byte(i)}))
 		acct, has := baseAcct.read(addr)
@@ -88,8 +84,6 @@ func TestLRUBasicAccounts(t *testing.T) {
 }
 
 func TestLRUAccountsPendingWrites(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	var baseAcct lruAccounts
 	accountsNum := 250
 	baseAcct.init(logging.TestingLog(t), accountsNum*2, accountsNum)
@@ -101,7 +95,7 @@ func TestLRUAccountsPendingWrites(t *testing.T) {
 				addr:        basics.Address(crypto.Hash([]byte{byte(i)})),
 				round:       basics.Round(i),
 				rowid:       int64(i),
-				accountData: baseAccountData{MicroAlgos: basics.MicroAlgos{Raw: uint64(i)}},
+				accountData: basics.AccountData{MicroAlgos: basics.MicroAlgos{Raw: uint64(i)}},
 			}
 			baseAcct.writePending(acct)
 		}(i)
@@ -140,8 +134,6 @@ func (cl *lruAccountsTestLogger) Warnf(s string, args ...interface{}) {
 }
 
 func TestLRUAccountsPendingWritesWarning(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	var baseAcct lruAccounts
 	pendingWritesBuffer := 50
 	pendingWritesThreshold := 40
@@ -153,7 +145,7 @@ func TestLRUAccountsPendingWritesWarning(t *testing.T) {
 				addr:        basics.Address(crypto.Hash([]byte{byte(i)})),
 				round:       basics.Round(i),
 				rowid:       int64(i),
-				accountData: baseAccountData{MicroAlgos: basics.MicroAlgos{Raw: uint64(i)}},
+				accountData: basics.AccountData{MicroAlgos: basics.MicroAlgos{Raw: uint64(i)}},
 			}
 			baseAcct.writePending(acct)
 		}
@@ -166,8 +158,6 @@ func TestLRUAccountsPendingWritesWarning(t *testing.T) {
 }
 
 func TestLRUAccountsOmittedPendingWrites(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	var baseAcct lruAccounts
 	pendingWritesBuffer := 50
 	pendingWritesThreshold := 40
@@ -179,14 +169,14 @@ func TestLRUAccountsOmittedPendingWrites(t *testing.T) {
 			addr:        basics.Address(crypto.Hash([]byte{byte(i)})),
 			round:       basics.Round(i),
 			rowid:       int64(i),
-			accountData: baseAccountData{MicroAlgos: basics.MicroAlgos{Raw: uint64(i)}},
+			accountData: basics.AccountData{MicroAlgos: basics.MicroAlgos{Raw: uint64(i)}},
 		}
 		baseAcct.writePending(acct)
 	}
 
 	baseAcct.flushPendingWrites()
 
-	// verify that all these accounts are truly there.
+	// verify that all these accounts are truely there.
 	for i := 0; i < pendingWritesBuffer; i++ {
 		addr := basics.Address(crypto.Hash([]byte{byte(i)}))
 		acct, has := baseAcct.read(addr)
@@ -204,54 +194,4 @@ func TestLRUAccountsOmittedPendingWrites(t *testing.T) {
 		require.False(t, has)
 		require.Equal(t, persistedAccountData{}, acct)
 	}
-}
-
-func BenchmarkLRUAccountsWrite(b *testing.B) {
-	numTestAccounts := 5000
-	// there are 2500 accounts that overlap
-	fillerAccounts := generatePersistedAccountData(0, 97500)
-	accounts := generatePersistedAccountData(97500-numTestAccounts/2, 97500+numTestAccounts/2)
-
-	benchLruWrite(b, fillerAccounts, accounts)
-}
-
-func benchLruWrite(b *testing.B, fillerAccounts []persistedAccountData, accounts []persistedAccountData) {
-	b.ResetTimer()
-	b.StopTimer()
-	var baseAcct lruAccounts
-	// setting up the baseAccts with a predefined cache size
-	baseAcct.init(logging.TestingLog(b), baseAccountsPendingAccountsBufferSize, baseAccountsPendingAccountsWarnThreshold)
-	for i := 0; i < b.N; i++ {
-		baseAcct = fillLRUAccounts(baseAcct, fillerAccounts)
-
-		b.StartTimer()
-		fillLRUAccounts(baseAcct, accounts)
-		b.StopTimer()
-		baseAcct.prune(0)
-	}
-}
-
-func fillLRUAccounts(baseAcct lruAccounts, fillerAccounts []persistedAccountData) lruAccounts {
-	for _, account := range fillerAccounts {
-		baseAcct.write(account)
-	}
-	return baseAcct
-}
-
-func generatePersistedAccountData(startRound, endRound int) []persistedAccountData {
-	accounts := make([]persistedAccountData, endRound-startRound)
-	buffer := make([]byte, 4)
-
-	for i := startRound; i < endRound; i++ {
-		binary.BigEndian.PutUint32(buffer, uint32(i))
-		digest := crypto.Hash(buffer)
-
-		accounts[i-startRound] = persistedAccountData{
-			addr:        basics.Address(digest),
-			round:       basics.Round(i + startRound),
-			rowid:       int64(i),
-			accountData: baseAccountData{MicroAlgos: basics.MicroAlgos{Raw: uint64(i)}},
-		}
-	}
-	return accounts
 }

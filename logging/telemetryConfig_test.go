@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2021 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -17,18 +17,15 @@
 package logging
 
 import (
-	"encoding/json"
 	"io/ioutil"
 	"os"
 	"path/filepath"
 	"testing"
 
-	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/stretchr/testify/require"
 )
 
 func Test_loadTelemetryConfig(t *testing.T) {
-	partitiontest.PartitionTest(t)
 
 	sample := TelemetryConfig{
 		Enable:             true,
@@ -37,8 +34,8 @@ func Test_loadTelemetryConfig(t *testing.T) {
 		MinLogLevel:        4,
 		ReportHistoryLevel: 4,
 		// These credentials are here intentionally. Not a bug.
-		UserName: defaultTelemetryUsername,
-		Password: defaultTelemetryPassword,
+		UserName: "telemetry-v9",
+		Password: "oq%$FA1TOJ!yYeMEcJ7D688eEOE#MGCu",
 	}
 
 	a := require.New(t)
@@ -60,7 +57,6 @@ func Test_loadTelemetryConfig(t *testing.T) {
 }
 
 func Test_CreateSaveLoadTelemetryConfig(t *testing.T) {
-	partitiontest.PartitionTest(t)
 
 	testDir := os.Getenv("TESTDIR")
 
@@ -95,7 +91,6 @@ func Test_CreateSaveLoadTelemetryConfig(t *testing.T) {
 }
 
 func Test_SanitizeTelemetryString(t *testing.T) {
-	partitiontest.PartitionTest(t)
 	type testcase struct {
 		input    string
 		expected string
@@ -114,7 +109,6 @@ func Test_SanitizeTelemetryString(t *testing.T) {
 }
 
 func TestLoadTelemetryConfig(t *testing.T) {
-	partitiontest.PartitionTest(t)
 	testLoggingConfigFileName := "../test/testdata/configs/logging/logging.config.test1"
 	tc, err := loadTelemetryConfig(testLoggingConfigFileName)
 	require.NoError(t, err)
@@ -123,57 +117,5 @@ func TestLoadTelemetryConfig(t *testing.T) {
 	require.Equal(t, "test-user-name", tc.UserName)
 	// ensure we know how to default correctly if some of the fields in the configuration field aren't specified.
 	require.Equal(t, createTelemetryConfig().Password, tc.Password)
-
-}
-
-func TestLoadTelemetryConfigBlankUsernamePassword(t *testing.T) {
-	partitiontest.PartitionTest(t)
-	testLoggingConfigFileName := "../test/testdata/configs/logging/logging.config.test2"
-	tc, err := loadTelemetryConfig(testLoggingConfigFileName)
-	require.NoError(t, err)
-	// make sure the user name was loaded from the specified file
-	require.Equal(t, defaultTelemetryUsername, tc.UserName)
-	// ensure we know how to default correctly if some of the fields in the configuration field aren't specified.
-	require.Equal(t, defaultTelemetryPassword, tc.Password)
-}
-
-func TestSaveTelemetryConfigBlankUsernamePassword(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
-	testDir := os.Getenv("TESTDIR")
-
-	if testDir == "" {
-		testDir, _ = ioutil.TempDir("", "tmp")
-	}
-
-	a := require.New(t)
-
-	configsPath := filepath.Join(testDir, "logging.config")
-
-	config := createTelemetryConfig()
-
-	// Ensure that config has default username and password
-	config.UserName = defaultTelemetryUsername
-	config.Password = defaultTelemetryPassword
-
-	err := config.Save(configsPath)
-	a.NoError(err)
-
-	f, err := os.Open(configsPath)
-	a.NoError(err)
-	defer f.Close()
-
-	var cfg TelemetryConfig
-
-	var marshaledConfig MarshalingTelemetryConfig
-	marshaledConfig.TelemetryConfig = createTelemetryConfig()
-
-	dec := json.NewDecoder(f)
-	err = dec.Decode(&marshaledConfig)
-	a.NoError(err)
-
-	cfg = marshaledConfig.TelemetryConfig
-	a.Equal(cfg.UserName, "")
-	a.Equal(cfg.Password, "")
 
 }

@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2021 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -150,21 +150,12 @@ func (t ioTrace) ContainsFn(compareFn func(b event) bool) bool {
 	return false
 }
 
-func (t ioTrace) countAction() (count int) {
-	for _, ev := range t.events {
-		if ev.t() == wrappedAction {
-			count++
-		}
-	}
-	return
-}
-
 // ioSafetyProp denotes whether some trace is "safe" according to itself
 type ioSafetyProp interface {
 	// returns bool whether trace is in the safety property. If false,
 	// optionally accompanied by an informational message pertaining to why
 	// the trace is not in the safety property. Err is set if we saw an
-	// unforeseen error.
+	// unforseen error.
 	containsTrace(trace ioTrace) (contains bool, info string, err error)
 
 	// every safety prop also exposes the option to check it dynamically
@@ -283,7 +274,7 @@ type ioAutomataConcrete struct {
 	listener
 
 	// listeners need additional context. For now, we keep it static.
-	routerCtx router // optional, set to router{} on default
+	routerCtx router // optional, set to router{} on defualt
 	playerCtx player // optional, set to player{} by default
 
 	// private

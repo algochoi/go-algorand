@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2021 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -19,13 +19,10 @@ package component
 import (
 	"testing"
 
-	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/stretchr/testify/assert"
 )
 
 func TestCommandStatus(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	var start = START
 	var completed = COMPLETED
 	var failed = FAILED

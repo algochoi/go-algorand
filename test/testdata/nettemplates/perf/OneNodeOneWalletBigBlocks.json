@@ -2,7 +2,6 @@
     "Genesis": {
         "NetworkName": "tbd",
         "ConsensusProtocol": "test-big-blocks",
-        "LastPartKeyRound": 3000,
         "Wallets": [
             {
                 "Name": "Wallet1",

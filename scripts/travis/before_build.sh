@@ -12,14 +12,13 @@ set -e
 
 GOPATH=$(go env GOPATH)
 export GOPATH
+export GO111MODULE=on
 
 SCRIPTPATH="$( cd "$(dirname "$0")" ; pwd -P )"
 OS=$("${SCRIPTPATH}"/../ostype.sh)
 ARCH=$("${SCRIPTPATH}"/../archtype.sh)
 
-if [ ! -f crypto/libs/${OS}/${ARCH}/lib/libsodium.a ]; then
-  echo "Building libsodium-fork..."
-  make crypto/libs/${OS}/${ARCH}/lib/libsodium.a
-fi
+echo "Building libsodium-fork..."
+make crypto/libs/${OS}/${ARCH}/lib/libsodium.a
 
 

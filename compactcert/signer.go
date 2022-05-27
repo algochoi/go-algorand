@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2021 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -22,7 +22,7 @@ import (
 	"time"
 
 	"github.com/algorand/go-algorand/config"
-	"github.com/algorand/go-algorand/crypto/merklesignature"
+	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/protocol"
@@ -34,9 +34,9 @@ import (
 type sigFromAddr struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
-	Signer basics.Address            `codec:"signer"`
-	Round  basics.Round              `codec:"rnd"`
-	Sig    merklesignature.Signature `codec:"sig"`
+	Signer basics.Address          `codec:"signer"`
+	Round  basics.Round            `codec:"rnd"`
+	Sig    crypto.OneTimeSignature `codec:"sig"`
 }
 
 func (ccw *Worker) signer(latest basics.Round) {
@@ -93,7 +93,12 @@ func (ccw *Worker) signBlock(hdr bookkeeping.BlockHeader) {
 		return
 	}
 
-	keys := ccw.accts.StateProofKeys(hdr.Round)
+	// Compact cert gets signed by the next round after the block,
+	// because by the time agreement is reached on the block,
+	// ephemeral keys for that round could be deleted.
+	sigKeyRound := hdr.Round + 1
+
+	keys := ccw.accts.Keys(sigKeyRound)
 	if len(keys) == 0 {
 		// No keys, nothing to do.
 		return
@@ -108,35 +113,33 @@ func (ccw *Worker) signBlock(hdr bookkeeping.BlockHeader) {
 		return
 	}
 
-	if votersHdr.CompactCert[protocol.CompactCertBasic].CompactCertVoters.IsEmpty() {
+	if votersHdr.CompactCert[protocol.CompactCertBasic].CompactCertVoters.IsZero() {
 		// No voter commitment, perhaps because compact certs were
 		// just enabled.
 		return
 	}
 
-	sigs := make([]sigFromAddr, 0, len(keys))
+	votersProto := config.Consensus[votersHdr.CurrentProtocol]
 
+	var sigs []sigFromAddr
+	var sigkeys []crypto.OneTimeSignatureVerifier
 	for _, key := range keys {
-		if key.FirstValid > hdr.Round || hdr.Round > key.LastValid {
-			continue
-		}
+		if key.FirstValid <= sigKeyRound && sigKeyRound <= key.LastValid {
+			keyDilution := key.KeyDilution
+			if keyDilution == 0 {
+				keyDilution = votersProto.DefaultKeyDilution
+			}
 
-		if key.StateProofSecrets == nil {
-			ccw.log.Warnf("ccw.signBlock(%d): empty state proof secrets for round", hdr.Round)
-			continue
-		}
+			ephID := basics.OneTimeIDForRound(sigKeyRound, keyDilution)
+			sig := key.Voting.Sign(ephID, hdr)
 
-		sig, err := key.StateProofSecrets.Sign(hdr)
-		if err != nil {
-			ccw.log.Warnf("ccw.signBlock(%d): StateProofSecrets.Sign: %v", hdr.Round, err)
-			continue
+			sigs = append(sigs, sigFromAddr{
+				Signer: key.Parent,
+				Round:  hdr.Round,
+				Sig:    sig,
+			})
+			sigkeys = append(sigkeys, key.Voting.OneTimeSignatureVerifier)
 		}
-
-		sigs = append(sigs, sigFromAddr{
-			Signer: key.Account,
-			Round:  hdr.Round,
-			Sig:    sig,
-		})
 	}
 
 	for _, sfa := range sigs {

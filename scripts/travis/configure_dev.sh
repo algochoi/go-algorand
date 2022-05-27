@@ -21,11 +21,9 @@ if [[ "${OS}" == "linux" ]]; then
 elif [[ "${OS}" == "darwin" ]]; then
     # we don't want to upgrade boost if we already have it, as it will try to update
     # other components.
-    if [ "${CIRCLECI}" != "true" ]; then
-        brew update
-        brew tap homebrew/cask
-        brew pin boost || true
-    fi
+    brew update
+    brew tap homebrew/cask
+    brew pin boost || true
 elif [[ "${OS}" == "windows" ]]; then
     git config --global core.autocrlf true
     # Golang probably is not installed under MSYS2 so add the environment variable temporarily

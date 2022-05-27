@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2021 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -33,7 +33,7 @@ func createAsyncHook(wrappedHook logrus.Hook, channelDepth uint, maxQueueDepth i
 }
 
 func createAsyncHookLevels(wrappedHook logrus.Hook, channelDepth uint, maxQueueDepth int, levels []logrus.Level) *asyncTelemetryHook {
-	// needed by 'makeTelemetryTestFixtureWithConfig' to mark ready in unit tests.
+	// one time check to see if the wrappedHook is ready (true for mocked telemetry)
 	tfh, ok := wrappedHook.(*telemetryFilteredHook)
 	ready := ok && tfh.wrappedHook != nil
 

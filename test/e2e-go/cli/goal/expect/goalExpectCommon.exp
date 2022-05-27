@@ -112,7 +112,7 @@ proc ::AlgorandGoal::StartNode { TEST_ALGO_DIR {SYSTEMD_MANAGED "False"} {PEER_A
         if { $SYSTEMD_MANAGED eq "True" } {
             expect {
                 timeout { close; ::AlgorandGoal::Abort "Did not receive appropriate message during node start" }
-                "^This node is using systemd and should be managed with systemctl*" { puts "Goal showed correct error message for systemd" ; close}
+                "^This node is managed by systemd, you must run the following command to make your desired state change to your node:*" { puts "Goal showed correct error message for systemd" ; close}
                 eof { ::AlgorandGoal::CheckEOF "Unable to start network" }
             }
         } else {
@@ -146,7 +146,7 @@ proc ::AlgorandGoal::StopNode { TEST_ALGO_DIR {SYSTEMD_MANAGED ""} } {
             spawn goal node stop -d $TEST_ALGO_DIR
             expect {
                 timeout { close; ::AlgorandGoal::Abort "Did not receive appropriate message during node stop" }
-                "^This node is using systemd and should be managed with systemctl*" { puts "Goal showed correct error message for systemd" ; close}
+                "*This node is managed by systemd, you must run the following command to make your desired state change to your node:*" { puts "Goal showed correct error message for systemd" ; close}
                 eof { close; ::AlgorandGoal::Abort "Did not receive appropriate message before goal command completion" }
             }
         }
@@ -173,7 +173,7 @@ proc ::AlgorandGoal::RestartNode { TEST_ALGO_DIR {SYSTEMD_MANAGED ""} } {
             spawn goal node restart -d $TEST_ALGO_DIR
             expect {
                 timeout { close; ::AlgorandGoal::Abort "Did not receive appropriate message during node restart" }
-                "^This node is using systemd and should be managed with systemctl*" { puts "Goal showed correct error message for systemd" ; close}
+                "^This node is managed by systemd, you must run the following command to make your desired state change to your node:*" { puts "Goal showed correct error message for systemd" ; close}
             }
         }
     } EXCEPTION] } {
@@ -283,7 +283,7 @@ proc ::AlgorandGoal::CreateWallet { WALLET_NAME WALLET_PASSWORD TEST_PRIMARY_NOD
         }
         expect {
              timeout {::AlgorandGoal::Abort "Timed out CreateWallet pass phrase"  }
-             -re {([a-z ]+)} {set WALLET_PASS_PHRASE $expect_out(1,string); close;}
+             -re {32m([a-z ]+)} {set WALLET_PASS_PHRASE $expect_out(1,string); close;}
         }
     } EXCEPTION ] } {
        ::AlgorandGoal::Abort "ERROR in CreateWallet: $EXCEPTION"
@@ -934,17 +934,7 @@ proc ::AlgorandGoal::WaitForRound { WAIT_FOR_ROUND_NUMBER NODE_DATA_DIR } {
                 -re {Genesis ID: (\w+)} {set GENESIS_ID $expect_out(1,string); exp_continue }
                 -re {Genesis hash: ([A-Za-z0-9+/]+={0,2})} {set GENESIS_HASH $expect_out(1,string); exp_continue }
                 -re {Catchpoint: ([0-9]*#[A-Z2-7]*)} { set CATCHPOINT $expect_out(1,string); exp_continue }
-                eof {
-                    catch wait result;
-                    if { [lindex $result 3] != 0 } {
-                        log_user 1
-                        set errLog [exec cat $NODE_DATA_DIR/algod-err.log]
-                        puts "$NODE_DATA_DIR/algod-err.log :\r\n$errLog"
-                        set nodeLog [exec -- tail -n 30 $NODE_DATA_DIR/node.log]
-                        puts "$NODE_DATA_DIR/node.log :\r\n$nodeLog"
-                        ::AlgorandGoal::Abort "failed to wait for round : error code [lindex $result 3]"
-                    }
-                }
+                eof { catch wait result; if { [lindex $result 3] != 0 } { ::AlgorandGoal::Abort "failed to wait for round : error code [lindex $result 3]"} }
             }
             log_user 1
             if { $BLOCK > -1 } {
@@ -1073,26 +1063,6 @@ proc ::AlgorandGoal::AppCreate { WALLET_NAME WALLET_PASSWORD ACCOUNT_ADDRESS APP
         set APP_ID "NOT SET"
         puts "calling goal app create"
         spawn goal app create --creator $ACCOUNT_ADDRESS --approval-prog $APPROVAL_PROGRAM --global-byteslices $GLOBAL_BYTE_SLICES --global-ints 0 --local-byteslices $LOCAL_BYTE_SLICES --local-ints 0 --app-arg $APP_ARG --clear-prog $CLEAR_PROGRAM -w $WALLET_NAME -d $DATA_DIR
-        expect {
-            timeout { abort "\n Failed to see expected output" }
-            "Please enter the password for wallet '$WALLET_NAME':" {send "$WALLET_PASSWORD\r" ; exp_continue }
-            -re {Created app with app index ([0-9]+)} {set APP_ID $expect_out(1,string) ;close  }
-            eof {close; ::AlgorandGoal::Abort "app not created" }
-        }
-        puts "App ID $APP_ID"
-    } EXCEPTION ] } {
-       ::AlgorandGoal::Abort "ERROR in AppCreate: $EXCEPTION"
-    }
-    return $APP_ID
-}
-
-# App Create with extra pages
-proc ::AlgorandGoal::AppCreateExPages { WALLET_NAME WALLET_PASSWORD ACCOUNT_ADDRESS APPROVAL_PROGRAM APP_ARG GLOBAL_BYTE_SLICES LOCAL_BYTE_SLICES CLEAR_PROGRAM DATA_DIR EXTRA_PAGES } {
-    set timeout 60
-    if { [ catch {
-        set APP_ID "NOT SET"
-        puts "calling goal app create with extra pages"
-        spawn goal app create --creator $ACCOUNT_ADDRESS --approval-prog $APPROVAL_PROGRAM --global-byteslices $GLOBAL_BYTE_SLICES --global-ints 0 --local-byteslices $LOCAL_BYTE_SLICES --local-ints 0 --app-arg $APP_ARG --clear-prog $CLEAR_PROGRAM --extra-pages $EXTRA_PAGES -w $WALLET_NAME  -d $DATA_DIR
         expect {
             timeout { abort "\n Failed to see expected output" }
             "Please enter the password for wallet '$WALLET_NAME':" {send "$WALLET_PASSWORD\r" ; exp_continue }

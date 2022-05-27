@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2021 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -23,7 +23,6 @@ import (
 
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
-	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
 func randomAddress() basics.Address {
@@ -33,28 +32,26 @@ func randomAddress() basics.Address {
 }
 
 func TestAccountDeltas(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	a := require.New(t)
 
 	ad := AccountDeltas{}
-	data, ok := ad.GetData(basics.Address{})
+	data, ok := ad.Get(basics.Address{})
 	a.False(ok)
-	a.Equal(AccountData{}, data)
+	a.Equal(basics.AccountData{}, data)
 
 	addr := randomAddress()
-	data, ok = ad.GetData(addr)
+	data, ok = ad.Get(addr)
 	a.False(ok)
-	a.Equal(AccountData{}, data)
+	a.Equal(basics.AccountData{}, data)
 
-	a.Zero(ad.Len())
+	a.Equal(0, ad.Len())
 	a.Panics(func() { ad.GetByIdx(0) })
 
 	a.Equal([]basics.Address{}, ad.ModifiedAccounts())
 
-	sample1 := AccountData{AccountBaseData: AccountBaseData{MicroAlgos: basics.MicroAlgos{Raw: 123}}}
+	sample1 := basics.AccountData{MicroAlgos: basics.MicroAlgos{Raw: 123}}
 	ad.Upsert(addr, sample1)
-	data, ok = ad.GetData(addr)
+	data, ok = ad.Get(addr)
 	a.True(ok)
 	a.Equal(sample1, data)
 
@@ -63,9 +60,9 @@ func TestAccountDeltas(t *testing.T) {
 	a.Equal(addr, address)
 	a.Equal(sample1, data)
 
-	sample2 := AccountData{AccountBaseData: AccountBaseData{MicroAlgos: basics.MicroAlgos{Raw: 456}}}
+	sample2 := basics.AccountData{MicroAlgos: basics.MicroAlgos{Raw: 456}}
 	ad.Upsert(addr, sample2)
-	data, ok = ad.GetData(addr)
+	data, ok = ad.Get(addr)
 	a.True(ok)
 	a.Equal(sample2, data)
 

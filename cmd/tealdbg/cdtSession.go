@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2021 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -168,7 +168,7 @@ func (s *cdtSession) websocketHandler(w http.ResponseWriter, r *http.Request) {
 		// set pc and line to 0 to workaround Register ack
 		state.Update(cdtStateUpdate{
 			dbgState.Stack, dbgState.Scratch,
-			0, 0, "", dbgState.OpcodeBudget, dbgState.CallStack,
+			0, 0, "",
 			s.debugger.GetStates(nil),
 		})
 
@@ -224,7 +224,7 @@ func (s *cdtSession) websocketHandler(w http.ResponseWriter, r *http.Request) {
 			select {
 			case devtoolResp := <-cdtRespCh:
 				if s.verbose {
-					log.Printf("responding: %v\n", devtoolResp)
+					log.Printf("responsing: %v\n", devtoolResp)
 				}
 				err := ws.WriteJSON(&devtoolResp)
 				if err != nil {
@@ -247,7 +247,7 @@ func (s *cdtSession) websocketHandler(w http.ResponseWriter, r *http.Request) {
 				state.Update(cdtStateUpdate{
 					dbgState.Stack, dbgState.Scratch,
 					dbgState.PC, dbgState.Line, dbgState.Error,
-					dbgState.OpcodeBudget, dbgState.CallStack, appState,
+					appState,
 				})
 				dbgStateMu.Unlock()
 
@@ -473,26 +473,14 @@ func (s *cdtSession) handleCdtRequest(req *cdt.ChromeRequest, state *cdtState) (
 		response = cdt.ChromeResponse{ID: req.ID, Result: empty}
 	case "Debugger.stepOut":
 		state.lastAction.Store("step")
-		if len(state.callStack) == 0 {
-			// If we are not in a subroutine, pause at the end so user can
-			// inspect the final state of the program.
-			state.pauseOnCompleted.SetTo(true)
-		}
-		s.debugger.StepOut()
+		state.pauseOnCompeted.SetTo(true)
+		s.debugger.Resume()
 		if state.completed.IsSet() {
 			evDestroyed := s.makeContextDestroyedEvent()
 			events = append(events, &evDestroyed)
 		}
 		response = cdt.ChromeResponse{ID: req.ID, Result: empty}
-	case "Debugger.stepOver":
-		state.lastAction.Store("step")
-		s.debugger.StepOver()
-		if state.completed.IsSet() {
-			evDestroyed := s.makeContextDestroyedEvent()
-			events = append(events, &evDestroyed)
-		}
-		response = cdt.ChromeResponse{ID: req.ID, Result: empty}
-	case "Debugger.stepInto":
+	case "Debugger.stepOver", "Debugger.stepInto":
 		state.lastAction.Store("step")
 		s.debugger.Step()
 		if state.completed.IsSet() {
@@ -509,7 +497,7 @@ func (s *cdtSession) handleCdtRequest(req *cdt.ChromeRequest, state *cdtState) (
 
 func (s *cdtSession) computeEvent(state *cdtState) (event interface{}) {
 	if state.completed.IsSet() {
-		if state.pauseOnCompleted.IsSet() {
+		if state.pauseOnCompeted.IsSet() {
 			event = s.makeDebuggerPausedEvent(state)
 			return
 		}
@@ -583,43 +571,22 @@ func (s *cdtSession) makeDebuggerPausedEvent(state *cdtState) cdt.DebuggerPaused
 		},
 	}
 	sc := []cdt.DebuggerScope{scopeLocal, scopeGlobal}
-
-	cfs := []cdt.DebuggerCallFrame{
-		{
-			CallFrameID:  "mainframe",
-			FunctionName: "main",
-			Location: &cdt.DebuggerLocation{
-				ScriptID:     s.scriptID,
-				LineNumber:   state.line.Load(),
-				ColumnNumber: 0,
-			},
-			URL:        s.scriptURL,
-			ScopeChain: sc,
+	cf := cdt.DebuggerCallFrame{
+		CallFrameID:  "mainframe",
+		FunctionName: "",
+		Location: &cdt.DebuggerLocation{
+			ScriptID:     s.scriptID,
+			LineNumber:   state.line.Load(),
+			ColumnNumber: 0,
 		},
-	}
-	for i := range state.callStack {
-		cf := cdt.DebuggerCallFrame{
-			CallFrameID:  "mainframe",
-			FunctionName: state.callStack[i].LabelName,
-			Location: &cdt.DebuggerLocation{
-				ScriptID:     s.scriptID,
-				LineNumber:   state.line.Load(),
-				ColumnNumber: 0,
-			},
-			URL:        s.scriptURL,
-			ScopeChain: sc,
-		}
-		// Set the previous call frame line number
-		cfs[0].Location.LineNumber = state.callStack[i].FrameLine
-		// We have to prepend the newest frame for it to appear first
-		// in the debugger...
-		cfs = append([]cdt.DebuggerCallFrame{cf}, cfs...)
+		URL:        s.scriptURL,
+		ScopeChain: sc,
 	}
 
 	evPaused := cdt.DebuggerPausedEvent{
 		Method: "Debugger.paused",
 		Params: cdt.DebuggerPausedParams{
-			CallFrames:     cfs,
+			CallFrames:     []cdt.DebuggerCallFrame{cf},
 			Reason:         "other",
 			HitBreakpoints: make([]string, 0),
 		},

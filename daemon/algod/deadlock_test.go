@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2021 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -25,12 +25,9 @@ import (
 
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/logging"
-	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
 func TestDeadlockLogging(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	logFn := fmt.Sprintf("/tmp/test.%s.%d.log", t.Name(), crypto.RandUint64())
 	archiveFn := fmt.Sprintf("%s.archive", logFn)
 
@@ -60,8 +57,6 @@ func TestDeadlockLogging(t *testing.T) {
 }
 
 func TestDeadlockOnPotentialDeadlock(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	logFn := fmt.Sprintf("/tmp/test.%s.%d.log", t.Name(), crypto.RandUint64())
 	archiveFn := fmt.Sprintf("%s.archive", logFn)
 

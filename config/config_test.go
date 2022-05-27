@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2021 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -29,7 +29,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/protocol"
-	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/algorand/go-algorand/util/codecs"
 )
 
@@ -42,8 +41,6 @@ var defaultConfig = Local{
 }
 
 func TestSaveThenLoad(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	c1, err := loadWithoutDefaults(defaultConfig)
 	require.NoError(t, err)
 	c1, err = migrate(c1)
@@ -71,16 +68,12 @@ func TestSaveThenLoad(t *testing.T) {
 }
 
 func TestLoadMissing(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	os.RemoveAll("testdir")
 	_, err := LoadConfigFromDisk("testdir")
 	require.True(t, os.IsNotExist(err))
 }
 
 func TestMergeConfig(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	os.RemoveAll("testdir")
 	err := os.Mkdir("testdir", 0777)
 
@@ -146,8 +139,6 @@ var expectedMerged = []string{
 }
 
 func TestLoadPhonebook(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	os.RemoveAll("testdir")
 	err := os.Mkdir("testdir", 0777)
 	require.NoError(t, err)
@@ -165,22 +156,16 @@ func TestLoadPhonebook(t *testing.T) {
 }
 
 func TestLoadPhonebookMissing(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	os.RemoveAll("testdir")
 	_, err := LoadPhonebook("testdir")
 	require.True(t, os.IsNotExist(err))
 }
 
 func TestArchivalIfRelay(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	testArchivalIfRelay(t, true)
 }
 
 func TestArchivalIfNotRelay(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	testArchivalIfRelay(t, false)
 }
 
@@ -218,8 +203,6 @@ func testArchivalIfRelay(t *testing.T, relay bool) {
 }
 
 func TestConfigExampleIsCorrect(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	a := require.New(t)
 
 	ourPath, err := os.Getwd()
@@ -261,8 +244,7 @@ func loadWithoutDefaults(cfg Local) (Local, error) {
 }
 
 func TestConfigMigrate(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
+	t.Skip()
 	a := require.New(t)
 
 	c0, err := loadWithoutDefaults(getVersionedDefaultLocalConfig(0))
@@ -288,8 +270,6 @@ func TestConfigMigrate(t *testing.T) {
 }
 
 func TestConfigMigrateFromDisk(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	a := require.New(t)
 
 	ourPath, err := os.Getwd()
@@ -311,8 +291,6 @@ func TestConfigMigrateFromDisk(t *testing.T) {
 
 // Verify that nobody is changing the shipping default configurations
 func TestConfigInvariant(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	a := require.New(t)
 
 	ourPath, err := os.Getwd()
@@ -328,8 +306,6 @@ func TestConfigInvariant(t *testing.T) {
 }
 
 func TestConfigLatestVersion(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	a := require.New(t)
 
 	// Make sure current version is correct for the assigned defaultLocal
@@ -337,8 +313,6 @@ func TestConfigLatestVersion(t *testing.T) {
 }
 
 func TestConsensusUpgrades(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	a := require.New(t)
 
 	// Starting with v7, ensure we have a path to ConsensusCurrentVersion
@@ -365,8 +339,6 @@ func consensusUpgradesTo(a *require.Assertions, currentName, targetName protocol
 }
 
 func TestConsensusLatestVersion(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	a := require.New(t)
 
 	latest, has := Consensus[protocol.ConsensusCurrentVersion]
@@ -375,8 +347,6 @@ func TestConsensusLatestVersion(t *testing.T) {
 }
 
 func TestLocal_DNSBootstrapArray(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	type fields struct {
 		DNSBootstrapID string
 	}
@@ -418,8 +388,6 @@ func TestLocal_DNSBootstrapArray(t *testing.T) {
 }
 
 func TestLocal_DNSBootstrap(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	type fields struct {
 		DNSBootstrapID string
 	}
@@ -466,8 +434,6 @@ func TestLocal_DNSBootstrap(t *testing.T) {
 }
 
 func TestLocalStructTags(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	localType := reflect.TypeOf(Local{})
 
 	versionField, ok := localType.FieldByName("Version")
@@ -509,8 +475,6 @@ func TestLocalStructTags(t *testing.T) {
 }
 
 func TestGetVersionedDefaultLocalConfig(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	for i := uint32(0); i < getLatestConfigVersion(); i++ {
 		localVersion := getVersionedDefaultLocalConfig(i)
 		require.Equal(t, uint32(i), localVersion.Version)
@@ -519,8 +483,6 @@ func TestGetVersionedDefaultLocalConfig(t *testing.T) {
 
 // TestLocalVersionField - ensures the Version contains only versions tags, the versions are all contiguous, and that no non-version tags are included there.
 func TestLocalVersionField(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	localType := reflect.TypeOf(Local{})
 	field, ok := localType.FieldByName("Version")
 	require.True(t, true, ok)

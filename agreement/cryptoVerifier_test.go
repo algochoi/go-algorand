@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2021 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -26,7 +26,6 @@ import (
 
 	"github.com/algorand/go-deadlock"
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
@@ -35,8 +34,6 @@ import (
 	"github.com/algorand/go-algorand/data/committee"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
-	"github.com/algorand/go-algorand/test/partitiontest"
-	"github.com/algorand/go-algorand/util/execpool"
 )
 
 var _ = fmt.Printf
@@ -72,7 +69,7 @@ func makeUnauthenticatedVote(l Ledger, sender basics.Address, selection *crypto.
 
 	m, _ := membership(l, rv.Sender, rv.Round, rv.Period, rv.Step)
 	cred := committee.MakeCredential(&selection.SK, m.Selector)
-	ephID := basics.OneTimeIDForRound(rv.Round, voting.KeyDilution(config.Consensus[protocol.ConsensusCurrentVersion].DefaultKeyDilution))
+	ephID := basics.OneTimeIDForRound(rv.Round, voting.KeyDilution(config.Consensus[protocol.ConsensusCurrentVersion]))
 	sig := voting.Sign(ephID, rv)
 
 	return unauthenticatedVote{
@@ -139,8 +136,6 @@ func getSelectorCapacity(tag protocol.Tag) int {
 }
 
 func TestCryptoVerifierBuffers(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	t.Skip("Test is flaky")
 
 	t.Parallel()
@@ -316,7 +311,7 @@ func BenchmarkCryptoVerifierProposalVertification(b *testing.B) {
 	pn := &asyncPseudonode{
 		factory:   testBlockFactory{Owner: 0},
 		validator: testBlockValidator{},
-		keys:      makeRecordingKeyManager(participations),
+		keys:      simpleKeyManager(participations),
 		ledger:    ledger,
 		log:       serviceLogger{logging.Base()},
 	}
@@ -386,27 +381,4 @@ func BenchmarkCryptoVerifierBundleVertification(b *testing.B) {
 	for n := 0; n < b.N; n++ {
 		<-c
 	}
-}
-
-// TestCryptoVerifierVerificationFailures tests to see that the cryptoVerifier.VerifyVote returns an error in the vote response
-// when being unable to enqueue a vote.
-func TestCryptoVerifierVerificationFailures(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
-	mainPool := execpool.MakePool(t)
-	defer mainPool.Shutdown()
-
-	voteVerifier := MakeAsyncVoteVerifier(&expiredExecPool{mainPool})
-	defer voteVerifier.Quit()
-
-	cryptoVerifier := makeCryptoVerifier(nil, nil, voteVerifier, logging.TestingLog(t))
-	defer cryptoVerifier.Quit()
-
-	cryptoVerifier.VerifyVote(context.Background(), cryptoVoteRequest{message: message{Tag: protocol.AgreementVoteTag}, Round: basics.Round(8), TaskIndex: 14})
-	// read the failed response from VerifiedVotes:
-	votesout := cryptoVerifier.VerifiedVotes()
-	voteResponse := <-votesout
-	require.Equal(t, context.Canceled, voteResponse.err)
-	require.True(t, voteResponse.cancelled)
-	require.Equal(t, 14, voteResponse.index)
 }

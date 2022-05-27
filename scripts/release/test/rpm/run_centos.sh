@@ -14,7 +14,7 @@ if [ "$CHANNEL" = beta ]; then
     exit 0
 fi
 
-# Run RPM build in Centos 7 & 8 Docker container
+# Run RPM build in Centos7 Docker container
 sg docker "docker build -t algocentosbuild - < ${HOME}/go/src/github.com/algorand/go-algorand/scripts/release/common/docker/centos.Dockerfile"
 
 cat <<EOF>"${HOME}"/dummyrepo/algodummy.repo

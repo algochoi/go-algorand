@@ -2,7 +2,7 @@
 
 # create_and_deploy_recipe.sh - Generates deployed network configuration (based on a recipe) and private build and pushes to S3
 #
-# Syntax:   create_and_deploy_recipe.sh -c <channel/network> [-n network] --recipe <recipe file> -r <rootdir> [--nodeploy] [--skip-build] [--force] [-m genesisVersionModifier] [ -b <bucket> ] [--template <template_path>]"
+# Syntax:   create_and_deploy_recipe.sh -c <channel/network> [-n network] --recipe <recipe file> -r <rootdir> [--nodeploy] [--skip-build] [--force] [-m genesisVersionModifier] [ -b <bucket> ]"
 #
 # Outputs:  <errors or warnings>
 #
@@ -15,12 +15,8 @@
 # Examples: create_and_deploy_recipe.sh -c TestCatchup --recipe test/testdata/deployednettemplates/recipes/devnet-like.config -r ~/networks/gen
 #
 # Notes:    If you're running on a Mac, this will attempt to use docker to build for linux.
-#           If you need to generate a recipe, you can pass in the --template flag with the path to the
-#           template json and it will run the generate_recipe.py on the file. Make sure it's in the same
-#           directory as the recipe file path.
 
 set -e
-set -x
 
 if [[ "${AWS_ACCESS_KEY_ID}" = "" || "${AWS_SECRET_ACCESS_KEY}" = "" ]]; then
     echo "You need to export your AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY for this to work"
@@ -28,8 +24,7 @@ if [[ "${AWS_ACCESS_KEY_ID}" = "" || "${AWS_SECRET_ACCESS_KEY}" = "" ]]; then
 fi
 
 SCRIPTPATH="$( cd "$(dirname "$0")" ; pwd -P )"
-GOPATH=$(go env GOPATH)
-export GOPATH=${GOPATH%:*}
+export GOPATH=$(go env GOPATH)
 
 # Anchor our repo root reference location
 REPO_ROOT=${SCRIPTPATH}/..
@@ -85,10 +80,6 @@ while [ "$1" != "" ]; do
         --skip-build)
             SKIP_BUILD="true"
             ;;
-        --template)
-            shift
-            NETWORK_TEMPLATE="$1"
-            ;;
         *)
             echo "Unknown option" "$1"
             exit 1
@@ -98,7 +89,7 @@ while [ "$1" != "" ]; do
 done
 
 if [[ -z "${CHANNEL}" || -z "${RECIPEFILE}" || -z "${ROOTDIR}" ]]; then
-    echo "Syntax: create_and_deploy_recipe.sh -c <channel/network> [-n network] --recipe <recipe file> -r <rootdir> [--nodeploy] [--force] [--template <template_path>]"
+    echo "Syntax: create_and_deploy_recipe.sh -c <channel/network> [-n network] --recipe <recipe file> -r <rootdir> [--nodeploy] [--force]"
     echo "e.g. create_and_deploy_recipe.sh -c TestCatchup --recipe test/testdata/deployednettemplates/recipes/devnet-like.config -r ~/networks/<channel>/gen"
     exit 1
 fi
@@ -118,11 +109,6 @@ fi
 if [[ "${SKIP_BUILD}" != "true" || ! -f ${GOPATH}/bin/netgoal ]]; then
     # Build so we've got up-to-date binaries
     (cd ${SRCPATH} && make)
-fi
-
-# If template is passed in, a recipe will be generated in the same folder as the template
-if [[ ! -z ${NETWORK_TEMPLATE} ]]; then
-    python3 ${SRCPATH}/test/testdata/deployednettemplates/generate-recipe/generate_network.py -f ${NETWORK_TEMPLATE}
 fi
 
 # Generate the nodecfg package directory

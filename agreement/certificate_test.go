@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2021 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -28,7 +28,6 @@ import (
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
-	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
 func makeCertTesting(digest crypto.Digest, votes []vote, equiVotes []equivocationVote) Certificate {
@@ -43,8 +42,6 @@ func verifyBundleAgainstLedger(b unauthenticatedBundle, l Ledger, avv *AsyncVote
 }
 
 func TestCertificateGoodCertificateBasic(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	ledger, addresses, vrfSecrets, otSecrets := readOnlyFixture100()
 	round := ledger.NextRound()
 	period := period(0)
@@ -71,8 +68,6 @@ func TestCertificateGoodCertificateBasic(t *testing.T) {
 }
 
 func TestCertificateGoodCertificateEarlyBreak(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	ledger, addresses, vrfSecrets, otSecrets := readOnlyFixture100()
 	round := ledger.NextRound()
 	period := period(0)
@@ -99,8 +94,6 @@ func TestCertificateGoodCertificateEarlyBreak(t *testing.T) {
 }
 
 func TestCertificateFinalCert(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	ledger, addresses, vrfSecrets, otSecrets := readOnlyFixture100()
 	round := ledger.NextRound()
 	period := period(0)
@@ -127,8 +120,6 @@ func TestCertificateFinalCert(t *testing.T) {
 }
 
 func TestCertificateBadCertificateWithFakeDoubleVote(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	ledger, addresses, vrfSecrets, otSecrets := readOnlyFixture100()
 	round := ledger.NextRound()
 	period := period(0)
@@ -182,8 +173,6 @@ func TestCertificateBadCertificateWithFakeDoubleVote(t *testing.T) {
 }
 
 func TestCertificateDifferentBlock(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	ledger, addresses, vrfSecrets, otSecrets := readOnlyFixture100()
 	round := ledger.NextRound()
 	period := period(0)
@@ -213,8 +202,6 @@ func TestCertificateDifferentBlock(t *testing.T) {
 }
 
 func TestCertificateNoCertStep(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	ledger, addresses, vrfSecrets, otSecrets := readOnlyFixture100()
 	round := ledger.NextRound()
 	period := period(0)
@@ -237,8 +224,6 @@ func TestCertificateNoCertStep(t *testing.T) {
 }
 
 func TestCertificateNotEnoughVotesToCert(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	ledger, addresses, vrfSecrets, otSecrets := readOnlyFixture100()
 	round := ledger.NextRound()
 	period := period(0)
@@ -271,8 +256,6 @@ func TestCertificateNotEnoughVotesToCert(t *testing.T) {
 }
 
 func TestCertificateCertWrongRound(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	ledger, addresses, vrfSecrets, otSecrets := readOnlyFixture100()
 	round := ledger.NextRound()
 	period := period(0)
@@ -302,8 +285,6 @@ func TestCertificateCertWrongRound(t *testing.T) {
 }
 
 func TestCertificateCertWithTooFewVotes(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	ledger, addresses, vrfSecrets, otSecrets := readOnlyFixture100()
 	round := ledger.NextRound()
 	period := period(0)
@@ -332,8 +313,6 @@ func TestCertificateCertWithTooFewVotes(t *testing.T) {
 }
 
 func TestCertificateDupVote(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	ledger, addresses, vrfSecrets, otSecrets := readOnlyFixture100()
 	round := ledger.NextRound()
 	period := period(0)

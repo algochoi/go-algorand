@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2021 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -18,10 +18,9 @@ package protocol
 
 import (
 	"reflect"
+	"strings"
 	"testing"
 
-	"github.com/algorand/go-algorand/test/partitiontest"
-	"github.com/algorand/go-codec/codec"
 	"github.com/stretchr/testify/require"
 )
 
@@ -55,16 +54,12 @@ type HelperStruct2 struct {
 }
 
 func TestOmitEmpty(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	var x TestStruct
 	enc := EncodeReflect(&x)
 	require.Equal(t, 1, len(enc))
 }
 
 func TestEncodeOrder(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	var a struct {
 		A int
 		B string
@@ -122,8 +117,6 @@ type InlineParent struct {
 }
 
 func TestEncodeInline(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	a := InlineChild{X: 5}
 	b := InlineParent{InlineChild: a}
 
@@ -136,8 +129,6 @@ type embeddedMsgp struct {
 }
 
 func TestEncodeEmbedded(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	var x embeddedMsgp
 
 	x.TxType = PaymentTx
@@ -154,8 +145,6 @@ func TestEncodeEmbedded(t *testing.T) {
 }
 
 func TestEncodeJSON(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	type ar []string
 	type mp struct {
 		Map map[int]ar `codec:"ld,allocbound=config.MaxEvalDeltaAccounts"`
@@ -167,34 +156,20 @@ func TestEncodeJSON(t *testing.T) {
 	v.Map[1] = []string{"test1"}
 
 	nonStrict := EncodeJSON(&v)
-	require.Contains(t, string(nonStrict), `0:`)
-	require.Contains(t, string(nonStrict), `1:`)
+	strings.Contains(string(nonStrict), `0:`)
+	strings.Contains(string(nonStrict), `1:`)
 
 	strict := EncodeJSONStrict(&v)
-	require.Contains(t, string(strict), `"0":`)
-	require.Contains(t, string(strict), `"1":`)
+	strings.Contains(string(strict), `"0":`)
+	strings.Contains(string(strict), `"1":`)
 
 	var nsv mp
 	err := DecodeJSON(nonStrict, &nsv)
 	require.NoError(t, err)
 
 	var sv mp
-	err = DecodeJSON(strict, &sv)
+	err = DecodeJSON(nonStrict, &sv)
 	require.NoError(t, err)
-
-	require.True(t, reflect.DeepEqual(v, nsv))
-	require.True(t, reflect.DeepEqual(v, sv))
-
-	decodeJSONStrict := func(b []byte, objptr interface{}) error {
-		dec := codec.NewDecoderBytes(b, JSONStrictHandle)
-		return dec.Decode(objptr)
-	}
-
-	nsv = mp{}
-	decodeJSONStrict(nonStrict, &nsv)
-
-	sv = mp{}
-	decodeJSONStrict(strict, &sv)
 
 	require.True(t, reflect.DeepEqual(v, nsv))
 	require.True(t, reflect.DeepEqual(v, sv))

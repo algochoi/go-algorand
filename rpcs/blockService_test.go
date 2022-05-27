@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2021 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -19,9 +19,7 @@ package rpcs
 import (
 	"context"
 	"fmt"
-	"io/ioutil"
 	"net/http"
-	"strings"
 	"testing"
 	"time"
 
@@ -32,11 +30,9 @@ import (
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data"
 	"github.com/algorand/go-algorand/data/basics"
-	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/network"
 	"github.com/algorand/go-algorand/protocol"
-	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
 type mockUnicastPeer struct {
@@ -52,11 +48,6 @@ func (mup *mockUnicastPeer) Unicast(ctx context.Context, data []byte, tag protoc
 func (mup *mockUnicastPeer) Version() string {
 	return "2.1"
 }
-
-// GetConnectionLatency returns the connection latency between the local node and this peer.
-func (mup *mockUnicastPeer) GetConnectionLatency() time.Duration {
-	return time.Duration(0)
-}
 func (mup *mockUnicastPeer) Request(ctx context.Context, tag network.Tag, topics network.Topics) (resp *network.Response, e error) {
 	return nil, nil
 }
@@ -67,7 +58,6 @@ func (mup *mockUnicastPeer) Respond(ctx context.Context, reqMsg network.Incoming
 
 // TestHandleCatchupReqNegative covers the error reporting in handleCatchupReq
 func TestHandleCatchupReqNegative(t *testing.T) {
-	partitiontest.PartitionTest(t)
 
 	reqMsg := network.IncomingMessage{
 		Sender: &mockUnicastPeer{},
@@ -120,10 +110,8 @@ func TestHandleCatchupReqNegative(t *testing.T) {
 	require.Equal(t, roundNumberParseErrMsg, string(val))
 }
 
-// TestRedirectFallbackArchiver tests the case when the block service fallback to another in the absense of a given block.
+// TestRedirectBasic tests the case when the block service redirects the request to elsewhere
 func TestRedirectFallbackArchiver(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	log := logging.TestingLog(t)
 
 	ledger1 := makeLedger(t, "l1")
@@ -138,8 +126,8 @@ func TestRedirectFallbackArchiver(t *testing.T) {
 	net2 := &httpTestPeerSource{}
 
 	config := config.GetDefaultLocal()
-	bs1 := MakeBlockService(log, config, ledger1, net1, "test-genesis-ID")
-	bs2 := MakeBlockService(log, config, ledger2, net2, "test-genesis-ID")
+	bs1 := MakeBlockService(log, config, ledger1, net1, "{genesisID}")
+	bs2 := MakeBlockService(log, config, ledger2, net2, "{genesisID}")
 
 	nodeA := &basicRPCNode{}
 	nodeB := &basicRPCNode{}
@@ -161,7 +149,6 @@ func TestRedirectFallbackArchiver(t *testing.T) {
 
 	ctx := context.Background()
 	parsedURL.Path = FormatBlockQuery(uint64(2), parsedURL.Path, net1)
-	parsedURL.Path = strings.Replace(parsedURL.Path, "{genesisID}", "test-genesis-ID", 1)
 	blockURL := parsedURL.String()
 	request, err := http.NewRequest("GET", blockURL, nil)
 	require.NoError(t, err)
@@ -173,64 +160,10 @@ func TestRedirectFallbackArchiver(t *testing.T) {
 	require.NoError(t, err)
 
 	require.Equal(t, http.StatusOK, response.StatusCode)
-	bodyData, err := ioutil.ReadAll(response.Body)
-	require.NoError(t, err)
-	require.NotEqual(t, 0, len(bodyData))
-}
-
-// TestBlockServiceShutdown tests that the block service is shutting down correctly.
-func TestBlockServiceShutdown(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
-	log := logging.TestingLog(t)
-
-	ledger1 := makeLedger(t, "l1")
-	addBlock(t, ledger1)
-
-	net1 := &httpTestPeerSource{}
-
-	config := config.GetDefaultLocal()
-	bs1 := MakeBlockService(log, config, ledger1, net1, "test-genesis-ID")
-	bs1.Start()
-
-	nodeA := &basicRPCNode{}
-
-	nodeA.RegisterHTTPHandler(BlockServiceBlockPath, bs1)
-	nodeA.start()
-	defer nodeA.stop()
-
-	parsedURL, err := network.ParseHostOrURL(nodeA.rootURL())
-	require.NoError(t, err)
-
-	client := http.Client{}
-
-	ctx := context.Background()
-	parsedURL.Path = FormatBlockQuery(uint64(1), parsedURL.Path, net1)
-	parsedURL.Path = strings.Replace(parsedURL.Path, "{genesisID}", "test-genesis-ID", 1)
-	blockURL := parsedURL.String()
-	request, err := http.NewRequest("GET", blockURL, nil)
-	require.NoError(t, err)
-	requestCtx, requestCancel := context.WithTimeout(ctx, time.Duration(config.CatchupHTTPBlockFetchTimeoutSec)*time.Second)
-	defer requestCancel()
-	request = request.WithContext(requestCtx)
-	network.SetUserAgentHeader(request.Header)
-
-	requestDone := make(chan struct{})
-	go func() {
-		defer close(requestDone)
-		client.Do(request)
-	}()
-
-	bs1.Stop()
-	ledger1.Close()
-
-	<-requestDone
 }
 
 // TestRedirectBasic tests the case when the block service redirects the request to elsewhere
 func TestRedirectFallbackEndpoints(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	log := logging.TestingLog(t)
 
 	ledger1 := makeLedger(t, "l1")
@@ -283,8 +216,6 @@ func TestRedirectFallbackEndpoints(t *testing.T) {
 // - the case when the peer is not a valid http peer
 // - the case when the block service keeps redirecting and cannot get a block
 func TestRedirectExceptions(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	log := logging.TestingLog(t)
 
 	ledger1 := makeLedger(t, "l1")
@@ -345,7 +276,7 @@ func makeLedger(t *testing.T, namePostfix string) *data.Ledger {
 	}
 
 	log := logging.TestingLog(t)
-	genBal := bookkeeping.MakeGenesisBalances(genesis, sinkAddr, poolAddr)
+	genBal := data.MakeGenesisBalances(genesis, sinkAddr, poolAddr)
 	genHash := crypto.Digest{0x42}
 	cfg := config.GetDefaultLocal()
 	const inMem = true
@@ -363,7 +294,7 @@ func addBlock(t *testing.T, ledger *data.Ledger) {
 	require.NoError(t, err)
 	blk.BlockHeader.Round++
 	blk.BlockHeader.TimeStamp += int64(crypto.RandUint64() % 100 * 1000)
-	blk.TxnCommitments, err = blk.PaysetCommit()
+	blk.TxnRoot, err = blk.PaysetCommit()
 	require.NoError(t, err)
 
 	var cert agreement.Certificate

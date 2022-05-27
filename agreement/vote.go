@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2021 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -83,9 +83,6 @@ type (
 		Proposals [2]proposalValue           `codec:"props"`
 		Sigs      [2]crypto.OneTimeSignature `codec:"sigs"`
 	}
-
-	// UnauthenticatedVote exported for dumping textual versions of messages
-	UnauthenticatedVote = unauthenticatedVote
 )
 
 // verify verifies that a vote that was received from the network is valid.
@@ -129,7 +126,7 @@ func (uv unauthenticatedVote) verify(l LedgerReader) (vote, error) {
 
 	ephID := basics.OneTimeIDForRound(rv.Round, m.Record.KeyDilution(proto))
 	voteID := m.Record.VoteID
-	if !voteID.Verify(ephID, rv, uv.Sig, proto.EnableBatchVerification) {
+	if !voteID.Verify(ephID, rv, uv.Sig) {
 		return vote{}, fmt.Errorf("unauthenticatedVote.verify: could not verify FS signature on vote by %v given %v: %+v", rv.Sender, voteID, uv)
 	}
 
@@ -155,18 +152,27 @@ func makeVote(rv rawVote, voting crypto.OneTimeSigner, selection *crypto.VRFSecr
 		return unauthenticatedVote{}, fmt.Errorf("makeVote: could not get consensus params for round %d: %v", ParamsRound(rv.Round), err)
 	}
 
-	switch rv.Step {
-	case propose, soft, cert, late, redo:
-		if rv.Proposal == bottom {
-			logging.Base().Panicf("makeVote: votes from step %d cannot validate bottom", rv.Step)
+	if proto.FastPartitionRecovery {
+		switch rv.Step {
+		case propose, soft, cert, late, redo:
+			if rv.Proposal == bottom {
+				logging.Base().Panicf("makeVote: votes from step %d cannot validate bottom", rv.Step)
+			}
+		case down:
+			if rv.Proposal != bottom {
+				logging.Base().Panicf("makeVote: votes from step %d must validate bottom", rv.Step)
+			}
 		}
-	case down:
-		if rv.Proposal != bottom {
-			logging.Base().Panicf("makeVote: votes from step %d must validate bottom", rv.Step)
+	} else {
+		switch rv.Step {
+		case propose, soft, cert:
+			if rv.Proposal == bottom {
+				logging.Base().Panicf("makeVote: votes from step %d cannot validate bottom", rv.Step)
+			}
 		}
 	}
 
-	ephID := basics.OneTimeIDForRound(rv.Round, voting.KeyDilution(proto.DefaultKeyDilution))
+	ephID := basics.OneTimeIDForRound(rv.Round, voting.KeyDilution(proto))
 	sig := voting.Sign(ephID, rv)
 	if (sig == crypto.OneTimeSignature{}) {
 		return unauthenticatedVote{}, fmt.Errorf("makeVote: got back empty signature for vote")

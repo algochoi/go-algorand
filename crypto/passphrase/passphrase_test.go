@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2021 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -24,12 +24,9 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/crypto"
-	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
 func TestGenerateAndRecovery(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	key := make([]byte, 32)
 	for i := 0; i < 1000; i++ {
 		// Generate a key
@@ -45,8 +42,6 @@ func TestGenerateAndRecovery(t *testing.T) {
 }
 
 func TestZeroVector(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	zeroVector := []byte{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}
 	mn := "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon invest"
 
@@ -57,8 +52,6 @@ func TestZeroVector(t *testing.T) {
 }
 
 func TestWordNotInList(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	mn := "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon zzz invest"
 	_, err := MnemonicToKey(mn)
 	require.Error(t, err)
@@ -66,8 +59,6 @@ func TestWordNotInList(t *testing.T) {
 }
 
 func TestCorruptedChecksum(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	key := make([]byte, 32)
 	_, err := rand.Read(key)
 	require.NoError(t, err)
@@ -82,8 +73,6 @@ func TestCorruptedChecksum(t *testing.T) {
 }
 
 func TestInvalidKeyLen(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	badLens := []int{0, 31, 33, 100}
 	for _, l := range badLens {
 		key := make([]byte, l)
@@ -96,8 +85,6 @@ func TestInvalidKeyLen(t *testing.T) {
 }
 
 func TestUint11Array(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	N := 11*8*32 + 1
 
 	for i := 0; i < N; i++ {

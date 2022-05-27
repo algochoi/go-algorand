@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2021 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -23,7 +23,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/stretchr/testify/require"
 )
 
@@ -32,7 +31,6 @@ type GaugeTest struct {
 }
 
 func TestMetricGauge(t *testing.T) {
-	partitiontest.PartitionTest(t)
 
 	test := &GaugeTest{
 		MetricTest: NewMetricTest(),
@@ -66,8 +64,8 @@ func TestMetricGauge(t *testing.T) {
 	test.Lock()
 	defer test.Unlock()
 
-	// the the loop above we've created a single metric name with five different labels set ( host0, host1 .. host 4)
-	// let's see if we received all the 5 different labels.
+	// the the loop above we've created a single metric name with five diffrent labels set ( host0, host1 .. host 4)
+	// let's see if we received all the 5 diffrent labels.
 	require.Equal(t, 5, len(test.metrics), "Missing metric counts were reported.")
 
 	// iterate through the metrics and check the each of the metrics reached it's correct count.

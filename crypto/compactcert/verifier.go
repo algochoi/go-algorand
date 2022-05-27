@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2021 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -21,19 +21,20 @@ import (
 
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/crypto/merklearray"
+	"github.com/algorand/go-algorand/data/basics"
 )
 
 // Verifier is used to verify a compact certificate.
 type Verifier struct {
 	Params
 
-	partcom crypto.GenericDigest
+	partcom crypto.Digest
 }
 
 // MkVerifier constructs a verifier to check the compact certificate
 // on the message specified in p, with partcom specifying the Merkle
 // root of the participants that must sign the message.
-func MkVerifier(p Params, partcom crypto.GenericDigest) *Verifier {
+func MkVerifier(p Params, partcom crypto.Digest) *Verifier {
 	return &Verifier{
 		Params:  p,
 		partcom: partcom,
@@ -47,35 +48,26 @@ func (v *Verifier) Verify(c *Cert) error {
 		return fmt.Errorf("cert signed weight %d <= proven weight %d", c.SignedWeight, v.ProvenWeight)
 	}
 
-	sigs := make(map[uint64]crypto.Hashable)
-	parts := make(map[uint64]crypto.Hashable)
+	// Verify all of the reveals
+	sigs := make(map[uint64]crypto.Digest)
+	parts := make(map[uint64]crypto.Digest)
 	for pos, r := range c.Reveals {
-		sig, err := buildCommittableSignature(r.SigSlot)
-		if err != nil {
-			return err
-		}
+		sigs[pos] = crypto.HashObj(r.SigSlot)
+		parts[pos] = crypto.HashObj(r.Part)
 
-		sigs[pos] = sig
-		parts[pos] = r.Part
-
-		// verify that the msg and the signature is valid under the given participant's Pk
-		err = r.Part.PK.Verify(
-			uint64(v.SigRound),
-			v.Msg,
-			r.SigSlot.Sig.Signature)
-
-		if err != nil {
-			return fmt.Errorf("signature in reveal pos %d does not verify. error is %s", pos, err)
+		ephID := basics.OneTimeIDForRound(v.SigRound, r.Part.KeyDilution)
+		if !r.Part.PK.Verify(ephID, v.Msg, r.SigSlot.Sig.OneTimeSignature) {
+			return fmt.Errorf("signature in reveal pos %d does not verify", pos)
 		}
 	}
 
-	// verify all the reveals proofs on the signature tree.
-	if err := merklearray.VerifyVectorCommitment(c.SigCommit[:], sigs, &c.SigProofs); err != nil {
+	err := merklearray.Verify(c.SigCommit, sigs, c.SigProofs)
+	if err != nil {
 		return err
 	}
 
-	// verify all the reveals proofs on the participant tree.
-	if err := merklearray.VerifyVectorCommitment(v.partcom[:], parts, &c.PartProofs); err != nil {
+	err = merklearray.Verify(v.partcom, parts, c.PartProofs)
+	if err != nil {
 		return err
 	}
 
@@ -85,7 +77,7 @@ func (v *Verifier) Verify(c *Cert) error {
 		return err
 	}
 
-	msgHash := crypto.GenericHashObj(c.PartProofs.HashFactory.NewHash(), v.Msg)
+	msgHash := crypto.HashObj(v.Msg)
 
 	for j := uint64(0); j < nr; j++ {
 		choice := coinChoice{

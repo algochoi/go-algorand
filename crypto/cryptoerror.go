@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2021 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -18,15 +18,13 @@ package crypto
 
 import "errors"
 
-var (
-	errInvalidVersion           = errors.New("Invalid version")
-	errInvalidAddress           = errors.New("Invalid address")
-	errInvalidThreshold         = errors.New("Invalid threshold")
-	errInvalidNumberOfSignature = errors.New("Invalid number of signatures")
-	errKeyNotExist              = errors.New("Key does not exist")
-	errKeysNotMatch             = errors.New("Public key lists do not match")
-	errInvalidDuplicates        = errors.New("Invalid duplicates")
-	errInvalidNumberOfSig       = errors.New("invalid number of signatures to add")
-)
+const errorinvalidversion = "Invalid version"
+const errorinvalidaddress = "Invalid address"
+const errorinvalidthreshold = "Invalid threshold"
+const errorinvalidnumberofsignature = "Invalid number of signatures"
+const errorkeynotexist = "Key does not exist"
+const errorsubsigverification = "Verification failure: subsignature"
+const errorkeysnotmatch = "Public key lists do not match"
+const errorinvalidduplicates = "Invalid duplicates"
 
 var errUnknownVersion = errors.New("unknown version")

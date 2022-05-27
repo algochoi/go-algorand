@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2021 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -87,11 +87,7 @@ func MakeAccessor(dbfilename string, readOnly bool, inMemory bool) (Accessor, er
 // see https://www.sqlite.org/pragma.html#pragma_secure_delete
 // It is not read-only and not in-memory (otherwise, erasability doesn't matter)
 func MakeErasableAccessor(dbfilename string) (Accessor, error) {
-	return makeErasableAccessor(dbfilename, false)
-}
-
-func makeErasableAccessor(dbfilename string, readOnly bool) (Accessor, error) {
-	return makeAccessorImpl(dbfilename, readOnly, false, []string{"_secure_delete=on"})
+	return makeAccessorImpl(dbfilename, false, false, []string{"_secure_delete=on"})
 }
 
 func makeAccessorImpl(dbfilename string, readOnly bool, inMemory bool, params []string) (Accessor, error) {
@@ -181,7 +177,7 @@ func Retry(fn func() error) (err error) {
 	return LoggedRetry(fn, logging.Base())
 }
 
-// getDecoratedLogger returns a decorated logger that includes the readonly true/false, caller and extra fields.
+// getDecoratedLogger retruns a decorated logger that includes the readonly true/false, caller and extra fields.
 func (db *Accessor) getDecoratedLogger(fn idemFn, extras ...interface{}) logging.Logger {
 	log := db.logger().With("readonly", db.readOnly)
 	_, file, line, ok := runtime.Caller(3)
@@ -208,12 +204,12 @@ func (db *Accessor) IsSharedCacheConnection() bool {
 // Atomic executes a piece of code with respect to the database atomically.
 // For transactions where readOnly is false, sync determines whether or not to wait for the result.
 func (db *Accessor) Atomic(fn idemFn, extras ...interface{}) (err error) {
-	return db.atomic(fn, extras...)
+	return db.atomic(fn, nil, extras...)
 }
 
 // Atomic executes a piece of code with respect to the database atomically.
 // For transactions where readOnly is false, sync determines whether or not to wait for the result.
-func (db *Accessor) atomic(fn idemFn, extras ...interface{}) (err error) {
+func (db *Accessor) atomic(fn idemFn, commitLocker sync.Locker, extras ...interface{}) (err error) {
 	atomicDeadline := time.Now().Add(time.Second)
 
 	// note that the sql library will drop panics inside an active transaction
@@ -236,6 +232,29 @@ func (db *Accessor) atomic(fn idemFn, extras ...interface{}) (err error) {
 	var conn *sql.Conn
 	ctx := context.Background()
 
+	commitWriteLockTaken := false
+	if commitLocker != nil && db.IsSharedCacheConnection() {
+		// When we're using in memory database, the sqlite implementation forces us to use a shared cache
+		// mode so that multiple connections ( i.e. read and write ) could share the database instance.
+		// ( it would also create issues between precompiled statements and regular atomic calls, as the former
+		// would generate a connection on the fly).
+		// when using a shared cache, we have to be aware that there are additional locking mechanisms that are
+		// internal to the sqlite. Two of them which play a role here are the sqlite_unlock_notify which
+		// prevents a shared cache locks from returning "database is busy" error and would block instead, and
+		// table level locks, which ensure that at any one time, a single table may have any number of active
+		// read-locks or a single active write lock.
+		// see https://www.sqlite.org/sharedcache.html for more details.
+		// These shared cache constrains are more strict than the WAL based concurrency limitations, which allows
+		// one writer and multiple readers at the same time.
+		// In particular, the shared cache limitation means that since a connection could become a writer, any syncronization
+		// operating that would prevent this operation from completing could result with a deadlock.
+		// This is the reason why for shared cache connections, we'll take the lock before starting the write transaction,
+		// and would keep it along. It will cause a degraded performance when using a shared cache connection
+		// compared to a private cache connection, but would grentee correct locking semantics.
+		commitLocker.Lock()
+		commitWriteLockTaken = true
+	}
+
 	for i := 0; (i == 0) || dbretry(err); i++ {
 		if i > 0 {
 			if i < infoTxRetries {
@@ -252,11 +271,21 @@ func (db *Accessor) atomic(fn idemFn, extras ...interface{}) (err error) {
 
 	if err != nil {
 		// fail case - unable to create database connection
+		if commitLocker != nil && commitWriteLockTaken {
+			commitLocker.Unlock()
+		}
 		return
 	}
 	defer conn.Close()
 
 	for i := 0; ; i++ {
+		// check if the lock was taken in previous iteration
+		if commitLocker != nil && (!db.IsSharedCacheConnection()) && commitWriteLockTaken {
+			// undo the lock.
+			commitLocker.Unlock()
+			commitWriteLockTaken = false
+		}
+
 		if i > 0 {
 			if i < infoTxRetries {
 				db.getDecoratedLogger(fn, extras).Infof("db.atomic: %d retries (last err: %v)", i, err)
@@ -290,6 +319,12 @@ func (db *Accessor) atomic(fn idemFn, extras ...interface{}) (err error) {
 			}
 		}
 
+		// if everytyhing went well, take the lock, as we're going to attempt to commit the transaction to database.
+		if commitLocker != nil && (!commitWriteLockTaken) && (!db.IsSharedCacheConnection()) {
+			commitLocker.Lock()
+			commitWriteLockTaken = true
+		}
+
 		err = tx.Commit()
 		if err == nil {
 			// update the deadline, as it might have been updated.
@@ -298,6 +333,11 @@ func (db *Accessor) atomic(fn idemFn, extras ...interface{}) (err error) {
 		} else if !dbretry(err) {
 			break
 		}
+	}
+
+	// if we've errored, make sure to unlock the commitLocker ( if there is any )
+	if err != nil && commitLocker != nil && commitWriteLockTaken {
+		commitLocker.Unlock()
 	}
 
 	if time.Now().After(atomicDeadline) {
@@ -320,6 +360,14 @@ func ResetTransactionWarnDeadline(ctx context.Context, tx *sql.Tx, deadline time
 	prevDeadline = txContextData.deadline
 	txContextData.deadline = deadline
 	return
+}
+
+// AtomicCommitWriteLock executes a piece of code with respect to the database atomically.
+// For transactions where readOnly is false, sync determines whether or not to wait for the result.
+// The commitLocker is being taken before the transaction is committed. In case of an error, the lock would get released.
+// on all success cases ( i.e. err = nil ) the lock would be taken. on all the fail cases, the lock would be released
+func (db *Accessor) AtomicCommitWriteLock(fn idemFn, commitLocker sync.Locker, extras ...interface{}) (err error) {
+	return db.atomic(fn, commitLocker, extras...)
 }
 
 // Vacuum perform a full-vacuum on the given database. In order for the vacuum to succeed, the storage needs to have
@@ -390,7 +438,7 @@ func dbretry(obj error) bool {
 	return ok && (err.Code == sqlite3.ErrLocked || err.Code == sqlite3.ErrBusy)
 }
 
-// IsErrBusy examine the input inerr variable of type error and determine if it's a sqlite3 error for the ErrBusy error code.
+// IsErrBusy examine the input inerr varaible of type error and determine if it's a sqlite3 error for the ErrBusy error code.
 func IsErrBusy(inerr error) bool {
 	err, ok := inerr.(sqlite3.Error)
 	return ok && (err.Code == sqlite3.ErrBusy)
@@ -425,7 +473,7 @@ const (
 	SynchronousModeExtra SynchronousMode = 3
 )
 
-// SetSynchronousMode updates the synchronous mode of the connection
+// SetSynchronousMode updates the syncronous mode of the connection
 func (db *Accessor) SetSynchronousMode(ctx context.Context, mode SynchronousMode, fullfsync bool) (err error) {
 	if mode < SynchronousModeOff || mode > SynchronousModeExtra {
 		return fmt.Errorf("invalid value(%d) was provided to mode", mode)

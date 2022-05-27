@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2021 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -19,12 +19,10 @@ package crypto
 import (
 	"testing"
 
-	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/stretchr/testify/require"
 )
 
 func TestEncodeDecode(t *testing.T) {
-	partitiontest.PartitionTest(t)
 	toBeHashed := []byte("this is a test")
 	hashed := Hash(toBeHashed)
 	hashedStr := hashed.String()
@@ -35,7 +33,6 @@ func TestEncodeDecode(t *testing.T) {
 }
 
 func TestDigest_IsZero(t *testing.T) {
-	partitiontest.PartitionTest(t)
 	d := Digest{}
 	require.True(t, d.IsZero())
 	require.Zero(t, d)

@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2021 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -23,14 +23,11 @@ import (
 	"time"
 
 	"github.com/algorand/go-algorand/logging"
-	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/miekg/dns"
 	"github.com/stretchr/testify/require"
 )
 
 func TestLookup(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	a := require.New(t)
 
 	r := makeEmptyTestResolver()
@@ -216,8 +213,6 @@ func TestLookup(t *testing.T) {
 }
 
 func TestLookupAux(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	a := require.New(t)
 
 	r := makeEmptyTestResolver()
@@ -317,8 +312,6 @@ func TestLookupAux(t *testing.T) {
 }
 
 func TestDeadNS(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	t.Skip() // skip real network tests in autotest
 	a := require.New(t)
 
@@ -336,8 +329,6 @@ func TestDeadNS(t *testing.T) {
 }
 
 func TestRealRequests(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	t.Skip() // skip real network tests in autotest
 	a := require.New(t)
 
@@ -387,8 +378,6 @@ func TestRealRequests(t *testing.T) {
 }
 
 func TestDefaultResolver(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	a := require.New(t)
 	r := MakeDefaultDnssecResolver("127.0.0.1", logging.Base())
 	provided := len(DefaultDnssecAwareNSServers) + 1

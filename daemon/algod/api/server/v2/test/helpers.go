@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2021 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -21,18 +21,17 @@ import (
 	"math/rand"
 	"strconv"
 	"testing"
+	"time"
 
 	"github.com/algorand/go-algorand/agreement"
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
-	v2 "github.com/algorand/go-algorand/daemon/algod/api/server/v2"
 	generatedV2 "github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated"
 	"github.com/algorand/go-algorand/data"
 	"github.com/algorand/go-algorand/data/account"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
-	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/node"
@@ -74,7 +73,6 @@ var poolAddrResponseGolden = generatedV2.AccountResponse{
 	AppsLocalState:              &appLocalStates,
 	AppsTotalSchema:             &appsTotalSchema,
 	CreatedApps:                 &appCreatedApps,
-	MinBalance:                  100000,
 }
 var txnPoolGolden = make([]transactions.SignedTxn, 2)
 
@@ -82,45 +80,21 @@ var txnPoolGolden = make([]transactions.SignedTxn, 2)
 // but doing this would create an import cycle, as mockNode needs
 // package `data` and package `node`, which themselves import `mocks`
 type mockNode struct {
-	ledger    v2.LedgerForAPI
+	ledger    *data.Ledger
 	genesisID string
 	config    config.Local
 	err       error
-	id        account.ParticipationID
-	keys      account.StateProofKeys
 }
 
-func (m mockNode) InstallParticipationKey(partKeyBinary []byte) (account.ParticipationID, error) {
-	panic("implement me")
-}
-
-func (m mockNode) ListParticipationKeys() ([]account.ParticipationRecord, error) {
-	panic("implement me")
-}
-
-func (m mockNode) GetParticipationKey(id account.ParticipationID) (account.ParticipationRecord, error) {
-	panic("implement me")
-}
-
-func (m mockNode) RemoveParticipationKey(id account.ParticipationID) error {
-	panic("implement me")
-}
-
-func (m *mockNode) AppendParticipationKeys(id account.ParticipationID, keys account.StateProofKeys) error {
-	m.id = id
-	m.keys = keys
-	return m.err
-}
-
-func makeMockNode(ledger v2.LedgerForAPI, genesisID string, nodeError error) *mockNode {
-	return &mockNode{
+func makeMockNode(ledger *data.Ledger, genesisID string, nodeError error) mockNode {
+	return mockNode{
 		ledger:    ledger,
 		genesisID: genesisID,
 		config:    config.GetDefaultLocal(),
 		err:       nodeError}
 }
 
-func (m mockNode) LedgerForAPI() v2.LedgerForAPI {
+func (m mockNode) Ledger() *data.Ledger {
 	return m.ledger
 }
 
@@ -133,7 +107,7 @@ func (m mockNode) GenesisID() string {
 }
 
 func (m mockNode) GenesisHash() crypto.Digest {
-	return m.ledger.(*data.Ledger).GenesisHash()
+	return m.ledger.GenesisHash()
 }
 
 func (m mockNode) BroadcastSignedTxGroup(txgroup []transactions.SignedTxn) error {
@@ -196,7 +170,7 @@ func (m mockNode) GetTransactionByID(txid transactions.Txid, rnd basics.Round) (
 	return node.TxnWithStatus{}, fmt.Errorf("get transaction by id not implemented")
 }
 
-func (m mockNode) AssembleBlock(round basics.Round) (agreement.ValidatedBlock, error) {
+func (m mockNode) AssembleBlock(round basics.Round, deadline time.Time) (agreement.ValidatedBlock, error) {
 	return nil, fmt.Errorf("assemble block not implemented")
 }
 
@@ -214,7 +188,6 @@ var sinkAddr = basics.Address{0x7, 0xda, 0xcb, 0x4b, 0x6d, 0x9e, 0xd1, 0x41, 0xb
 var poolAddr = basics.Address{0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff}
 var genesisHash = crypto.Digest{0xff, 0xfe, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xfe}
 var genesisID = "testingid"
-var retOneProgram = []byte{2, 0x20, 1, 1, 0x22}
 
 var proto = config.Consensus[protocol.ConsensusCurrentVersion]
 
@@ -283,15 +256,7 @@ func testingenv(t testing.TB, numAccounts, numTxs int, offlineAccounts bool) (*d
 
 	genesis[poolAddr] = basics.MakeAccountData(basics.NotParticipating, basics.MicroAlgos{Raw: 100000 * uint64(proto.RewardsRateRefreshInterval)})
 
-	program := logic.Program(retOneProgram)
-	lhash := crypto.HashObj(&program)
-	var addr basics.Address
-	copy(addr[:], lhash[:])
-	ad := basics.MakeAccountData(basics.NotParticipating, basics.MicroAlgos{Raw: 100000 * uint64(proto.RewardsRateRefreshInterval)})
-	ad.AppLocalStates = map[basics.AppIndex]basics.AppLocalState{1: {}}
-	genesis[addr] = ad
-
-	bootstrap := bookkeeping.MakeGenesisBalances(genesis, sinkAddr, poolAddr)
+	bootstrap := data.MakeGenesisBalances(genesis, poolAddr, sinkAddr)
 
 	// generate test transactions
 	const inMem = true

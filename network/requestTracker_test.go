@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2021 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -25,7 +25,6 @@ import (
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/logging"
-	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
 func (ard *hostIncomingRequests) remove(trackedRequest *TrackerRequest) {
@@ -38,8 +37,6 @@ func (ard *hostIncomingRequests) remove(trackedRequest *TrackerRequest) {
 	}
 }
 func TestHostIncomingRequestsOrdering(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	if defaultConfig.ConnectionsRateLimitingCount == 0 || defaultConfig.ConnectionsRateLimitingWindowSeconds == 0 {
 		t.Skip()
 	}
@@ -73,8 +70,6 @@ func TestHostIncomingRequestsOrdering(t *testing.T) {
 }
 
 func TestRateLimiting(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	if defaultConfig.ConnectionsRateLimitingCount == 0 || defaultConfig.ConnectionsRateLimitingWindowSeconds == 0 {
 		t.Skip()
 	}
@@ -171,8 +166,6 @@ func TestRateLimiting(t *testing.T) {
 }
 
 func TestIsLocalHost(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	require.True(t, isLocalhost("localhost"))
 	require.True(t, isLocalhost("127.0.0.1"))
 	require.True(t, isLocalhost("[::1]"))

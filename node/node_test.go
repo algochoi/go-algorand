@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2021 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -37,7 +37,6 @@ import (
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
-	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/algorand/go-algorand/util"
 	"github.com/algorand/go-algorand/util/db"
 	"github.com/algorand/go-algorand/util/execpool"
@@ -57,7 +56,7 @@ var defaultConfig = config.Local{
 }
 
 func setupFullNodes(t *testing.T, proto protocol.ConsensusVersion, verificationPool execpool.BacklogPool, customConsensus config.ConsensusProtocols) ([]*AlgorandFullNode, []string, []string) {
-	util.SetFdSoftLimit(1000)
+	util.RaiseRlimit(1000)
 	f, _ := os.Create(t.Name() + ".log")
 	logging.Base().SetJSONFormatter()
 	logging.Base().SetOutput(f)
@@ -129,10 +128,10 @@ func setupFullNodes(t *testing.T, proto protocol.ConsensusVersion, verificationP
 			panic(err)
 		}
 		part, err := account.FillDBWithParticipationKeys(access, root.Address(), firstRound, lastRound, config.Consensus[protocol.ConsensusCurrentVersion].DefaultKeyDilution)
+		access.Close()
 		if err != nil {
 			panic(err)
 		}
-		access.Close()
 
 		data := basics.AccountData{
 			Status:      basics.Online,
@@ -144,7 +143,7 @@ func setupFullNodes(t *testing.T, proto protocol.ConsensusVersion, verificationP
 		genesis[short] = data
 	}
 
-	bootstrap := bookkeeping.MakeGenesisBalances(genesis, sinkAddr, poolAddr)
+	bootstrap := data.MakeGenesisBalances(genesis, sinkAddr, poolAddr)
 
 	for i, rootDirectory := range rootDirs {
 		genesisDir := filepath.Join(rootDirectory, g.ID())
@@ -178,8 +177,6 @@ func setupFullNodes(t *testing.T, proto protocol.ConsensusVersion, verificationP
 }
 
 func TestSyncingFullNode(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	t.Skip("This is failing randomly again - PLEASE FIX!")
 
 	backlogPool := execpool.MakeBacklog(nil, 0, execpool.LowPriority, nil)
@@ -237,8 +234,6 @@ func TestSyncingFullNode(t *testing.T) {
 }
 
 func TestInitialSync(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	t.Skip("flaky TestInitialSync ")
 
 	backlogPool := execpool.MakeBacklog(nil, 0, execpool.LowPriority, nil)
@@ -272,8 +267,6 @@ func TestInitialSync(t *testing.T) {
 }
 
 func TestSimpleUpgrade(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	t.Skip("Randomly failing: node_test.go:~330 : no block notification for account. Re-enable after agreement bug-fix pass")
 
 	backlogPool := execpool.MakeBacklog(nil, 0, execpool.LowPriority, nil)
@@ -423,8 +416,6 @@ func delayStartNode(node *AlgorandFullNode, peers []*AlgorandFullNode, delay tim
 }
 
 func TestStatusReport_TimeSinceLastRound(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	type fields struct {
 		LastRoundTimestamp time.Time
 	}
@@ -476,13 +467,11 @@ type mismatchingDirectroyPermissionsLog struct {
 
 func (m mismatchingDirectroyPermissionsLog) Errorf(fmts string, args ...interface{}) {
 	fmtStr := fmt.Sprintf(fmts, args...)
-	require.Contains(m.t, fmtStr, "Unable to create genesis directory")
+	require.Contains(m.t, fmtStr, "Unable to create genesis directroy")
 }
 
 // TestMismatchingGenesisDirectoryPermissions tests to see that the os.MkDir check we have in MakeFull works as expected. It tests both the return error as well as the logged error.
 func TestMismatchingGenesisDirectoryPermissions(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	testDirectroy, err := ioutil.TempDir(os.TempDir(), t.Name())
 	require.NoError(t, err)
 
@@ -506,50 +495,4 @@ func TestMismatchingGenesisDirectoryPermissions(t *testing.T) {
 
 	require.NoError(t, os.Chmod(testDirectroy, 1700))
 	require.NoError(t, os.RemoveAll(testDirectroy))
-}
-
-func TestAsyncRecord(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
-	testDirectroy, err := ioutil.TempDir(os.TempDir(), t.Name())
-	require.NoError(t, err)
-
-	genesis := bookkeeping.Genesis{
-		SchemaID:    "go-test-node-record-async",
-		Proto:       protocol.ConsensusCurrentVersion,
-		Network:     config.Devtestnet,
-		FeeSink:     sinkAddr.String(),
-		RewardsPool: poolAddr.String(),
-	}
-
-	cfg := config.GetDefaultLocal()
-	cfg.DisableNetworking = true
-	node, err := MakeFull(logging.TestingLog(t), testDirectroy, config.GetDefaultLocal(), []string{}, genesis)
-	require.NoError(t, err)
-	node.Start()
-	defer node.Stop()
-
-	var addr basics.Address
-	addr[0] = 1
-
-	p := account.Participation{
-		Parent:     addr,
-		FirstValid: 0,
-		LastValid:  1000000,
-		Voting:     &crypto.OneTimeSignatureSecrets{},
-		VRF:        &crypto.VRFSecrets{},
-	}
-	id, err := node.accountManager.Registry().Insert(p)
-	require.NoError(t, err)
-	err = node.accountManager.Registry().Register(id, 0)
-	require.NoError(t, err)
-
-	node.Record(addr, 10000, account.Vote)
-	node.Record(addr, 20000, account.BlockProposal)
-
-	time.Sleep(5000 * time.Millisecond)
-	records := node.accountManager.Registry().GetAll()
-	require.Len(t, records, 1)
-	require.Equal(t, 10000, int(records[0].LastVote))
-	require.Equal(t, 20000, int(records[0].LastBlockProposal))
 }

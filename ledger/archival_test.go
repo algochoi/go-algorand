@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2021 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -40,11 +40,9 @@ import (
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
-	"github.com/algorand/go-algorand/ledger/internal"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
-	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/algorand/go-algorand/util/db"
 )
 
@@ -69,7 +67,7 @@ func (wl *wrappedLedger) BlockHdr(rnd basics.Round) (bookkeeping.BlockHeader, er
 	return wl.l.BlockHdr(rnd)
 }
 
-func (wl *wrappedLedger) trackerEvalVerified(blk bookkeeping.Block, accUpdatesLedger internal.LedgerForEvaluator) (ledgercore.StateDelta, error) {
+func (wl *wrappedLedger) trackerEvalVerified(blk bookkeeping.Block, accUpdatesLedger ledgerForEvaluator) (ledgercore.StateDelta, error) {
 	return wl.l.trackerEvalVerified(blk, accUpdatesLedger)
 }
 
@@ -97,11 +95,7 @@ func (wl *wrappedLedger) GenesisProto() config.ConsensusParams {
 	return wl.l.GenesisProto()
 }
 
-func (wl *wrappedLedger) GenesisAccounts() map[basics.Address]basics.AccountData {
-	return wl.l.GenesisAccounts()
-}
-
-func getInitState() (genesisInitState ledgercore.InitState) {
+func getInitState() (genesisInitState InitState) {
 	blk := bookkeeping.Block{}
 	blk.CurrentProtocol = protocol.ConsensusCurrentVersion
 	blk.RewardsPool = testPoolAddr
@@ -118,8 +112,6 @@ func getInitState() (genesisInitState ledgercore.InitState) {
 }
 
 func TestArchival(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	// This test ensures that trackers return the correct value from
 	// committedUpTo() -- that is, if they return round rnd, then they
 	// do not ask for any round before rnd on a subsequent call to
@@ -183,8 +175,6 @@ func TestArchival(t *testing.T) {
 }
 
 func TestArchivalRestart(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	// Start in archival mode, add 2K blocks, restart, ensure all blocks are there
 
 	// disable deadlock checking code
@@ -331,8 +321,6 @@ func makeUnsignedApplicationCallTx(appIdx uint64, onCompletion transactions.OnCo
 }
 
 func TestArchivalCreatables(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	// Start in archival mode, add 2K blocks with asset + app txns
 	// restart, ensure all assets are there in index unless they were
 	// deleted
@@ -689,8 +677,6 @@ func makeSignedTxnInBlock(tx transactions.Transaction) transactions.SignedTxnInB
 }
 
 func TestArchivalFromNonArchival(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	// Start in non-archival mode, add 2K blocks, restart in archival mode ensure only genesis block is there
 	deadlockDisable := deadlock.Opts.Disable
 	deadlock.Opts.Disable = true
@@ -729,10 +715,6 @@ func TestArchivalFromNonArchival(t *testing.T) {
 	l, err := OpenLedger(log, dbPrefix, inMem, genesisInitState, cfg)
 	require.NoError(t, err)
 	blk := genesisInitState.Block
-
-	// The next operations are heavy on the memory.
-	// Garbage collection helps prevent trashing
-	runtime.GC()
 
 	const maxBlocks = 2000
 	for i := 0; i < maxBlocks; i++ {
@@ -788,9 +770,6 @@ func TestArchivalFromNonArchival(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, basics.Round(0), earliest)
 	require.Equal(t, basics.Round(0), latest)
-
-	// Minimize the impact of the memory consumption here on other tests.
-	runtime.GC()
 }
 
 func checkTrackers(t *testing.T, wl *wrappedLedger, rnd basics.Round) (basics.Round, error) {
@@ -802,10 +781,9 @@ func checkTrackers(t *testing.T, wl *wrappedLedger, rnd basics.Round) (basics.Ro
 	defer wl.l.trackerMu.RUnlock()
 	for _, trk := range wl.l.trackers.trackers {
 		if au, ok := trk.(*accountUpdates); ok {
-			wl.l.trackers.waitAccountsWriting()
-			minSave, _ = trk.committedUpTo(rnd)
-			wl.l.trackers.committedUpTo(rnd)
-			wl.l.trackers.waitAccountsWriting()
+			au.waitAccountsWriting()
+			minSave = trk.committedUpTo(rnd)
+			au.waitAccountsWriting()
 			if minSave < minMinSave {
 				minMinSave = minSave
 			}
@@ -817,9 +795,9 @@ func checkTrackers(t *testing.T, wl *wrappedLedger, rnd basics.Round) (basics.Ro
 			au = cleanTracker.(*accountUpdates)
 			cfg := config.GetDefaultLocal()
 			cfg.Archival = true
-			au.initialize(cfg)
+			au.initialize(cfg, "", au.initProto, wl.l.accts.initAccounts)
 		} else {
-			minSave, _ = trk.committedUpTo(rnd)
+			minSave = trk.committedUpTo(rnd)
 			if minSave < minMinSave {
 				minMinSave = minSave
 			}
@@ -830,7 +808,7 @@ func checkTrackers(t *testing.T, wl *wrappedLedger, rnd basics.Round) (basics.Ro
 		}
 
 		cleanTracker.close()
-		err := cleanTracker.loadFromDisk(wl, wl.l.trackers.dbRound)
+		err := cleanTracker.loadFromDisk(wl)
 		require.NoError(t, err)
 
 		cleanTracker.close()

@@ -25,9 +25,6 @@ type Account struct {
 	// Note the raw object uses `map[int] -> AppLocalState` for this type.
 	AppsLocalState *[]ApplicationLocalState `json:"apps-local-state,omitempty"`
 
-	// \[teap\] the sum of all extra application program pages for this account.
-	AppsTotalExtraPages *uint64 `json:"apps-total-extra-pages,omitempty"`
-
 	// Specifies maximums on the number of each type that may be stored.
 	AppsTotalSchema *ApplicationStateSchema `json:"apps-total-schema,omitempty"`
 
@@ -48,11 +45,6 @@ type Account struct {
 	//
 	// Note: the raw account uses `map[int] -> Asset` for this type.
 	CreatedAssets *[]Asset `json:"created-assets,omitempty"`
-
-	// MicroAlgo balance required by the account.
-	//
-	// The requirement grows based on asset and application usage.
-	MinBalance uint64 `json:"min-balance"`
 
 	// AccountParticipation describes the parameters used by this account in consensus protocol.
 	Participation *AccountParticipation `json:"participation,omitempty"`
@@ -80,18 +72,6 @@ type Account struct {
 	// *  Online  - indicates that the associated account used as part of the delegation pool.
 	// *   NotParticipating - indicates that the associated account is neither a delegator nor a delegate.
 	Status string `json:"status"`
-
-	// The count of all applications that have been opted in, equivalent to the count of application local data (AppLocalState objects) stored in this account.
-	TotalAppsOptedIn uint64 `json:"total-apps-opted-in"`
-
-	// The count of all assets that have been opted in, equivalent to the count of AssetHolding objects held by this account.
-	TotalAssetsOptedIn uint64 `json:"total-assets-opted-in"`
-
-	// The count of all apps (AppParams objects) created by this account.
-	TotalCreatedApps uint64 `json:"total-created-apps"`
-
-	// The count of all assets (AssetParams objects) created by this account.
-	TotalCreatedAssets uint64 `json:"total-created-assets"`
 }
 
 // AccountParticipation defines model for AccountParticipation.
@@ -99,9 +79,6 @@ type AccountParticipation struct {
 
 	// \[sel\] Selection public key (if any) currently registered for this round.
 	SelectionParticipationKey []byte `json:"selection-participation-key"`
-
-	// \[stprf\] Root of the state proof key (if any)
-	StateProofKey *[]byte `json:"state-proof-key,omitempty"`
 
 	// \[voteFst\] First round for which this participation is valid.
 	VoteFirstValid uint64 `json:"vote-first-valid"`
@@ -159,9 +136,6 @@ type ApplicationParams struct {
 	// The address that created this application. This is the address where the parameters and global state for this application can be found.
 	Creator string `json:"creator"`
 
-	// \[epp\] the amount of extra program pages available to this app.
-	ExtraProgramPages *uint64 `json:"extra-program-pages,omitempty"`
-
 	// Represents a key-value store for use in an application.
 	GlobalState *TealKeyValueStore `json:"global-state,omitempty"`
 
@@ -206,6 +180,9 @@ type AssetHolding struct {
 	// Asset ID of the holding.
 	AssetId uint64 `json:"asset-id"`
 
+	// Address that created this asset. This is the address where the parameters for this asset can be found, and also the address where unwanted asset units can be sent in the worst case.
+	Creator string `json:"creator"`
+
 	// \[f\] whether or not the holding is frozen.
 	IsFrozen bool `json:"is-frozen"`
 }
@@ -234,11 +211,8 @@ type AssetParams struct {
 	// \[am\] A commitment to some unspecified asset metadata. The format of this metadata is up to the application.
 	MetadataHash *[]byte `json:"metadata-hash,omitempty"`
 
-	// \[an\] Name of this asset, as supplied by the creator. Included only when the asset name is composed of printable utf-8 characters.
+	// \[an\] Name of this asset, as supplied by the creator.
 	Name *string `json:"name,omitempty"`
-
-	// Base64 encoded name of this asset, as supplied by the creator.
-	NameB64 *[]byte `json:"name-b64,omitempty"`
 
 	// \[r\] Address of account holding reserve (non-minted) units of this asset.
 	Reserve *string `json:"reserve,omitempty"`
@@ -246,17 +220,11 @@ type AssetParams struct {
 	// \[t\] The total number of units of this asset.
 	Total uint64 `json:"total"`
 
-	// \[un\] Name of a unit of this asset, as supplied by the creator. Included only when the name of a unit of this asset is composed of printable utf-8 characters.
+	// \[un\] Name of a unit of this asset, as supplied by the creator.
 	UnitName *string `json:"unit-name,omitempty"`
 
-	// Base64 encoded name of a unit of this asset, as supplied by the creator.
-	UnitNameB64 *[]byte `json:"unit-name-b64,omitempty"`
-
-	// \[au\] URL where more information about the asset can be retrieved. Included only when the URL is composed of printable utf-8 characters.
+	// \[au\] URL where more information about the asset can be retrieved.
 	Url *string `json:"url,omitempty"`
-
-	// Base64 encoded URL where more information about the asset can be retrieved.
-	UrlB64 *[]byte `json:"url-b64,omitempty"`
 }
 
 // BuildVersion defines model for BuildVersion.
@@ -316,27 +284,20 @@ type DryrunTxnResult struct {
 	AppCallMessages *[]string      `json:"app-call-messages,omitempty"`
 	AppCallTrace    *[]DryrunState `json:"app-call-trace,omitempty"`
 
-	// Execution cost of app call transaction
-	Cost *uint64 `json:"cost,omitempty"`
-
 	// Disassembled program line by line.
 	Disassembly []string `json:"disassembly"`
 
 	// Application state delta.
-	GlobalDelta *StateDelta          `json:"global-delta,omitempty"`
-	LocalDeltas *[]AccountStateDelta `json:"local-deltas,omitempty"`
-
-	// Disassembled lsig program line by line.
-	LogicSigDisassembly *[]string      `json:"logic-sig-disassembly,omitempty"`
-	LogicSigMessages    *[]string      `json:"logic-sig-messages,omitempty"`
-	LogicSigTrace       *[]DryrunState `json:"logic-sig-trace,omitempty"`
-	Logs                *[][]byte      `json:"logs,omitempty"`
+	GlobalDelta      *StateDelta          `json:"global-delta,omitempty"`
+	LocalDeltas      *[]AccountStateDelta `json:"local-deltas,omitempty"`
+	LogicSigMessages *[]string            `json:"logic-sig-messages,omitempty"`
+	LogicSigTrace    *[]DryrunState       `json:"logic-sig-trace,omitempty"`
 }
 
 // ErrorResponse defines model for ErrorResponse.
 type ErrorResponse struct {
-	Data    *map[string]interface{} `json:"data,omitempty"`
-	Message string                  `json:"message"`
+	Data    *string `json:"data,omitempty"`
+	Message string  `json:"message"`
 }
 
 // EvalDelta defines model for EvalDelta.
@@ -360,80 +321,6 @@ type EvalDeltaKeyValue struct {
 	Value EvalDelta `json:"value"`
 }
 
-// ParticipationKey defines model for ParticipationKey.
-type ParticipationKey struct {
-
-	// Address the key was generated for.
-	Address string `json:"address"`
-
-	// When registered, this is the first round it may be used.
-	EffectiveFirstValid *uint64 `json:"effective-first-valid,omitempty"`
-
-	// When registered, this is the last round it may be used.
-	EffectiveLastValid *uint64 `json:"effective-last-valid,omitempty"`
-
-	// The key's ParticipationID.
-	Id string `json:"id"`
-
-	// AccountParticipation describes the parameters used by this account in consensus protocol.
-	Key AccountParticipation `json:"key"`
-
-	// Round when this key was last used to propose a block.
-	LastBlockProposal *uint64 `json:"last-block-proposal,omitempty"`
-
-	// Round when this key was last used to generate a state proof.
-	LastStateProof *uint64 `json:"last-state-proof,omitempty"`
-
-	// Round when this key was last used to vote.
-	LastVote *uint64 `json:"last-vote,omitempty"`
-}
-
-// PendingTransactionResponse defines model for PendingTransactionResponse.
-type PendingTransactionResponse struct {
-
-	// The application index if the transaction was found and it created an application.
-	ApplicationIndex *uint64 `json:"application-index,omitempty"`
-
-	// The number of the asset's unit that were transferred to the close-to address.
-	AssetClosingAmount *uint64 `json:"asset-closing-amount,omitempty"`
-
-	// The asset index if the transaction was found and it created an asset.
-	AssetIndex *uint64 `json:"asset-index,omitempty"`
-
-	// Rewards in microalgos applied to the close remainder to account.
-	CloseRewards *uint64 `json:"close-rewards,omitempty"`
-
-	// Closing amount for the transaction.
-	ClosingAmount *uint64 `json:"closing-amount,omitempty"`
-
-	// The round where this transaction was confirmed, if present.
-	ConfirmedRound *uint64 `json:"confirmed-round,omitempty"`
-
-	// Application state delta.
-	GlobalStateDelta *StateDelta `json:"global-state-delta,omitempty"`
-
-	// Inner transactions produced by application execution.
-	InnerTxns *[]PendingTransactionResponse `json:"inner-txns,omitempty"`
-
-	// \[ld\] Local state key/value changes for the application being executed by this transaction.
-	LocalStateDelta *[]AccountStateDelta `json:"local-state-delta,omitempty"`
-
-	// \[lg\] Logs for the application being executed by this transaction.
-	Logs *[][]byte `json:"logs,omitempty"`
-
-	// Indicates that the transaction was kicked out of this node's transaction pool (and specifies why that happened).  An empty string indicates the transaction wasn't kicked out of this node's txpool due to an error.
-	PoolError string `json:"pool-error"`
-
-	// Rewards in microalgos applied to the receiver account.
-	ReceiverRewards *uint64 `json:"receiver-rewards,omitempty"`
-
-	// Rewards in microalgos applied to the sender account.
-	SenderRewards *uint64 `json:"sender-rewards,omitempty"`
-
-	// The raw signed transaction.
-	Txn map[string]interface{} `json:"txn"`
-}
-
 // StateDelta defines model for StateDelta.
 type StateDelta []EvalDeltaKeyValue
 
@@ -454,7 +341,7 @@ type TealValue struct {
 	// \[tb\] bytes value.
 	Bytes string `json:"bytes"`
 
-	// \[tt\] value type. Value `1` refers to **bytes**, value `2` refers to **uint**
+	// \[tt\] value type.
 	Type uint64 `json:"type"`
 
 	// \[ui\] uint value.
@@ -535,40 +422,6 @@ type TxId string
 // TxType defines model for tx-type.
 type TxType string
 
-// AccountApplicationResponse defines model for AccountApplicationResponse.
-type AccountApplicationResponse struct {
-
-	// Stores local state associated with an application.
-	AppLocalState *ApplicationLocalState `json:"app-local-state,omitempty"`
-
-	// Stores the global information associated with an application.
-	CreatedApp *ApplicationParams `json:"created-app,omitempty"`
-
-	// The round for which this information is relevant.
-	Round uint64 `json:"round"`
-}
-
-// AccountAssetResponse defines model for AccountAssetResponse.
-type AccountAssetResponse struct {
-
-	// Describes an asset held by an account.
-	//
-	// Definition:
-	// data/basics/userBalance.go : AssetHolding
-	AssetHolding *AssetHolding `json:"asset-holding,omitempty"`
-
-	// AssetParams specifies the parameters for an asset.
-	//
-	// \[apar\] when part of an AssetConfig transaction.
-	//
-	// Definition:
-	// data/transactions/asset.go : AssetParams
-	CreatedAsset *AssetParams `json:"created-asset,omitempty"`
-
-	// The round for which this information is relevant.
-	Round uint64 `json:"round"`
-}
-
 // AccountResponse defines model for AccountResponse.
 type AccountResponse Account
 
@@ -609,16 +462,6 @@ type CompileResponse struct {
 	Hash string `json:"hash"`
 
 	// base64 encoded program bytes
-	Result string `json:"result"`
-
-	// JSON of the source map
-	Sourcemap *map[string]interface{} `json:"sourcemap,omitempty"`
-}
-
-// DisassembleResponse defines model for DisassembleResponse.
-type DisassembleResponse struct {
-
-	// disassembled Teal code
 	Result string `json:"result"`
 }
 
@@ -680,11 +523,45 @@ type NodeStatusResponse struct {
 	TimeSinceLastRound uint64 `json:"time-since-last-round"`
 }
 
-// ParticipationKeyResponse defines model for ParticipationKeyResponse.
-type ParticipationKeyResponse ParticipationKey
+// PendingTransactionResponse defines model for PendingTransactionResponse.
+type PendingTransactionResponse struct {
 
-// ParticipationKeysResponse defines model for ParticipationKeysResponse.
-type ParticipationKeysResponse []ParticipationKey
+	// The application index if the transaction was found and it created an application.
+	ApplicationIndex *uint64 `json:"application-index,omitempty"`
+
+	// The number of the asset's unit that were transferred to the close-to address.
+	AssetClosingAmount *uint64 `json:"asset-closing-amount,omitempty"`
+
+	// The asset index if the transaction was found and it created an asset.
+	AssetIndex *uint64 `json:"asset-index,omitempty"`
+
+	// Rewards in microalgos applied to the close remainder to account.
+	CloseRewards *uint64 `json:"close-rewards,omitempty"`
+
+	// Closing amount for the transaction.
+	ClosingAmount *uint64 `json:"closing-amount,omitempty"`
+
+	// The round where this transaction was confirmed, if present.
+	ConfirmedRound *uint64 `json:"confirmed-round,omitempty"`
+
+	// Application state delta.
+	GlobalStateDelta *StateDelta `json:"global-state-delta,omitempty"`
+
+	// \[ld\] Local state key/value changes for the application being executed by this transaction.
+	LocalStateDelta *[]AccountStateDelta `json:"local-state-delta,omitempty"`
+
+	// Indicates that the transaction was kicked out of this node's transaction pool (and specifies why that happened).  An empty string indicates the transaction wasn't kicked out of this node's txpool due to an error.
+	PoolError string `json:"pool-error"`
+
+	// Rewards in microalgos applied to the receiver account.
+	ReceiverRewards *uint64 `json:"receiver-rewards,omitempty"`
+
+	// Rewards in microalgos applied to the sender account.
+	SenderRewards *uint64 `json:"sender-rewards,omitempty"`
+
+	// The raw signed transaction.
+	Txn map[string]interface{} `json:"txn"`
+}
 
 // PendingTransactionsResponse defines model for PendingTransactionsResponse.
 type PendingTransactionsResponse struct {
@@ -694,13 +571,6 @@ type PendingTransactionsResponse struct {
 
 	// Total number of transactions in the pool.
 	TotalTransactions uint64 `json:"total-transactions"`
-}
-
-// PostParticipationResponse defines model for PostParticipationResponse.
-type PostParticipationResponse struct {
-
-	// encoding of the participation ID.
-	PartId string `json:"partId"`
 }
 
 // PostTransactionsResponse defines model for PostTransactionsResponse.
@@ -713,11 +583,6 @@ type PostTransactionsResponse struct {
 // ProofResponse defines model for ProofResponse.
 type ProofResponse struct {
 
-	// The type of hash function used to create the proof, must be one of:
-	// * sha512_256
-	// * sha256
-	Hashtype string `json:"hashtype"`
-
 	// Index of the transaction in the block's payset.
 	Idx uint64 `json:"idx"`
 
@@ -726,9 +591,6 @@ type ProofResponse struct {
 
 	// Hash of SignedTxnInBlock for verifying proof.
 	Stibhash []byte `json:"stibhash"`
-
-	// Represents the depth of the tree that is being proven, i.e. the number of edges from a leaf to the root.
-	Treedepth uint64 `json:"treedepth"`
 }
 
 // SupplyResponse defines model for SupplyResponse.
@@ -779,23 +641,6 @@ type AccountInformationParams struct {
 
 	// Configures whether the response object is JSON or MessagePack encoded.
 	Format *string `json:"format,omitempty"`
-
-	// When set to `all` will exclude asset holdings, application local state, created asset parameters, any created application parameters. Defaults to `none`.
-	Exclude *string `json:"exclude,omitempty"`
-}
-
-// AccountApplicationInformationParams defines parameters for AccountApplicationInformation.
-type AccountApplicationInformationParams struct {
-
-	// Configures whether the response object is JSON or MessagePack encoded.
-	Format *string `json:"format,omitempty"`
-}
-
-// AccountAssetInformationParams defines parameters for AccountAssetInformation.
-type AccountAssetInformationParams struct {
-
-	// Configures whether the response object is JSON or MessagePack encoded.
-	Format *string `json:"format,omitempty"`
 }
 
 // GetPendingTransactionsByAddressParams defines parameters for GetPendingTransactionsByAddress.
@@ -818,20 +663,8 @@ type GetBlockParams struct {
 // GetProofParams defines parameters for GetProof.
 type GetProofParams struct {
 
-	// The type of hash function used to create the proof, must be one of:
-	// * sha512_256
-	// * sha256
-	Hashtype *string `json:"hashtype,omitempty"`
-
 	// Configures whether the response object is JSON or MessagePack encoded.
 	Format *string `json:"format,omitempty"`
-}
-
-// TealCompileParams defines parameters for TealCompile.
-type TealCompileParams struct {
-
-	// When set to `true`, returns the source map of the program as a JSON. Defaults to `false`.
-	Sourcemap *bool `json:"sourcemap,omitempty"`
 }
 
 // TealDryrunJSONBody defines parameters for TealDryrun.

@@ -1,10 +1,5 @@
 #!/usr/bin/env bash
 
-if [ ! -z "${GOHOSTOS+x}" ]; then
-    echo "${GOHOSTOS}"
-    exit 0
-fi
-
 UNAME=$(uname)
 
 if [ "${UNAME}" = "Darwin" ]; then

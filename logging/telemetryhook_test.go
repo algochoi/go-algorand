@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2021 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -21,16 +21,15 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/config"
-	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
 func TestTelemetryConfig(t *testing.T) {
-	partitiontest.PartitionTest(t)
 	a := require.New(t)
 
 	cfg := createTelemetryConfig()
@@ -43,7 +42,6 @@ func TestTelemetryConfig(t *testing.T) {
 }
 
 func TestLoadDefaultConfig(t *testing.T) {
-	partitiontest.PartitionTest(t)
 	a := require.New(t)
 
 	configDir, err := ioutil.TempDir("", "testdir")
@@ -62,13 +60,11 @@ func isDefault(cfg TelemetryConfig) bool {
 	cfg.FilePath = "" // Reset to compare the rest
 	cfg.GUID = ""
 	cfg.ChainID = ""
-	cfg.Version = ""
 	defaultCfg.GUID = ""
 	return cfg == defaultCfg
 }
 
 func TestLoggingConfigDataDirFirst(t *testing.T) {
-	partitiontest.PartitionTest(t)
 	a := require.New(t)
 
 	globalConfigRoot, err := ioutil.TempDir("", "globalConfigRoot")
@@ -104,7 +100,6 @@ func TestLoggingConfigDataDirFirst(t *testing.T) {
 
 	a.Equal(cfg.FilePath, dataDirLoggingPath)
 	a.NotEqual(cfg.GUID, defaultCfg.GUID)
-	a.NotEmpty(cfg.Version)
 
 	// We got this from the tiny file we wrote to earlier.
 	a.True(cfg.Enable)
@@ -114,7 +109,6 @@ func TestLoggingConfigDataDirFirst(t *testing.T) {
 }
 
 func TestLoggingConfigGlobalSecond(t *testing.T) {
-	partitiontest.PartitionTest(t)
 	a := require.New(t)
 
 	globalConfigRoot, err := ioutil.TempDir("", "globalConfigRoot")
@@ -138,7 +132,6 @@ func TestLoggingConfigGlobalSecond(t *testing.T) {
 	defaultCfg := createTelemetryConfig()
 	a.Equal(cfg.FilePath, globalLoggingPath)
 	a.NotEqual(cfg.GUID, defaultCfg.GUID)
-	a.NotEmpty(cfg.Version)
 
 	a.True(isDefault(cfg))
 
@@ -147,7 +140,6 @@ func TestLoggingConfigGlobalSecond(t *testing.T) {
 }
 
 func TestSaveLoadConfig(t *testing.T) {
-	partitiontest.PartitionTest(t)
 	a := require.New(t)
 
 	globalConfigRoot, err := ioutil.TempDir("", "globalConfigRoot")
@@ -166,14 +158,10 @@ func TestSaveLoadConfig(t *testing.T) {
 
 	cfgLoad, err := LoadTelemetryConfig(cfg.FilePath)
 
-	// ChainId and Version aren't stored.
+	// ChainId isn't stored.
 	a.NotEmpty(cfg.ChainID)
 	a.Empty(cfgLoad.ChainID)
 	cfg.ChainID = ""
-
-	a.NotEmpty(cfg.Version)
-	a.Empty(cfgLoad.Version)
-	cfg.Version = ""
 
 	a.NoError(err)
 	a.Equal("testname", cfgLoad.Name)
@@ -182,18 +170,19 @@ func TestSaveLoadConfig(t *testing.T) {
 	os.RemoveAll(configDir)
 }
 
-func TestAsyncTelemetryHook_CloseDrop(t *testing.T) {
-	partitiontest.PartitionTest(t)
-	const entryCount = 100
+func TestAsyncTelemetryHook_Close(t *testing.T) {
+	t.Skip("We no longer ensure 100% delivery. To not block, we drop messages when they come in faster than the network sends them.")
+	a := require.New(t)
+	t.Parallel()
 
-	filling := make(chan struct{})
+	const entryCount = 100
 
 	testHook := makeMockTelemetryHook(logrus.DebugLevel)
 	testHook.cb = func(entry *logrus.Entry) {
-		<-filling // Block while filling
+		// Inject a delay to ensure we buffer entries
+		time.Sleep(1 * time.Millisecond)
 	}
 	hook := createAsyncHook(&testHook, 4, entryCount)
-	hook.ready = true
 	for i := 0; i < entryCount; i++ {
 		entry := logrus.Entry{
 			Level: logrus.ErrorLevel,
@@ -201,15 +190,16 @@ func TestAsyncTelemetryHook_CloseDrop(t *testing.T) {
 		hook.Fire(&entry)
 	}
 
-	close(filling)
 	hook.Close()
 
-	// To not block, we drop messages when they come in faster than the network sends them.
-	require.Less(t, len(testHook.entries()), entryCount)
+	a.Equal(entryCount, len(testHook.entries()))
 }
 
 func TestAsyncTelemetryHook_QueueDepth(t *testing.T) {
-	partitiontest.PartitionTest(t)
+	t.Skip("flakey test can fail on slow test systems")
+	a := require.New(t)
+	t.Parallel()
+
 	const entryCount = 100
 	const maxDepth = 10
 
@@ -221,7 +211,6 @@ func TestAsyncTelemetryHook_QueueDepth(t *testing.T) {
 	}
 
 	hook := createAsyncHook(&testHook, entryCount, maxDepth)
-	hook.ready = true
 	for i := 0; i < entryCount; i++ {
 		entry := logrus.Entry{
 			Level: logrus.ErrorLevel,
@@ -232,10 +221,5 @@ func TestAsyncTelemetryHook_QueueDepth(t *testing.T) {
 	close(filling)
 	hook.Close()
 
-	hookEntries := len(testHook.entries())
-	require.GreaterOrEqual(t, hookEntries, maxDepth)
-	// the anonymous goroutine in createAsyncHookLevels might pull an entry off the pending list before
-	// writing it off to the underlying hook. when that happens, the total number of sent entries could
-	// be one higher then the maxDepth.
-	require.LessOrEqual(t, hookEntries, maxDepth+1)
+	a.Equal(maxDepth, len(testHook.entries()))
 }

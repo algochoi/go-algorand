@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2021 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -41,11 +41,11 @@ const maxGetRelayAddressRetry = 50
 
 // NetworkCfg contains the persisted configuration of the deployed network
 type NetworkCfg struct {
-	Name string `json:"Name,omitempty"`
+	Name string
 	// RelayDirs are directories where relays live (where we check for connection IP:Port)
 	// They are stored relative to root dir (e.g. "Primary")
-	RelayDirs    []string `json:"RelayDirs,omitempty"`
-	TemplateFile string   `json:"TemplateFile,omitempty"` // Template file used to create the network
+	RelayDirs    []string
+	TemplateFile string // Template file used to create the network
 }
 
 // Network represents an instance of a deployed network
@@ -59,7 +59,7 @@ type Network struct {
 
 // CreateNetworkFromTemplate uses the specified template to deploy a new private network
 // under the specified root directory.
-func CreateNetworkFromTemplate(name, rootDir, templateFile, binDir string, importKeys bool, nodeExitCallback nodecontrol.AlgodExitErrorCallback, consensus config.ConsensusProtocols, overrideDevMode bool) (Network, error) {
+func CreateNetworkFromTemplate(name, rootDir, templateFile, binDir string, importKeys bool, nodeExitCallback nodecontrol.AlgodExitErrorCallback, consensus config.ConsensusProtocols) (Network, error) {
 	n := Network{
 		rootDir:          rootDir,
 		nodeExitCallback: nodeExitCallback,
@@ -69,12 +69,6 @@ func CreateNetworkFromTemplate(name, rootDir, templateFile, binDir string, impor
 
 	template, err := loadTemplate(templateFile)
 	if err == nil {
-		if overrideDevMode {
-			template.Genesis.DevMode = true
-			if len(template.Nodes) > 0 {
-				template.Nodes[0].IsRelay = false
-			}
-		}
 		err = template.Validate()
 	}
 	if err != nil {
@@ -145,14 +139,7 @@ func (n Network) Name() string {
 
 // PrimaryDataDir returns the primary data directory for the network
 func (n Network) PrimaryDataDir() string {
-	if !n.gen.DevMode || len(n.cfg.RelayDirs) > 0 {
-		return n.getNodeFullPath(n.cfg.RelayDirs[0])
-	}
-	// for devmode, there should be only a single node, so pick it up.
-	for nodeName := range n.nodeDirs {
-		return n.getNodeFullPath(nodeName)
-	}
-	panic(fmt.Errorf("neither relay directories nor node directories are defined for the network"))
+	return n.getNodeFullPath(n.cfg.RelayDirs[0])
 }
 
 // NodeDataDirs returns an array of node data directories (not the relays)
@@ -271,8 +258,8 @@ func (n Network) Start(binDir string, redirectOutput bool) error {
 	var relayAddress string
 	var err error
 	for _, relayDir := range n.cfg.RelayDirs {
-		nodeFullPath := n.getNodeFullPath(relayDir)
-		nc := nodecontrol.MakeNodeController(binDir, nodeFullPath)
+		nodeFulllPath := n.getNodeFullPath(relayDir)
+		nc := nodecontrol.MakeNodeController(binDir, nodeFulllPath)
 		args := nodecontrol.AlgodStartArgs{
 			RedirectOutput:    redirectOutput,
 			ExitErrorCallback: n.nodeExitCallback,
@@ -463,16 +450,16 @@ func (n Network) Delete(binDir string) error {
 // any of the nodes starts
 func (n Network) SetConsensus(binDir string, consensus config.ConsensusProtocols) error {
 	for _, relayDir := range n.cfg.RelayDirs {
-		relayFullPath := n.getNodeFullPath(relayDir)
-		nc := nodecontrol.MakeNodeController(binDir, relayFullPath)
+		relayFulllPath := n.getNodeFullPath(relayDir)
+		nc := nodecontrol.MakeNodeController(binDir, relayFulllPath)
 		err := nc.SetConsensus(consensus)
 		if err != nil {
 			return err
 		}
 	}
 	for _, nodeDir := range n.nodeDirs {
-		nodeFullPath := n.getNodeFullPath(nodeDir)
-		nc := nodecontrol.MakeNodeController(binDir, nodeFullPath)
+		nodeFulllPath := n.getNodeFullPath(nodeDir)
+		nc := nodecontrol.MakeNodeController(binDir, nodeFulllPath)
 		err := nc.SetConsensus(consensus)
 		if err != nil {
 			return err

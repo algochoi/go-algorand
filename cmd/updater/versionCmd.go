@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2021 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -28,26 +28,20 @@ import (
 var (
 	destFile        string
 	versionBucket   string
-	packageName     string
 	specificVersion uint64
 	semanticOutput  bool
 )
-
-// DefaultPackageName is the package we'll use by default.
-const DefaultPackageName = "node"
 
 func init() {
 	versionCmd.AddCommand(checkCmd)
 	versionCmd.AddCommand(getCmd)
 
-	checkCmd.Flags().BoolVarP(&semanticOutput, "semantic", "s", false, "Human readable semantic version output.")
-	checkCmd.Flags().StringVarP(&packageName, "package", "p", DefaultPackageName, "Get version of specific package.")
 	checkCmd.Flags().StringVarP(&versionBucket, "bucket", "b", "", "S3 bucket containing updates.")
+	checkCmd.Flags().BoolVarP(&semanticOutput, "semantic", "s", false, "Human readable semantic version output.")
 
 	getCmd.Flags().StringVarP(&destFile, "outputFile", "o", "", "Path for downloaded file (required).")
-	getCmd.Flags().Uint64VarP(&specificVersion, "version", "v", 0, "Specific version to download.")
-	getCmd.Flags().StringVarP(&packageName, "package", "p", DefaultPackageName, "Get version of specific package.")
 	getCmd.Flags().StringVarP(&versionBucket, "bucket", "b", "", "S3 bucket containing updates.")
+	getCmd.Flags().Uint64VarP(&specificVersion, "version", "v", 0, "Specific version to download.")
 	getCmd.MarkFlagRequired("outputFile")
 }
 
@@ -73,7 +67,7 @@ var checkCmd = &cobra.Command{
 		if err != nil {
 			exitErrorf("Error creating s3 session %s\n", err.Error())
 		} else {
-			version, _, err := s3Session.GetPackageVersion(channel, packageName, 0)
+			version, _, err := s3Session.GetLatestUpdateVersion(channel)
 			if err != nil {
 				exitErrorf("Error getting latest version from s3 %s\n", err.Error())
 			}
@@ -108,7 +102,7 @@ var getCmd = &cobra.Command{
 		if err != nil {
 			exitErrorf("Error creating s3 session %s\n", err.Error())
 		} else {
-			version, name, err := s3Session.GetPackageVersion(channel, packageName, specificVersion)
+			version, name, err := s3Session.GetUpdateVersion(channel, specificVersion)
 			if err != nil {
 				exitErrorf("Error getting latest version from s3 %s\n", err.Error())
 			}

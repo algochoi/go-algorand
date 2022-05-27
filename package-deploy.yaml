@@ -63,7 +63,6 @@ agents:
       - $HOME/.gnupg/pubring.kbx:/root/.gnupg/pubring.kbx
     workDir: $HOME/projects/go-algorand
 
-
 tasks:
   - task: docker.Make
     name: docker

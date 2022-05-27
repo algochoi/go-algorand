@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2021 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -28,19 +28,14 @@ import (
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
-	ledgertesting "github.com/algorand/go-algorand/ledger/testing"
 	"github.com/algorand/go-algorand/protocol"
-	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
 func TestTxTailCheckdup(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
-	accts := ledgertesting.RandomAccounts(10, false)
-	ledger := makeMockLedgerForTracker(t, true, 1, protocol.ConsensusCurrentVersion, []map[basics.Address]basics.AccountData{accts})
+	ledger := makeMockLedgerForTracker(t, true, 1, protocol.ConsensusCurrentVersion)
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
 	tail := txTail{}
-	require.NoError(t, tail.loadFromDisk(ledger, 0))
+	require.NoError(t, tail.loadFromDisk(ledger))
 
 	lastRound := basics.Round(proto.MaxTxnLife)
 	lookback := basics.Round(100)
@@ -95,102 +90,6 @@ func TestTxTailCheckdup(t *testing.T) {
 		} else {
 			var leaseInLedgerErr *ledgercore.LeaseInLedgerError
 			require.Truef(t, errors.As(err, &leaseInLedgerErr), "error a LeaseInLedgerError(%d) : %v ", rnd, err)
-		}
-	}
-}
-
-type txTailTestLedger struct {
-	Ledger
-}
-
-const testTxTailValidityRange = 200
-const testTxTailTxnPerRound = 150
-
-func (t *txTailTestLedger) Latest() basics.Round {
-	return basics.Round(config.Consensus[protocol.ConsensusCurrentVersion].MaxTxnLife + 10)
-}
-
-func (t *txTailTestLedger) BlockHdr(r basics.Round) (bookkeeping.BlockHeader, error) {
-	return bookkeeping.BlockHeader{
-		UpgradeState: bookkeeping.UpgradeState{
-			CurrentProtocol: protocol.ConsensusCurrentVersion,
-		},
-	}, nil
-}
-
-func (t *txTailTestLedger) Block(r basics.Round) (bookkeeping.Block, error) {
-	blk := bookkeeping.Block{
-		BlockHeader: bookkeeping.BlockHeader{
-			UpgradeState: bookkeeping.UpgradeState{
-				CurrentProtocol: protocol.ConsensusCurrentVersion,
-			},
-			Round: r,
-		},
-		Payset: make(transactions.Payset, testTxTailTxnPerRound),
-	}
-	for i := range blk.Payset {
-		blk.Payset[i] = makeTxTailTestTransaction(r, i)
-	}
-
-	return blk, nil
-}
-func makeTxTailTestTransaction(r basics.Round, txnIdx int) (txn transactions.SignedTxnInBlock) {
-	txn.Txn.FirstValid = r
-	txn.Txn.LastValid = r + testTxTailValidityRange
-	if txnIdx%5 == 0 {
-		digest := crypto.Hash([]byte{byte(r), byte(r >> 8), byte(r >> 16), byte(r >> 24), byte(r >> 32), byte(r >> 40), byte(r >> 48), byte(r >> 56)})
-		copy(txn.Txn.Lease[:], digest[:])
-	}
-	// use 7 different senders.
-	sender := uint64((int(r) + txnIdx) % 7)
-	senderDigest := crypto.Hash([]byte{byte(sender), byte(sender >> 8), byte(sender >> 16), byte(sender >> 24), byte(sender >> 32), byte(sender >> 40), byte(sender >> 48), byte(sender >> 56)})
-	copy(txn.Txn.Sender[:], senderDigest[:])
-	return txn
-}
-
-func TestTxTailLoadFromDisk(t *testing.T) {
-	partitiontest.PartitionTest(t)
-	var ledger txTailTestLedger
-	txtail := txTail{}
-
-	err := txtail.loadFromDisk(&ledger, 0)
-	require.NoError(t, err)
-	require.Equal(t, int(config.Consensus[protocol.ConsensusCurrentVersion].MaxTxnLife), len(txtail.recent))
-	require.Equal(t, testTxTailValidityRange, len(txtail.lastValid))
-	require.Equal(t, ledger.Latest(), txtail.lowWaterMark)
-
-	// do some fuzz testing for leases -
-	for i := 0; i < 5000; i++ {
-		r := basics.Round(crypto.RandUint64() % uint64(ledger.Latest()))
-		txIdx := int(crypto.RandUint64() % uint64(len(txtail.recent)))
-		txn := makeTxTailTestTransaction(r, txIdx)
-		if txn.Txn.Lease != [32]byte{} {
-			// transaction has a lease
-			txl := ledgercore.Txlease{Sender: txn.Txn.Sender, Lease: txn.Txn.Lease}
-			dupResult := txtail.checkDup(
-				config.Consensus[protocol.ConsensusCurrentVersion], ledger.Latest(),
-				txn.Txn.FirstValid, txn.Txn.LastValid, txn.Txn.ID(),
-				txl)
-			if r >= ledger.Latest()-testTxTailValidityRange {
-				require.Equal(t, ledgercore.MakeLeaseInLedgerError(txn.Txn.ID(), txl), dupResult)
-			} else {
-				require.Equal(t, &txtailMissingRound{round: txn.Txn.LastValid}, dupResult)
-			}
-		} else {
-			// transaction has no lease
-			dupResult := txtail.checkDup(
-				config.Consensus[protocol.ConsensusCurrentVersion], ledger.Latest(),
-				txn.Txn.FirstValid, txn.Txn.LastValid, txn.Txn.ID(),
-				ledgercore.Txlease{})
-			if r >= ledger.Latest()-testTxTailValidityRange {
-				if txn.Txn.LastValid > ledger.Latest() {
-					require.Equal(t, &ledgercore.TransactionInLedgerError{Txid: txn.Txn.ID()}, dupResult)
-				} else {
-					require.Nil(t, dupResult)
-				}
-			} else {
-				require.Equal(t, &txtailMissingRound{round: txn.Txn.LastValid}, dupResult)
-			}
 		}
 	}
 }

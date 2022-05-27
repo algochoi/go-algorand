@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2021 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -24,12 +24,9 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/protocol"
-	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
 func TestEmptyEncoding(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	var b Block
 	require.Equal(t, 1, len(protocol.Encode(&b)))
 
@@ -38,8 +35,6 @@ func TestEmptyEncoding(t *testing.T) {
 }
 
 func TestBlockWithTxnEncoding(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	txn := transactions.Transaction{
 		Type: protocol.PaymentTx,
 		PaymentTxnFields: transactions.PaymentTxnFields{

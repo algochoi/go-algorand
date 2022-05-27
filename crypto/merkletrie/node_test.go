@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2021 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -22,13 +22,10 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/crypto"
-	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
 // TestNodeSerialization tests the serialization and deserialization of nodes.
 func TestNodeSerialization(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	var memoryCommitter InMemoryCommitter
 	memConfig := defaultTestMemoryConfig
 	memConfig.CachedNodesCount = 1000

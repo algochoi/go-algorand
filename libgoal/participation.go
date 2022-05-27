@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2021 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -24,7 +24,6 @@ import (
 	"path/filepath"
 
 	"github.com/algorand/go-algorand/config"
-	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated"
 	"github.com/algorand/go-algorand/data/account"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/protocol"
@@ -127,6 +126,18 @@ func (c *Client) GenParticipationKeysTo(address string, firstValid, lastValid, k
 
 	firstRound, lastRound := basics.Round(firstValid), basics.Round(lastValid)
 
+	// Get the current protocol for ephemeral key parameters
+	stat, err := c.Status()
+	if err != nil {
+		return
+	}
+
+	proto, ok := c.consensus[protocol.ConsensusVersion(stat.LastVersion)]
+	if !ok {
+		err = fmt.Errorf("consensus protocol %s not supported", stat.LastVersion)
+		return
+	}
+
 	// If output directory wasn't specified, store it in the current ledger directory.
 	if outDir == "" {
 		// Get the GenesisID for use in the participation key path
@@ -143,28 +154,19 @@ func (c *Client) GenParticipationKeysTo(address string, firstValid, lastValid, k
 	if err != nil {
 		return
 	}
-	_, err = os.Stat(partKeyPath)
-	if err == nil {
-		err = fmt.Errorf("ParticipationKeys exist for the range %d to %d", firstRound, lastRound)
-		return
-	} else if !os.IsNotExist(err) {
-		err = fmt.Errorf("participation key file '%s' cannot be accessed : %w", partKeyPath, err)
-		return
-	}
-
 	partdb, err := db.MakeErasableAccessor(partKeyPath)
 	if err != nil {
 		return
 	}
 
 	if keyDilution == 0 {
-		keyDilution = 1 + uint64(math.Sqrt(float64(lastRound-firstRound)))
+		keyDilution = proto.DefaultKeyDilution
 	}
 
 	// Fill the database with new participation keys
 	newPart, err := account.FillDBWithParticipationKeys(partdb, parsedAddr, firstRound, lastRound, keyDilution)
 	part = newPart.Participation
-	partdb.Close()
+	newPart.Close()
 	return part, partKeyPath, err
 }
 
@@ -193,7 +195,7 @@ func (c *Client) InstallParticipationKeys(inputfile string) (part account.Partic
 	}
 	defer inputdb.Close()
 
-	partkey, err := account.RestoreParticipationWithSecrets(inputdb)
+	partkey, err := account.RestoreParticipation(inputdb)
 	if err != nil {
 		return
 	}
@@ -215,7 +217,7 @@ func (c *Client) InstallParticipationKeys(inputfile string) (part account.Partic
 
 	newpartkey := partkey
 	newpartkey.Store = newdb
-	err = newpartkey.PersistWithSecrets()
+	err = newpartkey.Persist()
 	if err != nil {
 		newpartkey.Close()
 		return
@@ -241,18 +243,8 @@ func (c *Client) InstallParticipationKeys(inputfile string) (part account.Partic
 }
 
 // ListParticipationKeys returns the available participation keys,
-// as a response object.
-func (c *Client) ListParticipationKeys() (partKeyFiles generated.ParticipationKeysResponse, err error) {
-	algod, err := c.ensureAlgodClient()
-	if err == nil {
-		partKeyFiles, err = algod.GetParticipationKeys()
-	}
-	return
-}
-
-// ListParticipationKeyFiles returns the available participation keys,
 // as a map from database filename to Participation key object.
-func (c *Client) ListParticipationKeyFiles() (partKeyFiles map[string]account.Participation, err error) {
+func (c *Client) ListParticipationKeys() (partKeyFiles map[string]account.Participation, err error) {
 	genID, err := c.GenesisID()
 	if err != nil {
 		return

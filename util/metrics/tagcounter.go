@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2021 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -129,7 +129,7 @@ func (tc *TagCounter) WriteMetric(buf *strings.Builder, parentLabels string) {
 
 // AddMetric is part of the Metric interface
 // Copy the values in this TagCounter out into the string-string map.
-func (tc *TagCounter) AddMetric(values map[string]float64) {
+func (tc *TagCounter) AddMetric(values map[string]string) {
 	tagp := tc.tagptr.Load()
 	if tagp == nil {
 		return
@@ -146,6 +146,6 @@ func (tc *TagCounter) AddMetric(values map[string]float64) {
 		} else {
 			name = tc.Name + "_" + tag
 		}
-		values[sanitizeTelemetryName(name)] = float64(*tagcount)
+		values[name] = strconv.FormatUint(*tagcount, 10)
 	}
 }

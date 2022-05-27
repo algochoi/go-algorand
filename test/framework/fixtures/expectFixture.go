@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2021 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -18,17 +18,16 @@ package fixtures
 
 import (
 	"bytes"
-	"fmt"
 	"io/ioutil"
 	"os"
 	"os/exec"
 	"path"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"strings"
 	"testing"
 
-	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/stretchr/testify/require"
 )
 
@@ -57,7 +56,9 @@ func (ef *ExpectFixture) initialize(t *testing.T) (err error) {
 	}
 	ef.testDataDir = os.Getenv("TESTDATADIR")
 	if ef.testDataDir == "" {
-		ef.testDataDir = filepath.Join(getTestDir(), "testdata")
+		// Default to test/testdata in the source tree being tested
+		_, path, _, _ := runtime.Caller(0)
+		ef.testDataDir = filepath.Join(filepath.Dir(path), "../../testdata")
 	}
 
 	ef.testFilter = os.Getenv("TESTFILTER")
@@ -95,10 +96,6 @@ func (ef *ExpectFixture) removeTestDir(workingDir string) (err error) {
 
 // MakeExpectTest creates an expect test fixture for the current directory
 func MakeExpectTest(t *testing.T) *ExpectFixture {
-	if skipExpectTests() {
-		t.Skip("Expect tests disabled by environment variables.")
-	}
-
 	ef := &ExpectFixture{}
 	ef.expectFiles = make(map[string]string) // map expect test to full file name.
 	err := filepath.Walk(".", func(path string, info os.FileInfo, err error) error {
@@ -113,47 +110,11 @@ func MakeExpectTest(t *testing.T) *ExpectFixture {
 	return ef
 }
 
-func skipExpectTests() bool {
-	// Explicitly enabled.
-	if strings.ToUpper(os.Getenv("RUN_EXPECT")) == "TRUE" {
-		return false
-	}
-	if strings.ToUpper(os.Getenv("RUN_EXPECT")) == "FALSE" {
-		return true
-	}
-
-	// If any of the CI systems didn't set RUN_EXPECT, disable them.
-	if strings.ToUpper(os.Getenv("CI")) == "TRUE" {
-		return true
-	}
-	if strings.ToUpper(os.Getenv("CIRCLECI")) == "TRUE" {
-		return true
-	}
-	if strings.ToUpper(os.Getenv("TRAVIS")) == "TRUE" {
-		return true
-	}
-	if strings.ToUpper(os.Getenv("JENKINS_URL")) != "" {
-		return true
-	}
-
-	// Implicitly enable for devs running tests.
-	return false
-}
-
-// Run Process all expect script files with suffix Test.exp within the current directory
+// Run Process all expect script files with suffix Test.exp within the current directroy
 func (ef *ExpectFixture) Run() {
-	disabledTest := map[string]string{
-		"pingpongTest.exp":                    "broken",
-		"listExpiredParticipationKeyTest.exp": "flaky",
-	}
 	for testName := range ef.expectFiles {
 		if match, _ := regexp.MatchString(ef.testFilter, testName); match {
 			ef.t.Run(testName, func(t *testing.T) {
-				if reason, ok := disabledTest[testName]; ok {
-					t.Skip(fmt.Sprintf("Skipping %s test: %s", testName, reason))
-				}
-				partitiontest.PartitionTest(t) // Check if this expect test should by run, may SKIP
-
 				syncTest := SynchronizedTest(t)
 				workingDir, algoDir, err := ef.getTestDir(testName)
 				require.NoError(SynchronizedTest(t), err)

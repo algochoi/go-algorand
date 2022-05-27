@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2021 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -19,13 +19,10 @@ package config
 import (
 	"testing"
 
-	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/stretchr/testify/require"
 )
 
 func TestConsensusParams(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	for proto, params := range Consensus {
 		// Our implementation of Payset.Commit() assumes that
 		// SupportSignedTxnInBlock implies not PaysetCommitUnsupported.
@@ -42,8 +39,6 @@ func TestConsensusParams(t *testing.T) {
 
 // TestConsensusUpgradeWindow ensures that the upgrade window is a non-zero value, and confirm to be within the valid range.
 func TestConsensusUpgradeWindow(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	for proto, params := range Consensus {
 		require.GreaterOrEqualf(t, params.MaxUpgradeWaitRounds, params.MinUpgradeWaitRounds, "Version :%v", proto)
 		for toVersion, delay := range params.ApprovedUpgrades {
@@ -55,17 +50,6 @@ func TestConsensusUpgradeWindow(t *testing.T) {
 				require.Zerof(t, delay, "From :%v\nTo :%v", proto, toVersion)
 
 			}
-		}
-	}
-}
-
-func TestConsensusCompactCertParams(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
-	for _, params := range Consensus {
-		if params.CompactCertRounds != 0 {
-			require.Equal(t, uint64(1<<16), (params.MaxKeyregValidPeriod+1)/params.CompactCertRounds,
-				"Validity period divided by CompactCertRounds should allow for no more than %d generated keys", 1<<16)
 		}
 	}
 }

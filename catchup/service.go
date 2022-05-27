@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2021 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -18,7 +18,6 @@ package catchup
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"sync"
 	"sync/atomic"
@@ -29,6 +28,7 @@ import (
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
+	"github.com/algorand/go-algorand/ledger"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/logging/telemetryspec"
@@ -58,8 +58,8 @@ type Ledger interface {
 	LastRound() basics.Round
 	Block(basics.Round) (bookkeeping.Block, error)
 	IsWritingCatchpointFile() bool
-	Validate(ctx context.Context, blk bookkeeping.Block, executionPool execpool.BacklogPool) (*ledgercore.ValidatedBlock, error)
-	AddValidatedBlock(vb ledgercore.ValidatedBlock, cert agreement.Certificate) error
+	Validate(ctx context.Context, blk bookkeeping.Block, executionPool execpool.BacklogPool) (*ledger.ValidatedBlock, error)
+	AddValidatedBlock(vb ledger.ValidatedBlock, cert agreement.Certificate) error
 }
 
 // Service represents the catchup service. Once started and until it is stopped, it ensures that the ledger is up to date with network.
@@ -156,19 +156,8 @@ func (s *Service) SynchronizingTime() time.Duration {
 	return time.Duration(timeInNS - startNS)
 }
 
-// errLedgerAlreadyHasBlock is returned by innerFetch in case the local ledger already has the requested block.
-var errLedgerAlreadyHasBlock = errors.New("ledger already has block")
-
 // function scope to make a bunch of defer statements better
 func (s *Service) innerFetch(r basics.Round, peer network.Peer) (blk *bookkeeping.Block, cert *agreement.Certificate, ddur time.Duration, err error) {
-	ledgerWaitCh := s.ledger.Wait(r)
-	select {
-	case <-ledgerWaitCh:
-		// if our ledger already have this block, no need to attempt to fetch it.
-		return nil, nil, time.Duration(0), errLedgerAlreadyHasBlock
-	default:
-	}
-
 	ctx, cf := context.WithCancel(s.ctx)
 	fetcher := makeUniversalBlockFetcher(s.log, s.net, s.cfg)
 	defer cf()
@@ -177,29 +166,15 @@ func (s *Service) innerFetch(r basics.Round, peer network.Peer) (blk *bookkeepin
 	go func() {
 		select {
 		case <-stopWaitingForLedgerRound:
-		case <-ledgerWaitCh:
+		case <-s.ledger.Wait(r):
 			cf()
 		}
 	}()
-	blk, cert, ddur, err = fetcher.fetchBlock(ctx, r, peer)
-	// check to see if we aborted due to ledger.
-	if err != nil {
-		select {
-		case <-ledgerWaitCh:
-			// yes, we aborted since the ledger received this round.
-			err = errLedgerAlreadyHasBlock
-		default:
-		}
-	}
-	return
+	return fetcher.fetchBlock(ctx, r, peer)
 }
 
 // fetchAndWrite fetches a block, checks the cert, and writes it to the ledger. Cert checking and ledger writing both wait for the ledger to advance if necessary.
-// Returns false if we should stop trying to catch up.  This may occur for several reasons:
-//  - If the context is canceled (e.g. if the node is shutting down)
-//  - If we couldn't fetch the block (e.g. if there are no peers available or we've reached the catchupRetryLimit)
-//  - If the block is already in the ledger (e.g. if agreement service has already written it)
-//  - If the retrieval of the previous block was unsuccessful
+// Returns false if we couldn't fetch or write (i.e., if we failed even after a given number of retries or if we were told to abort.)
 func (s *Service) fetchAndWrite(r basics.Round, prevFetchCompleteChan chan bool, lookbackComplete chan bool, peerSelector *peerSelector) bool {
 	i := 0
 	hasLookback := false
@@ -233,25 +208,18 @@ func (s *Service) fetchAndWrite(r basics.Round, prevFetchCompleteChan chan bool,
 			return false
 		}
 
-		psp, getPeerErr := peerSelector.getNextPeer()
+		peer, getPeerErr := peerSelector.GetNextPeer()
 		if getPeerErr != nil {
 			s.log.Debugf("fetchAndWrite: was unable to obtain a peer to retrieve the block from")
 			break
 		}
-		peer := psp.Peer
 
 		// Try to fetch, timing out after retryInterval
 		block, cert, blockDownloadDuration, err := s.innerFetch(r, peer)
 
 		if err != nil {
-			if err == errLedgerAlreadyHasBlock {
-				// ledger already has the block, no need to request this block.
-				// only the agreement could have added this block into the ledger, catchup is complete
-				s.log.Infof("fetchAndWrite(%d): the block is already in the ledger. The catchup is complete", r)
-				return false
-			}
 			s.log.Debugf("fetchAndWrite(%v): Could not fetch: %v (attempt %d)", r, err, i)
-			peerSelector.rankPeer(psp, peerRankDownloadFailed)
+			peerSelector.RankPeer(peer, peerRankDownloadFailed)
 			// we've just failed to retrieve a block; wait until the previous block is fetched before trying again
 			// to avoid the usecase where the first block doesn't exists and we're making many requests down the chain
 			// for no reason.
@@ -277,7 +245,7 @@ func (s *Service) fetchAndWrite(r basics.Round, prevFetchCompleteChan chan bool,
 		// Check that the block's contents match the block header (necessary with an untrusted block because b.Hash() only hashes the header)
 		if s.cfg.CatchupVerifyPaysetHash() {
 			if !block.ContentsMatchHeader() {
-				peerSelector.rankPeer(psp, peerRankInvalidDownload)
+				peerSelector.RankPeer(peer, peerRankInvalidDownload)
 				// Check if this mismatch is due to an unsupported protocol version
 				if _, ok := config.Consensus[block.BlockHeader.CurrentProtocol]; !ok {
 					s.log.Errorf("fetchAndWrite(%v): unsupported protocol version detected: '%v'", r, block.BlockHeader.CurrentProtocol)
@@ -306,13 +274,13 @@ func (s *Service) fetchAndWrite(r basics.Round, prevFetchCompleteChan chan bool,
 			err = s.auth.Authenticate(block, cert)
 			if err != nil {
 				s.log.Warnf("fetchAndWrite(%v): cert did not authenticate block (attempt %d): %v", r, i, err)
-				peerSelector.rankPeer(psp, peerRankInvalidDownload)
+				peerSelector.RankPeer(peer, peerRankInvalidDownload)
 				continue // retry the fetch
 			}
 		}
 
-		peerRank := peerSelector.peerDownloadDurationToRank(psp, blockDownloadDuration)
-		r1, r2 := peerSelector.rankPeer(psp, peerRank)
+		peerRank := peerSelector.PeerDownloadDurationToRank(peer, blockDownloadDuration)
+		r1, r2 := peerSelector.RankPeer(peer, peerRank)
 		s.log.Debugf("fetchAndWrite(%d): ranked peer with %d from %d to %d", r, peerRank, r1, r2)
 
 		// Write to ledger, noting that ledger writes must be in order
@@ -338,17 +306,10 @@ func (s *Service) fetchAndWrite(r basics.Round, prevFetchCompleteChan chan bool,
 				}
 
 				if s.cfg.CatchupVerifyTransactionSignatures() || s.cfg.CatchupVerifyApplyData() {
-					var vb *ledgercore.ValidatedBlock
-					vb, err = s.ledger.Validate(s.ctx, *block, s.blockValidationPool)
+					vb, err := s.ledger.Validate(s.ctx, *block, s.blockValidationPool)
 					if err != nil {
 						if s.ctx.Err() != nil {
 							// if the context expired, just exit.
-							return false
-						}
-						if errNSBE, ok := err.(ledgercore.ErrNonSequentialBlockEval); ok && errNSBE.EvaluatorRound <= errNSBE.LatestRound {
-							// the block was added to the ledger from elsewhere after fetching it here
-							// only the agreement could have added this block into the ledger, catchup is complete
-							s.log.Infof("fetchAndWrite(%d): after fetching the block, it is already in the ledger. The catchup is complete", r)
 							return false
 						}
 						s.log.Warnf("fetchAndWrite(%d): failed to validate block : %v", r, err)
@@ -361,14 +322,9 @@ func (s *Service) fetchAndWrite(r basics.Round, prevFetchCompleteChan chan bool,
 
 				if err != nil {
 					switch err.(type) {
-					case ledgercore.ErrNonSequentialBlockEval:
-						s.log.Infof("fetchAndWrite(%d): no need to re-evaluate historical block", r)
-						return true
 					case ledgercore.BlockInLedgerError:
-						// the block was added to the ledger from elsewhere after fetching it here
-						// only the agreement could have added this block into the ledger, catchup is complete
-						s.log.Infof("fetchAndWrite(%d): after fetching the block, it is already in the ledger. The catchup is complete", r)
-						return false
+						s.log.Infof("fetchAndWrite(%d): block already in ledger", r)
+						return true
 					case protocol.Error:
 						if !s.protocolErrorLogged {
 							logging.Base().Errorf("fetchAndWrite(%v): unrecoverable protocol error detected: %v", r, err)
@@ -401,7 +357,7 @@ func (s *Service) pipelineCallback(r basics.Round, thisFetchComplete chan bool, 
 		thisFetchComplete <- fetchResult
 
 		if !fetchResult {
-			s.log.Infof("pipelineCallback(%d): did not fetch or write the block", r)
+			s.log.Infof("failed to fetch block %v", r)
 			return 0
 		}
 		return r
@@ -427,7 +383,7 @@ func (s *Service) pipelinedFetch(seedLookback uint64) {
 
 	peerSelector := s.createPeerSelector(true)
 
-	if _, err := peerSelector.getNextPeer(); err == errPeerSelectorNoPeerPoolsAvailable {
+	if _, err := peerSelector.GetNextPeer(); err == errPeerSelectorNoPeerPoolsAvailable {
 		s.log.Debugf("pipelinedFetch: was unable to obtain a peer to retrieve the block from")
 		return
 	}
@@ -525,9 +481,6 @@ func (s *Service) periodicSync() {
 	defer close(s.done)
 	// if the catchup is disabled in the config file, just skip it.
 	if s.parallelBlocks != 0 && !s.cfg.DisableNetworking {
-		// The following request might be redundant, but it ensures we wait long enough for the DNS records to be loaded,
-		// which are required for the sync operation.
-		s.net.RequestConnectOutgoing(false, s.ctx.Done())
 		s.sync()
 	}
 	stuckInARow := 0
@@ -643,25 +596,15 @@ func (s *Service) syncCert(cert *PendingUnmatchedCertificate) {
 
 // TODO this doesn't actually use the digest from cert!
 func (s *Service) fetchRound(cert agreement.Certificate, verifier *agreement.AsyncVoteVerifier) {
-	// is there any point attempting to retrieve the block ?
-	if s.nextRoundIsNotSupported(cert.Round) {
-		// we might get here if the agreement service was seeing the certs votes for the next
-		// block, without seeing the actual block. Since it hasn't seen the block, it couldn't
-		// tell that it's an unsupported protocol, and would try to request it from the catchup.
-		s.handleUnsupportedRound(cert.Round)
-		return
-	}
-
 	blockHash := bookkeeping.BlockHash(cert.Proposal.BlockDigest) // semantic digest (i.e., hash of the block header), not byte-for-byte digest
 	peerSelector := s.createPeerSelector(false)
 	for s.ledger.LastRound() < cert.Round {
-		psp, getPeerErr := peerSelector.getNextPeer()
+		peer, getPeerErr := peerSelector.GetNextPeer()
 		if getPeerErr != nil {
 			s.log.Debugf("fetchRound: was unable to obtain a peer to retrieve the block from")
 			s.net.RequestConnectOutgoing(true, s.ctx.Done())
 			continue
 		}
-		peer := psp.Peer
 
 		// Ask the fetcher to get the block somehow
 		block, fetchedCert, _, err := s.innerFetch(cert.Round, peer)
@@ -674,7 +617,7 @@ func (s *Service) fetchRound(cert agreement.Certificate, verifier *agreement.Asy
 			default:
 			}
 			logging.Base().Warnf("fetchRound could not acquire block, fetcher errored out: %v", err)
-			peerSelector.rankPeer(psp, peerRankDownloadFailed)
+			peerSelector.RankPeer(peer, peerRankDownloadFailed)
 			continue
 		}
 
@@ -684,7 +627,7 @@ func (s *Service) fetchRound(cert agreement.Certificate, verifier *agreement.Asy
 		}
 		// Otherwise, fetcher gave us the wrong block
 		logging.Base().Warnf("fetcher gave us bad/wrong block (for round %d): fetched hash %v; want hash %v", cert.Round, block.Hash(), blockHash)
-		peerSelector.rankPeer(psp, peerRankInvalidDownload)
+		peerSelector.RankPeer(peer, peerRankInvalidDownload)
 
 		// As a failsafe, if the cert we fetched is valid but for the wrong block, panic as loudly as possible
 		if cert.Round == fetchedCert.Round &&

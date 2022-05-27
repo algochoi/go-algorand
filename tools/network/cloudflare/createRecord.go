@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2021 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -141,7 +141,7 @@ type CreateDNSRecordResult struct {
 	Data       interface{} `json:"data"`
 }
 
-// parseCreateDNSRecordResponse parses the response that was received as a result of a ListDNSRecordRequest
+// parseCreateDNSRecordResponse parses the reponse that was received as a result of a ListDNSRecordRequest
 func parseCreateDNSRecordResponse(response *http.Response) (*CreateDNSRecordResponse, error) {
 	defer response.Body.Close()
 	body, err := ioutil.ReadAll(response.Body)

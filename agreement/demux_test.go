@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2021 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -32,7 +32,6 @@ import (
 	"github.com/algorand/go-algorand/data/committee"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
-	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/algorand/go-algorand/util/timers"
 )
 
@@ -415,8 +414,6 @@ var demuxTestUsecases = []demuxTestUsecase{
 }
 
 func TestDemuxNext(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	dt := &demuxTester{T: t}
 	dt.Test()
 }
@@ -455,11 +452,6 @@ func (t *demuxTester) Decode([]byte) (timers.Clock, error) {
 	return t, nil
 }
 
-// implement timers.Clock
-func (t *demuxTester) Since() time.Duration {
-	return 0
-}
-
 // implement Ledger
 func (t *demuxTester) NextRound() basics.Round {
 	return 1234
@@ -489,9 +481,9 @@ func (t *demuxTester) LookupDigest(basics.Round) (crypto.Digest, error) {
 }
 
 // implement Ledger
-func (t *demuxTester) LookupAgreement(basics.Round, basics.Address) (basics.OnlineAccountData, error) {
+func (t *demuxTester) Lookup(basics.Round, basics.Address) (basics.AccountData, error) {
 	// we don't care about this function in this test.
-	return basics.OnlineAccountData{}, nil
+	return basics.AccountData{}, nil
 }
 
 // implement Ledger

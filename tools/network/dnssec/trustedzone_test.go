@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2021 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -21,14 +21,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/miekg/dns"
 	"github.com/stretchr/testify/require"
 )
 
 func TestTrustedZone(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	a := require.New(t)
 
 	zsk := make(map[uint16]dns.DNSKEY)
@@ -101,8 +98,6 @@ func TestTrustedZone(t *testing.T) {
 }
 
 func TestMakeTrustedZone(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	a := require.New(t)
 
 	tt, _ := time.Parse(time.RFC3339, "2020-02-12T00:00:00Z")
@@ -193,8 +188,6 @@ func TestMakeTrustedZone(t *testing.T) {
 	a.Empty(tzTest)
 }
 func TestVerifyRRSig(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	a := require.New(t)
 	tt, _ := time.Parse(time.RFC3339, "2020-02-12T00:00:00Z")
 
@@ -235,8 +228,6 @@ func TestVerifyRRSig(t *testing.T) {
 }
 
 func TestMatchKSKDigest(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	a := require.New(t)
 
 	r := makeTestResolver()

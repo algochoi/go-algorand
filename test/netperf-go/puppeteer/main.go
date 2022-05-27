@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2021 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -43,7 +43,7 @@ func init() {
 	rootCmd.Flags().StringVarP(&deployFor, "for", "f", "", "Specify instance `for` tag")
 	rootCmd.MarkFlagRequired("for")
 	rootCmd.Flags().BoolVarP(&verbose, "verbose", "v", false, "Verbosed output")
-	rootCmd.Flags().StringVarP(&stageDir, "stageDir", "s", "", "staging directory for deployed networks (defaults to a temporary directory)")
+	rootCmd.Flags().StringVarP(&stageDir, "stageDir", "s", "", "staging directory for deployed networks (defaults to a temporary directroy)")
 	rootCmd.Flags().BoolVarP(&skipCleanup, "skipCleanup", "", false, "Skip clean up of the staging directory on exit")
 	rootCmd.Flags().BoolVarP(&skipReset, "skipReset", "", false, "Skip resetting of the staging directory during initialization")
 
