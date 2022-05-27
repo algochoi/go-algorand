@@ -48,7 +48,7 @@ func (logger *LoggerMiddleware) handler(next echo.HandlerFunc) echo.HandlerFunc 
 		res := ctx.Response()
 		req := ctx.Request()
 
-		// Propagate the error if the next middleware has a problem
+		// Propogate the error if the next middleware has a problem
 		if err = next(ctx); err != nil {
 			ctx.Error(err)
 		}

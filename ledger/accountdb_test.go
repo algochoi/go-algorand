@@ -97,7 +97,7 @@ func randomFullAccountData(rewardsLevel, lastCreatableID uint64) (basics.Account
 			data.AssetParams[basics.AssetIndex(lastCreatableID)] = ap
 		}
 	}
-	if 1 == (crypto.RandUint64()%2) && lastCreatableID > 0 {
+	if 1 == (crypto.RandUint64() % 2) {
 		// if account owns assets
 		data.Assets = make(map[basics.AssetIndex]basics.AssetHolding)
 		ownedAssetsCount := crypto.RandUint64()%20 + 1
@@ -113,7 +113,7 @@ func randomFullAccountData(rewardsLevel, lastCreatableID uint64) (basics.Account
 		crypto.RandBytes(data.AuthAddr[:])
 	}
 
-	if 1 == (crypto.RandUint64()%3) && lastCreatableID > 0 {
+	if 1 == (crypto.RandUint64() % 3) {
 		data.AppLocalStates = make(map[basics.AppIndex]basics.AppLocalState)
 		appStatesCount := crypto.RandUint64()%20 + 1
 		for i := uint64(0); i < appStatesCount; i++ {
@@ -137,7 +137,7 @@ func randomFullAccountData(rewardsLevel, lastCreatableID uint64) (basics.Account
 				tv := basics.TealValue{
 					Type: basics.TealBytesType,
 				}
-				bytes := make([]byte, crypto.RandUint64()%uint64(config.MaxBytesKeyValueLen-len(appName)))
+				bytes := make([]byte, crypto.RandUint64()%uint64(config.MaxBytesKeyValueLen))
 				crypto.RandBytes(bytes[:])
 				tv.Bytes = string(bytes)
 				ap.KeyValue[appName] = tv
@@ -439,14 +439,12 @@ func TestAccountDBInit(t *testing.T) {
 	defer tx.Rollback()
 
 	accts := randomAccounts(20, true)
-	newDB, err := accountsInit(tx, accts, proto)
+	err = accountsInit(tx, accts, proto)
 	require.NoError(t, err)
-	require.True(t, newDB)
 	checkAccounts(t, tx, 0, accts)
 
-	newDB, err = accountsInit(tx, accts, proto)
+	err = accountsInit(tx, accts, proto)
 	require.NoError(t, err)
-	require.False(t, newDB)
 	checkAccounts(t, tx, 0, accts)
 }
 
@@ -530,7 +528,7 @@ func TestAccountDBRound(t *testing.T) {
 	defer tx.Rollback()
 
 	accts := randomAccounts(20, true)
-	_, err = accountsInit(tx, accts, proto)
+	err = accountsInit(tx, accts, proto)
 	require.NoError(t, err)
 	checkAccounts(t, tx, 0, accts)
 
@@ -737,7 +735,7 @@ func benchmarkInitBalances(b testing.TB, numAccounts int, dbs db.Pair, proto con
 
 	updates = generateRandomTestingAccountBalances(numAccounts)
 
-	_, err = accountsInit(tx, updates, proto)
+	err = accountsInit(tx, updates, proto)
 	require.NoError(b, err)
 	err = accountsAddNormalizedBalance(tx, proto)
 	require.NoError(b, err)
@@ -958,7 +956,7 @@ func TestAccountsReencoding(t *testing.T) {
 	pubVrfKey, _ := crypto.VrfKeygenFromSeed([32]byte{0, 1, 2, 3})
 
 	err := dbs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
-		_, err = accountsInit(tx, make(map[basics.Address]basics.AccountData), config.Consensus[protocol.ConsensusCurrentVersion])
+		err = accountsInit(tx, make(map[basics.Address]basics.AccountData), config.Consensus[protocol.ConsensusCurrentVersion])
 		if err != nil {
 			return err
 		}
@@ -1036,7 +1034,7 @@ func TestAccountsDbQueriesCreateClose(t *testing.T) {
 	defer dbs.Close()
 
 	err := dbs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
-		_, err = accountsInit(tx, make(map[basics.Address]basics.AccountData), config.Consensus[protocol.ConsensusCurrentVersion])
+		err = accountsInit(tx, make(map[basics.Address]basics.AccountData), config.Consensus[protocol.ConsensusCurrentVersion])
 		if err != nil {
 			return err
 		}

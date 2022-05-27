@@ -46,7 +46,7 @@ const txnPerWorksetThreshold = 32
 
 // When the PaysetGroups is generating worksets, it enqueues up to concurrentWorksets entries to the execution pool. This serves several
 // purposes :
-// - if the verification task need to be aborted, there are only concurrentWorksets entries that are currently redundant on the execution pool queue.
+// - if the verification task need to be aborted, there are only concurrentWorksets entries that are currently redundent on the execution pool queue.
 // - that number of concurrent tasks would not get beyond the capacity of the execution pool back buffer.
 // - if we were to "redundently" execute all these during context cancelation, we would spent at most 2ms * 16 = 32ms time.
 // - it allows us to linearly scan the input, and process elements only once we're going to queue them into the pool.
@@ -108,6 +108,10 @@ func Txn(s *transactions.SignedTxn, txnIdx int, groupCtx *GroupContext) error {
 		return err
 	}
 
+	if s.Txn.Src().IsZero() {
+		return errors.New("empty address")
+	}
+
 	return stxnVerifyCore(s, txnIdx, groupCtx)
 }
 
@@ -117,34 +121,13 @@ func TxnGroup(stxs []transactions.SignedTxn, contextHdr bookkeeping.BlockHeader,
 	if err != nil {
 		return nil, err
 	}
-
-	minFeeCount := uint64(0)
-	feesPaid := uint64(0)
 	for i, stxn := range stxs {
 		err = Txn(&stxn, i, groupCtx)
 		if err != nil {
 			err = fmt.Errorf("transaction %+v invalid : %w", stxn, err)
 			return
 		}
-		if stxn.Txn.Type != protocol.CompactCertTx {
-			minFeeCount++
-		}
-		feesPaid = basics.AddSaturate(feesPaid, stxn.Txn.Fee.Raw)
 	}
-	feeNeeded, overflow := basics.OMul(groupCtx.consensusParams.MinTxnFee, minFeeCount)
-	if overflow {
-		err = fmt.Errorf("txgroup fee requirement overflow")
-		return
-	}
-	// feesPaid may have saturated. That's ok. Since we know
-	// feeNeeded did not overlfow, simple comparison tells us
-	// feesPaid was enough.
-	if feesPaid < feeNeeded {
-		err = fmt.Errorf("txgroup had %d in fees, which is less than the minimum %d * %d",
-			feesPaid, minFeeCount, groupCtx.consensusParams.MinTxnFee)
-		return
-	}
-
 	if cache != nil {
 		cache.Add(stxs, groupCtx)
 	}

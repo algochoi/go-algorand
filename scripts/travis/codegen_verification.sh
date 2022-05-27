@@ -28,7 +28,10 @@ eval "$(~/gimme "${GOLANG_VERSION}")"
 make gen
 
 function runGoFmt() {
-    unformatted=$(gofmt -l .)
+    gofiles="$(git diff --cached --name-only --diff-filter=ACM | grep '\.go$' | grep -v ^vendor/)" || true
+    [ -z "$gofiles" ] && return 0
+
+    unformatted=$(gofmt -l $gofiles)
     [ -z "$unformatted" ] && return 0
 
     # Some files are not gofmt'd. Print message and fail.
@@ -42,7 +45,7 @@ function runGoFmt() {
 }
 
 function runGoLint() {
-    warningCount=$("$GOPATH"/bin/golint $(go list ./... | grep -v /vendor/ | grep -v /test/e2e-go/) | wc -l | tr -d ' ')
+    warningCount=$("$GOPATH"/bin/golint $(GO111MODULE=off go list ./... | grep -v /vendor/ | grep -v /test/e2e-go/) | wc -l | tr -d ' ')
     if [ "${warningCount}" = "0" ]; then
         return 0
     fi
@@ -54,7 +57,7 @@ function runGoLint() {
 }
 
 echo "Running go vet..."
-go vet $(go list ./... | grep -v /test/e2e-go/)
+go vet $(GO111MODULE=off go list ./... | grep -v /test/e2e-go/)
 
 echo "Running gofmt..."
 runGoFmt
@@ -74,9 +77,6 @@ go generate ./config
 echo "Running fixcheck"
 GOPATH=$(go env GOPATH)
 "$GOPATH"/bin/algofix -error */
-
-echo "Updating TEAL Specs"
-make -C data/transactions/logic
 
 echo Checking Enlistment...
 if [[ -n $(git status --porcelain) ]]; then

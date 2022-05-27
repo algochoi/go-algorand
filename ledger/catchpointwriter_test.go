@@ -94,15 +94,16 @@ func makeTestEncodedBalanceRecord(t *testing.T) encodedBalanceRecord {
 
 	maxApps := currentConsensusParams.MaxAppsCreated
 	maxOptIns := currentConsensusParams.MaxAppsOptedIn
-	maxKeyBytesLen := currentConsensusParams.MaxAppKeyLen
-	maxSumBytesLen := currentConsensusParams.MaxAppSumKeyValueLens
-
+	maxBytesLen := currentConsensusParams.MaxAppKeyLen
+	if maxBytesLen > currentConsensusParams.MaxAppBytesValueLen {
+		maxBytesLen = currentConsensusParams.MaxAppBytesValueLen
+	}
 	genKey := func() (string, basics.TealValue) {
-		len := int(crypto.RandUint64() % uint64(maxKeyBytesLen))
+		len := int(crypto.RandUint64() % uint64(maxBytesLen))
 		if len == 0 {
 			return "k", basics.TealValue{Type: basics.TealUintType, Uint: 0}
 		}
-		key := make([]byte, maxSumBytesLen-len)
+		key := make([]byte, len)
 		crypto.RandBytes(key)
 		return string(key), basics.TealValue{Type: basics.TealUintType, Bytes: string(key)}
 	}

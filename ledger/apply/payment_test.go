@@ -149,10 +149,6 @@ func TestPaymentValidation(t *testing.T) {
 		txn.GenesisHash = genHash
 		payments[i] = txn
 	}
-	tcpast := transactions.ExplicitTxnContext{
-		Proto:   config.Consensus[protocol.ConsensusV27],
-		GenHash: genHash,
-	}
 	tc := transactions.ExplicitTxnContext{
 		Proto:   config.Consensus[protocol.ConsensusCurrentVersion],
 		GenHash: genHash,
@@ -222,16 +218,9 @@ func TestPaymentValidation(t *testing.T) {
 
 		badFee := txn
 		badFee.Fee = basics.MicroAlgos{}
-		if badFee.WellFormed(spec, tcpast.Proto) == nil {
+		if badFee.WellFormed(spec, tc.Proto) == nil {
 			t.Errorf("transaction with no fee %#v verified incorrectly", badFee)
 		}
-		require.Nil(t, badFee.WellFormed(spec, tc.Proto))
-
-		badFee.Fee.Raw = 1
-		if badFee.WellFormed(spec, tcpast.Proto) == nil {
-			t.Errorf("transaction with low fee %#v verified incorrectly", badFee)
-		}
-		require.Nil(t, badFee.WellFormed(spec, tc.Proto))
 	}
 }
 

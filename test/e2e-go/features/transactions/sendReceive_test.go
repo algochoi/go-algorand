@@ -23,7 +23,6 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	v1 "github.com/algorand/go-algorand/daemon/algod/api/spec/v1"
 	"github.com/algorand/go-algorand/test/framework/fixtures"
 )
 
@@ -48,16 +47,6 @@ func TestAccountsCanSendMoney(t *testing.T) {
 	testAccountsCanSendMoney(t, filepath.Join("nettemplates", "TwoNodes50Each.json"), numberOfSends)
 }
 
-// this test checks that two accounts' balances stay up to date
-// as they send each other money many times
-func TestDevModeAccountsCanSendMoney(t *testing.T) {
-	numberOfSends := 25
-	if testing.Short() {
-		numberOfSends = 3
-	}
-	testAccountsCanSendMoney(t, filepath.Join("nettemplates", "DevModeNetwork.json"), numberOfSends)
-}
-
 func testAccountsCanSendMoney(t *testing.T, templatePath string, numberOfSends int) {
 	t.Parallel()
 	a := require.New(fixtures.SynchronizedTest(t))
@@ -73,17 +62,11 @@ func testAccountsCanSendMoney(t *testing.T, templatePath string, numberOfSends i
 	pingAccount := pingAccountList[0].Address
 
 	pongClient := fixture.GetLibGoalClientForNamedNode("Node")
-	pongAccounts, err := fixture.GetNodeWalletsSortedByBalance(pongClient.DataDir())
+	wh, err := pongClient.GetUnencryptedWalletHandle()
 	a.NoError(err)
-	var pongAccount string
-	for _, acct := range pongAccounts {
-		if acct.Address == pingAccount {
-			continue
-		}
-		// we found an account.
-		pongAccount = acct.Address
-		break
-	}
+	pongAccountList, err := pongClient.ListAddresses(wh)
+	a.NoError(err)
+	pongAccount := pongAccountList[0]
 
 	pingBalance, err := c.GetBalance(pingAccount)
 	pongBalance, err := c.GetBalance(pongAccount)
@@ -104,8 +87,6 @@ func testAccountsCanSendMoney(t *testing.T, templatePath string, numberOfSends i
 	pongTxidsToAddresses := make(map[string]string)
 	pingTxidsToAddresses := make(map[string]string)
 
-	waitForTransaction := false
-
 	for i := 0; i < numberOfSends; i++ {
 		pongTx, err := pongClient.SendPaymentFromUnencryptedWallet(pongAccount, pingAccount, transactionFee, amountPongSendsPing, GenerateRandomBytes(8))
 		pongTxidsToAddresses[pongTx.ID().String()] = pongAccount
@@ -115,38 +96,24 @@ func testAccountsCanSendMoney(t *testing.T, templatePath string, numberOfSends i
 		a.NoError(err, "fixture should be able to send money (ping -> pong), error on send number %v", i)
 		expectedPingBalance = expectedPingBalance - transactionFee - amountPingSendsPong + amountPongSendsPing
 		expectedPongBalance = expectedPongBalance - transactionFee - amountPongSendsPing + amountPingSendsPong
-
-		var pongTxInfo, pingTxInfo v1.Transaction
-		pongTxInfo, err = pingClient.PendingTransactionInformation(pongTx.ID().String())
-		if err == nil {
-			pingTxInfo, err = pingClient.PendingTransactionInformation(pingTx.ID().String())
-		}
-		waitForTransaction = err != nil || pongTxInfo.ConfirmedRound == 0 || pingTxInfo.ConfirmedRound == 0
-
-		if waitForTransaction {
-			curStatus, _ := pongClient.Status()
-			curRound := curStatus.LastRound
-			err = fixture.WaitForRoundWithTimeout(curRound + uint64(1))
-			a.NoError(err)
-		}
+		curStatus, _ := pongClient.Status()
+		curRound := curStatus.LastRound
+		err = fixture.WaitForRoundWithTimeout(curRound + uint64(1))
+		a.NoError(err)
 	}
 	curStatus, _ := pongClient.Status()
 	curRound := curStatus.LastRound
 
-	if waitForTransaction {
-		fixture.AlgodClient = fixture.GetAlgodClientForController(fixture.GetNodeControllerForDataDir(pongClient.DataDir()))
-		fixture.WaitForAllTxnsToConfirm(curRound+uint64(5), pingTxidsToAddresses)
-	}
+	fixture.AlgodClient = fixture.GetAlgodClientForController(fixture.GetNodeControllerForDataDir(pongClient.DataDir()))
+	fixture.WaitForAllTxnsToConfirm(curRound+uint64(5), pingTxidsToAddresses)
 
 	pingBalance, _ = fixture.GetBalanceAndRound(pingAccount)
 	pongBalance, _ = fixture.GetBalanceAndRound(pongAccount)
 	a.True(expectedPingBalance <= pingBalance, "ping balance is different than expected.")
 	a.True(expectedPongBalance <= pongBalance, "pong balance is different than expected.")
 
-	if waitForTransaction {
-		fixture.AlgodClient = fixture.GetAlgodClientForController(fixture.GetNodeControllerForDataDir(pingClient.DataDir()))
-		fixture.WaitForAllTxnsToConfirm(curRound+uint64(5), pongTxidsToAddresses)
-	}
+	fixture.AlgodClient = fixture.GetAlgodClientForController(fixture.GetNodeControllerForDataDir(pingClient.DataDir()))
+	fixture.WaitForAllTxnsToConfirm(curRound+uint64(5), pongTxidsToAddresses)
 
 	pingBalance, _ = fixture.GetBalanceAndRound(pingAccount)
 	pongBalance, _ = fixture.GetBalanceAndRound(pongAccount)

@@ -21,7 +21,7 @@ import (
 )
 
 // LogicVersion defines default assembler and max eval versions
-const LogicVersion = 5
+const LogicVersion = 4
 
 // rekeyingEnabledVersion is the version of TEAL where RekeyTo functionality
 // was enabled. This is important to remember so that old TEAL accounts cannot
@@ -33,14 +33,9 @@ const rekeyingEnabledVersion = 2
 // from being used with applications. Do not edit!
 const appsEnabledVersion = 2
 
-// backBranchEnabledVersion is the first version of TEAL where branches could
+// backBranchEabledVersion is the version of TEAL where branches could
 // go back (and cost accounting was done during execution)
 const backBranchEnabledVersion = 4
-
-// directRefEnabledVersion is the version of TEAL where opcodes
-// that reference accounts, asas, and apps may do so directly, not requiring
-// using an index into arrays.
-const directRefEnabledVersion = 4
 
 // opDetails records details such as non-standard costs, immediate
 // arguments, or dynamic layout controlled by a check function.
@@ -194,12 +189,6 @@ var OpSpecs = []OpSpec{
 	// Like gtxn, but gets txn index from stack, rather than immediate arg
 	{0x38, "gtxns", opGtxns, assembleGtxns, disTxn, oneInt, oneAny, 3, modeAny, immediates("f")},
 	{0x39, "gtxnsa", opGtxnsa, assembleGtxns, disTxna, oneInt, oneAny, 3, modeAny, immediates("f", "i")},
-	// Group scratch space access
-	{0x3a, "gload", opGload, asmDefault, disDefault, nil, oneAny, 4, runModeApplication, immediates("t", "i")},
-	{0x3b, "gloads", opGloads, asmDefault, disDefault, oneInt, oneAny, 4, runModeApplication, immediates("i")},
-	// Access creatable IDs
-	{0x3c, "gaid", opGaid, asmDefault, disDefault, nil, oneInt, 4, runModeApplication, immediates("t")},
-	{0x3d, "gaids", opGaids, asmDefault, disDefault, oneInt, oneInt, 4, runModeApplication, opDefault},
 
 	{0x40, "bnz", opBnz, assembleBranch, disBranch, oneInt, nil, 1, modeAny, opBranch},
 	{0x41, "bz", opBz, assembleBranch, disBranch, oneInt, nil, 2, modeAny, opBranch},
@@ -222,36 +211,22 @@ var OpSpecs = []OpSpec{
 	{0x54, "setbit", opSetBit, asmDefault, disDefault, anyIntInt, oneAny, 3, modeAny, opDefault},
 	{0x55, "getbyte", opGetByte, asmDefault, disDefault, byteInt, oneInt, 3, modeAny, opDefault},
 	{0x56, "setbyte", opSetByte, asmDefault, disDefault, byteIntInt, oneBytes, 3, modeAny, opDefault},
-	{0x57, "extract", opExtract, asmDefault, disDefault, oneBytes, oneBytes, 5, modeAny, immediates("s", "l")},
-	{0x58, "extract3", opExtract3, asmDefault, disDefault, byteIntInt, oneBytes, 5, modeAny, opDefault},
-	{0x59, "extract16bits", opExtract16Bits, asmDefault, disDefault, byteInt, oneInt, 5, modeAny, opDefault},
-	{0x5a, "extract32bits", opExtract32Bits, asmDefault, disDefault, byteInt, oneInt, 5, modeAny, opDefault},
-	{0x5b, "extract64bits", opExtract64Bits, asmDefault, disDefault, byteInt, oneInt, 5, modeAny, opDefault},
 
 	{0x60, "balance", opBalance, asmDefault, disDefault, oneInt, oneInt, 2, runModeApplication, opDefault},
-	{0x60, "balance", opBalance, asmDefault, disDefault, oneAny, oneInt, directRefEnabledVersion, runModeApplication, opDefault},
-	{0x61, "app_opted_in", opAppOptedIn, asmDefault, disDefault, twoInts, oneInt, 2, runModeApplication, opDefault},
-	{0x61, "app_opted_in", opAppOptedIn, asmDefault, disDefault, oneAny.plus(oneInt), oneInt, directRefEnabledVersion, runModeApplication, opDefault},
-	{0x62, "app_local_get", opAppLocalGet, asmDefault, disDefault, oneInt.plus(oneBytes), oneAny, 2, runModeApplication, opDefault},
-	{0x62, "app_local_get", opAppLocalGet, asmDefault, disDefault, oneAny.plus(oneBytes), oneAny, directRefEnabledVersion, runModeApplication, opDefault},
-	{0x63, "app_local_get_ex", opAppLocalGetEx, asmDefault, disDefault, twoInts.plus(oneBytes), oneAny.plus(oneInt), 2, runModeApplication, opDefault},
-	{0x63, "app_local_get_ex", opAppLocalGetEx, asmDefault, disDefault, oneAny.plus(oneInt).plus(oneBytes), oneAny.plus(oneInt), directRefEnabledVersion, runModeApplication, opDefault},
-	{0x64, "app_global_get", opAppGlobalGet, asmDefault, disDefault, oneBytes, oneAny, 2, runModeApplication, opDefault},
-	{0x65, "app_global_get_ex", opAppGlobalGetEx, asmDefault, disDefault, oneInt.plus(oneBytes), oneAny.plus(oneInt), 2, runModeApplication, opDefault},
-	{0x66, "app_local_put", opAppLocalPut, asmDefault, disDefault, oneInt.plus(oneBytes).plus(oneAny), nil, 2, runModeApplication, opDefault},
-	{0x66, "app_local_put", opAppLocalPut, asmDefault, disDefault, oneAny.plus(oneBytes).plus(oneAny), nil, directRefEnabledVersion, runModeApplication, opDefault},
-	{0x67, "app_global_put", opAppGlobalPut, asmDefault, disDefault, oneBytes.plus(oneAny), nil, 2, runModeApplication, opDefault},
-	{0x68, "app_local_del", opAppLocalDel, asmDefault, disDefault, oneInt.plus(oneBytes), nil, 2, runModeApplication, opDefault},
-	{0x68, "app_local_del", opAppLocalDel, asmDefault, disDefault, oneAny.plus(oneBytes), nil, directRefEnabledVersion, runModeApplication, opDefault},
-	{0x69, "app_global_del", opAppGlobalDel, asmDefault, disDefault, oneBytes, nil, 2, runModeApplication, opDefault},
+	{0x61, "app_opted_in", opAppCheckOptedIn, asmDefault, disDefault, twoInts, oneInt, 2, runModeApplication, opDefault},
+	{0x62, "app_local_get", opAppGetLocalState, asmDefault, disDefault, oneInt.plus(oneBytes), oneAny, 2, runModeApplication, opDefault},
+	{0x63, "app_local_get_ex", opAppGetLocalStateEx, asmDefault, disDefault, twoInts.plus(oneBytes), oneAny.plus(oneInt), 2, runModeApplication, opDefault},
+	{0x64, "app_global_get", opAppGetGlobalState, asmDefault, disDefault, oneBytes, oneAny, 2, runModeApplication, opDefault},
+	{0x65, "app_global_get_ex", opAppGetGlobalStateEx, asmDefault, disDefault, oneInt.plus(oneBytes), oneAny.plus(oneInt), 2, runModeApplication, opDefault},
+	{0x66, "app_local_put", opAppPutLocalState, asmDefault, disDefault, oneInt.plus(oneBytes).plus(oneAny), nil, 2, runModeApplication, opDefault},
+	{0x67, "app_global_put", opAppPutGlobalState, asmDefault, disDefault, oneBytes.plus(oneAny), nil, 2, runModeApplication, opDefault},
+	{0x68, "app_local_del", opAppDeleteLocalState, asmDefault, disDefault, oneInt.plus(oneBytes), nil, 2, runModeApplication, opDefault},
+	{0x69, "app_global_del", opAppDeleteGlobalState, asmDefault, disDefault, oneBytes, nil, 2, runModeApplication, opDefault},
 
 	{0x70, "asset_holding_get", opAssetHoldingGet, assembleAssetHolding, disAssetHolding, twoInts, oneAny.plus(oneInt), 2, runModeApplication, immediates("i")},
-	{0x70, "asset_holding_get", opAssetHoldingGet, assembleAssetHolding, disAssetHolding, oneAny.plus(oneInt), oneAny.plus(oneInt), directRefEnabledVersion, runModeApplication, immediates("i")},
 	{0x71, "asset_params_get", opAssetParamsGet, assembleAssetParams, disAssetParams, oneInt, oneAny.plus(oneInt), 2, runModeApplication, immediates("i")},
-	{0x72, "app_params_get", opAppParamsGet, assembleAppParams, disAppParams, oneInt, oneAny.plus(oneInt), 5, runModeApplication, immediates("i")},
 
 	{0x78, "min_balance", opMinBalance, asmDefault, disDefault, oneInt, oneInt, 3, runModeApplication, opDefault},
-	{0x78, "min_balance", opMinBalance, asmDefault, disDefault, oneAny, oneInt, directRefEnabledVersion, runModeApplication, opDefault},
 
 	// Immediate bytes and ints. Smaller code size for single use of constant.
 	{0x80, "pushbytes", opPushBytes, asmPushBytes, disPushBytes, nil, oneBytes, 3, modeAny, varies(checkPushBytes, "bytes", immBytes)},

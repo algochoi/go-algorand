@@ -75,17 +75,6 @@ func (sv *stackValue) typeName() string {
 	return "uint64"
 }
 
-func (sv *stackValue) clone() stackValue {
-	if sv.Bytes != nil {
-		// clone stack value if Bytes
-		bytesClone := make([]byte, len(sv.Bytes))
-		copy(bytesClone, sv.Bytes)
-		return stackValue{Bytes: bytesClone}
-	}
-	// otherwise no cloning is needed if Uint
-	return stackValue{Uint: sv.Uint}
-}
-
 func (sv *stackValue) String() string {
 	if sv.Bytes != nil {
 		return hex.EncodeToString(sv.Bytes)
@@ -143,12 +132,10 @@ type LedgerForLogic interface {
 	LatestTimestamp() int64
 
 	AssetHolding(addr basics.Address, assetIdx basics.AssetIndex) (basics.AssetHolding, error)
-	AssetParams(aidx basics.AssetIndex) (basics.AssetParams, basics.Address, error)
-	AppParams(aidx basics.AppIndex) (basics.AppParams, basics.Address, error)
+	AssetParams(aidx basics.AssetIndex) (basics.AssetParams, error)
 	ApplicationID() basics.AppIndex
 	CreatorAddress() basics.Address
 	OptedIn(addr basics.Address, appIdx basics.AppIndex) (bool, error)
-	GetCreatableID(groupIdx int) basics.CreatableIndex
 
 	GetLocal(addr basics.Address, appIdx basics.AppIndex, key string, accountIdx uint64) (value basics.TealValue, exists bool, err error)
 	SetLocal(addr basics.Address, key string, value basics.TealValue, accountIdx uint64) error
@@ -159,31 +146,6 @@ type LedgerForLogic interface {
 	DelGlobal(key string) error
 
 	GetDelta(txn *transactions.Transaction) (evalDelta basics.EvalDelta, err error)
-}
-
-// EvalSideEffects contains data returned from evaluation
-type EvalSideEffects struct {
-	scratchSpace scratchSpace
-}
-
-// MakePastSideEffects allocates and initializes a slice of EvalSideEffects of length `size`
-func MakePastSideEffects(size int) (pastSideEffects []EvalSideEffects) {
-	pastSideEffects = make([]EvalSideEffects, size)
-	for j := range pastSideEffects {
-		pastSideEffects[j] = EvalSideEffects{}
-	}
-	return
-}
-
-// getScratchValue loads and clones a stackValue
-// The value is cloned so the original bytes are protected from changes
-func (se *EvalSideEffects) getScratchValue(scratchPos uint8) stackValue {
-	return se.scratchSpace[scratchPos].clone()
-}
-
-// setScratchSpace stores the scratch space
-func (se *EvalSideEffects) setScratchSpace(scratch scratchSpace) {
-	se.scratchSpace = scratch
 }
 
 // EvalParams contains data that comes into condition evaluation.
@@ -199,8 +161,6 @@ type EvalParams struct {
 
 	// GroupIndex should point to Txn within TxnGroup
 	GroupIndex int
-
-	PastSideEffects []EvalSideEffects
 
 	Logger logging.Logger
 
@@ -265,8 +225,6 @@ func (ep EvalParams) log() logging.Logger {
 	return logging.Base()
 }
 
-type scratchSpace = [256]stackValue
-
 type evalContext struct {
 	EvalParams
 
@@ -279,7 +237,7 @@ type evalContext struct {
 	intc      []uint64
 	bytec     [][]byte
 	version   uint64
-	scratch   scratchSpace
+	scratch   [256]stackValue
 
 	cost int // cost incurred so far
 
@@ -355,11 +313,7 @@ func EvalStateful(program []byte, params EvalParams) (pass bool, err error) {
 	var cx evalContext
 	cx.EvalParams = params
 	cx.runModeFlags = runModeApplication
-	pass, err = eval(program, &cx)
-
-	// set side effects
-	cx.PastSideEffects[cx.GroupIndex].setScratchSpace(cx.scratch)
-	return
+	return eval(program, &cx)
 }
 
 // Eval checks to see if a transaction passes logic
@@ -478,7 +432,6 @@ func eval(program []byte, cx *evalContext) (pass bool, err error) {
 	if cx.stack[0].Bytes != nil {
 		return false, errors.New("stack finished with bytes not int")
 	}
-
 	return cx.stack[0].Uint != 0, nil
 }
 
@@ -783,7 +736,7 @@ func opAssert(cx *evalContext) {
 		cx.stack = cx.stack[:last]
 		return
 	}
-	cx.err = fmt.Errorf("assert failed pc=%d", cx.pc)
+	cx.err = errors.New("assert failed")
 }
 
 func opSwap(cx *evalContext) {
@@ -1713,13 +1666,13 @@ func (cx *evalContext) assetHoldingEnumToValue(holding *basics.AssetHolding, fie
 
 	assetHoldingField := AssetHoldingField(field)
 	assetHoldingFieldType := AssetHoldingFieldTypes[assetHoldingField]
-	if !typecheck(assetHoldingFieldType, sv.argType()) {
+	if assetHoldingFieldType != sv.argType() {
 		err = fmt.Errorf("%s expected field type is %s but got %s", assetHoldingField.String(), assetHoldingFieldType.String(), sv.argType().String())
 	}
 	return
 }
 
-func (cx *evalContext) assetParamsEnumToValue(params *basics.AssetParams, creator basics.Address, field uint64) (sv stackValue, err error) {
+func (cx *evalContext) assetParamsEnumToValue(params *basics.AssetParams, field uint64) (sv stackValue, err error) {
 	switch AssetParamsField(field) {
 	case AssetTotal:
 		sv.Uint = params.Total
@@ -1743,8 +1696,6 @@ func (cx *evalContext) assetParamsEnumToValue(params *basics.AssetParams, creato
 		sv.Bytes = params.Freeze[:]
 	case AssetClawback:
 		sv.Bytes = params.Clawback[:]
-	case AssetCreator:
-		sv.Bytes = creator[:]
 	default:
 		err = fmt.Errorf("invalid asset params field %d", field)
 		return
@@ -1752,39 +1703,8 @@ func (cx *evalContext) assetParamsEnumToValue(params *basics.AssetParams, creato
 
 	assetParamsField := AssetParamsField(field)
 	assetParamsFieldType := AssetParamsFieldTypes[assetParamsField]
-	if !typecheck(assetParamsFieldType, sv.argType()) {
+	if assetParamsFieldType != sv.argType() {
 		err = fmt.Errorf("%s expected field type is %s but got %s", assetParamsField.String(), assetParamsFieldType.String(), sv.argType().String())
-	}
-	return
-}
-
-func (cx *evalContext) appParamsEnumToValue(params *basics.AppParams, creator basics.Address, field uint64) (sv stackValue, err error) {
-	switch AppParamsField(field) {
-	case AppApprovalProgram:
-		sv.Bytes = params.ApprovalProgram[:]
-	case AppClearStateProgram:
-		sv.Bytes = params.ClearStateProgram[:]
-	case AppGlobalNumUint:
-		sv.Uint = params.GlobalStateSchema.NumUint
-	case AppGlobalNumByteSlice:
-		sv.Uint = params.GlobalStateSchema.NumByteSlice
-	case AppLocalNumUint:
-		sv.Uint = params.LocalStateSchema.NumUint
-	case AppLocalNumByteSlice:
-		sv.Uint = params.LocalStateSchema.NumByteSlice
-	case AppExtraProgramPages:
-		sv.Uint = uint64(params.ExtraProgramPages)
-	case AppCreator:
-		sv.Bytes = creator[:]
-	default:
-		err = fmt.Errorf("invalid app params field %d", field)
-		return
-	}
-
-	appParamsField := AppParamsField(field)
-	appParamsFieldType := AppParamsFieldTypes[appParamsField]
-	if !typecheck(appParamsFieldType, sv.argType()) {
-		err = fmt.Errorf("%s expected field type is %s but got %s", appParamsField.String(), appParamsFieldType.String(), sv.argType().String())
 	}
 	return
 }
@@ -1959,8 +1879,6 @@ func (cx *evalContext) txnFieldToStack(txn *transactions.Transaction, field TxnF
 		sv.Bytes = txn.FreezeAccount[:]
 	case FreezeAssetFrozen:
 		sv.Uint = boolToUint(txn.AssetFrozen)
-	case ExtraProgramPages:
-		sv.Uint = uint64(txn.ExtraProgramPages)
 	default:
 		err = fmt.Errorf("invalid txn field %d", field)
 		return
@@ -1968,7 +1886,7 @@ func (cx *evalContext) txnFieldToStack(txn *transactions.Transaction, field TxnF
 
 	txnField := TxnField(field)
 	txnFieldType := TxnFieldTypes[txnField]
-	if !typecheck(txnFieldType, sv.argType()) {
+	if txnFieldType != sv.argType() {
 		err = fmt.Errorf("%s expected field type is %s but got %s", txnField.String(), txnFieldType.String(), sv.argType().String())
 	}
 	return
@@ -1986,7 +1904,9 @@ func opTxn(cx *evalContext) {
 		cx.err = fmt.Errorf("invalid txn field %d", field)
 		return
 	}
-	sv, err := cx.txnFieldToStack(&cx.Txn.Txn, field, 0, cx.GroupIndex)
+	var sv stackValue
+	var err error
+	sv, err = cx.txnFieldToStack(&cx.Txn.Txn, field, 0, cx.GroupIndex)
 	if err != nil {
 		cx.err = err
 		return
@@ -2006,8 +1926,10 @@ func opTxna(cx *evalContext) {
 		cx.err = fmt.Errorf("txna unsupported field %d", field)
 		return
 	}
+	var sv stackValue
+	var err error
 	arrayFieldIdx := uint64(cx.program[cx.pc+2])
-	sv, err := cx.txnFieldToStack(&cx.Txn.Txn, field, arrayFieldIdx, cx.GroupIndex)
+	sv, err = cx.txnFieldToStack(&cx.Txn.Txn, field, arrayFieldIdx, cx.GroupIndex)
 	if err != nil {
 		cx.err = err
 		return
@@ -2066,8 +1988,10 @@ func opGtxna(cx *evalContext) {
 		cx.err = fmt.Errorf("gtxna unsupported field %d", field)
 		return
 	}
+	var sv stackValue
+	var err error
 	arrayFieldIdx := uint64(cx.program[cx.pc+3])
-	sv, err := cx.txnFieldToStack(tx, field, arrayFieldIdx, gtxid)
+	sv, err = cx.txnFieldToStack(tx, field, arrayFieldIdx, gtxid)
 	if err != nil {
 		cx.err = err
 		return
@@ -2128,62 +2052,14 @@ func opGtxnsa(cx *evalContext) {
 		cx.err = fmt.Errorf("gtxnsa unsupported field %d", field)
 		return
 	}
+	var sv stackValue
+	var err error
 	arrayFieldIdx := uint64(cx.program[cx.pc+2])
-	sv, err := cx.txnFieldToStack(tx, field, arrayFieldIdx, gtxid)
+	sv, err = cx.txnFieldToStack(tx, field, arrayFieldIdx, gtxid)
 	if err != nil {
 		cx.err = err
 		return
 	}
-	cx.stack[last] = sv
-}
-
-func opGaidImpl(cx *evalContext, groupIdx int, opName string) (sv stackValue, err error) {
-	if groupIdx >= len(cx.TxnGroup) {
-		err = fmt.Errorf("%s lookup TxnGroup[%d] but it only has %d", opName, groupIdx, len(cx.TxnGroup))
-		return
-	} else if groupIdx > cx.GroupIndex {
-		err = fmt.Errorf("%s can't get creatable ID of txn ahead of the current one (index %d) in the transaction group", opName, groupIdx)
-		return
-	} else if groupIdx == cx.GroupIndex {
-		err = fmt.Errorf("%s is only for accessing creatable IDs of previous txns, use `global CurrentApplicationID` instead to access the current app's creatable ID", opName)
-		return
-	} else if txn := cx.TxnGroup[groupIdx].Txn; !(txn.Type == protocol.ApplicationCallTx || txn.Type == protocol.AssetConfigTx) {
-		err = fmt.Errorf("can't use %s on txn that is not an app call nor an asset config txn with index %d", opName, groupIdx)
-		return
-	}
-
-	cid, err := cx.getCreatableID(groupIdx)
-	if cid == 0 {
-		err = fmt.Errorf("%s can't read creatable ID from txn with group index %d because the txn did not create anything", opName, groupIdx)
-		return
-	}
-
-	sv = stackValue{
-		Uint: cid,
-	}
-	return
-}
-
-func opGaid(cx *evalContext) {
-	groupIdx := int(uint(cx.program[cx.pc+1]))
-	sv, err := opGaidImpl(cx, groupIdx, "gaid")
-	if err != nil {
-		cx.err = err
-		return
-	}
-
-	cx.stack = append(cx.stack, sv)
-}
-
-func opGaids(cx *evalContext) {
-	last := len(cx.stack) - 1
-	groupIdx := int(cx.stack[last].Uint)
-	sv, err := opGaidImpl(cx, groupIdx, "gaids")
-	if err != nil {
-		cx.err = err
-		return
-	}
-
 	cx.stack[last] = sv
 }
 
@@ -2214,14 +2090,6 @@ func (cx *evalContext) getApplicationID() (rnd uint64, err error) {
 		return
 	}
 	return uint64(cx.Ledger.ApplicationID()), nil
-}
-
-func (cx *evalContext) getCreatableID(groupIndex int) (cid uint64, err error) {
-	if cx.Ledger == nil {
-		err = fmt.Errorf("ledger not available")
-		return
-	}
-	return uint64(cx.Ledger.GetCreatableID(groupIndex)), nil
 }
 
 func (cx *evalContext) getCreatorAddress() ([]byte, error) {
@@ -2282,7 +2150,7 @@ func opGlobal(cx *evalContext) {
 	}
 
 	globalFieldType := GlobalFieldTypes[globalField]
-	if !typecheck(globalFieldType, sv.argType()) {
+	if globalFieldType != sv.argType() {
 		cx.err = fmt.Errorf("%s expected field type is %s but got %s", globalField.String(), globalFieldType.String(), sv.argType().String())
 		return
 	}
@@ -2350,53 +2218,6 @@ func opStore(cx *evalContext) {
 	last := len(cx.stack) - 1
 	cx.scratch[gindex] = cx.stack[last]
 	cx.stack = cx.stack[:last]
-}
-
-func opGloadImpl(cx *evalContext, groupIdx int, scratchIdx int, opName string) (scratchValue stackValue, err error) {
-	if groupIdx >= len(cx.TxnGroup) {
-		err = fmt.Errorf("%s lookup TxnGroup[%d] but it only has %d", opName, groupIdx, len(cx.TxnGroup))
-		return
-	} else if scratchIdx >= 256 {
-		err = fmt.Errorf("invalid Scratch index %d", scratchIdx)
-		return
-	} else if txn := cx.TxnGroup[groupIdx].Txn; txn.Type != protocol.ApplicationCallTx {
-		err = fmt.Errorf("can't use %s on non-app call txn with index %d", opName, groupIdx)
-		return
-	} else if groupIdx == cx.GroupIndex {
-		err = fmt.Errorf("can't use %s on self, use load instead", opName)
-		return
-	} else if groupIdx > cx.GroupIndex {
-		err = fmt.Errorf("%s can't get future scratch space from txn with index %d", opName, groupIdx)
-		return
-	}
-
-	scratchValue = cx.PastSideEffects[groupIdx].getScratchValue(uint8(scratchIdx))
-	return
-}
-
-func opGload(cx *evalContext) {
-	groupIdx := int(uint(cx.program[cx.pc+1]))
-	scratchIdx := int(uint(cx.program[cx.pc+2]))
-	scratchValue, err := opGloadImpl(cx, groupIdx, scratchIdx, "gload")
-	if err != nil {
-		cx.err = err
-		return
-	}
-
-	cx.stack = append(cx.stack, scratchValue)
-}
-
-func opGloads(cx *evalContext) {
-	last := len(cx.stack) - 1
-	groupIdx := int(cx.stack[last].Uint)
-	scratchIdx := int(uint(cx.program[cx.pc+1]))
-	scratchValue, err := opGloadImpl(cx, groupIdx, scratchIdx, "gloads")
-	if err != nil {
-		cx.err = err
-		return
-	}
-
-	cx.stack[last] = scratchValue
 }
 
 func opConcat(cx *evalContext) {
@@ -2545,7 +2366,7 @@ func opGetByte(cx *evalContext) {
 	target := cx.stack[prev]
 
 	if idx >= uint64(len(target.Bytes)) {
-		cx.err = errors.New("getbyte index beyond array length")
+		cx.err = errors.New("getbyte index beyond byteslice")
 		return
 	}
 	cx.stack[prev].Uint = uint64(target.Bytes[idx])
@@ -2561,8 +2382,8 @@ func opSetByte(cx *evalContext) {
 		cx.err = errors.New("setbyte value > 255")
 		return
 	}
-	if cx.stack[prev].Uint >= uint64(len(cx.stack[pprev].Bytes)) {
-		cx.err = errors.New("setbyte index beyond array length")
+	if cx.stack[prev].Uint > uint64(len(cx.stack[pprev].Bytes)) {
+		cx.err = errors.New("setbyte index > byte length")
 		return
 	}
 	// Copy to avoid modifying shared slice
@@ -2571,161 +2392,80 @@ func opSetByte(cx *evalContext) {
 	cx.stack = cx.stack[:prev]
 }
 
-func opExtractImpl(x []byte, start, length int) (out []byte, err error) {
-	out = x
-	end := start + length
-	if start > len(x) || end > len(x) {
-		err = errors.New("extract range beyond length of string")
-		return
-	}
-	out = x[start:end]
-	return
-}
-
-func opExtract(cx *evalContext) {
-	last := len(cx.stack) - 1
-	startIdx := cx.program[cx.pc+1]
-	lengthIdx := cx.program[cx.pc+2]
-	// Shortcut: if length is 0, take bytes from start index to the end
-	length := int(lengthIdx)
-	if length == 0 {
-		length = len(cx.stack[last].Bytes) - int(startIdx)
-	}
-	cx.stack[last].Bytes, cx.err = opExtractImpl(cx.stack[last].Bytes, int(startIdx), length)
-}
-
-func opExtract3(cx *evalContext) {
-	last := len(cx.stack) - 1 // length
-	prev := last - 1          // start
-	byteArrayIdx := prev - 1  // bytes
-	startIdx := cx.stack[prev].Uint
-	lengthIdx := cx.stack[last].Uint
-	if startIdx > math.MaxInt32 || lengthIdx > math.MaxInt32 {
-		cx.err = errors.New("extract range beyond length of string")
-		return
-	}
-	cx.stack[byteArrayIdx].Bytes, cx.err = opExtractImpl(cx.stack[byteArrayIdx].Bytes, int(startIdx), int(lengthIdx))
-	cx.stack = cx.stack[:prev]
-}
-
-// We convert the bytes manually here because we need to accept "short" byte arrays.
-// A single byte is a legal uint64 decoded this way.
-func convertBytesToInt(x []byte) (out uint64) {
-	out = uint64(0)
-	for _, b := range x {
-		out = out << 8
-		out = out | (uint64(b) & 0x0ff)
-	}
-	return
-}
-
-func opExtractNBits(cx *evalContext, n int) {
-	last := len(cx.stack) - 1 // start
-	prev := last - 1          // bytes
-	startIdx := cx.stack[last].Uint
-	cx.stack[prev].Bytes, cx.err = opExtractImpl(cx.stack[prev].Bytes, int(startIdx), n) // extract n bits
-
-	cx.stack[prev].Uint = convertBytesToInt(cx.stack[prev].Bytes)
-	cx.stack[prev].Bytes = nil
-	cx.stack = cx.stack[:last]
-}
-
-func opExtract16Bits(cx *evalContext) {
-	opExtractNBits(cx, 2) // extract 16 bits
-}
-
-func opExtract32Bits(cx *evalContext) {
-	opExtractNBits(cx, 4) // extract 32 bits
-}
-
-func opExtract64Bits(cx *evalContext) {
-	opExtractNBits(cx, 8) // extract 64 bits
-}
-
-func accountReference(cx *evalContext, account stackValue) (basics.Address, uint64, error) {
-	if account.argType() == StackUint64 {
-		addr, err := cx.Txn.Txn.AddressByIndex(account.Uint, cx.Txn.Txn.Sender)
-		return addr, account.Uint, err
-	}
-	addr := basics.Address{}
-	copy(addr[:], account.Bytes)
-	idx, err := cx.Txn.Txn.IndexByAddress(addr, cx.Txn.Txn.Sender)
-	return addr, idx, err
-}
-
-type opQuery func(basics.Address, *config.ConsensusParams) (basics.MicroAlgos, error)
-
-func opBalanceQuery(cx *evalContext, query opQuery, item string) error {
-	last := len(cx.stack) - 1 // account (index or actual address)
-
-	addr, _, err := accountReference(cx, cx.stack[last])
-	if err != nil {
-		return err
-	}
-
-	microAlgos, err := query(addr, cx.Proto)
-	if err != nil {
-		return fmt.Errorf("failed to fetch %s of %v: %w", item, addr, err)
-	}
-
-	cx.stack[last].Bytes = nil
-	cx.stack[last].Uint = microAlgos.Raw
-	return nil
-}
 func opBalance(cx *evalContext) {
+	last := len(cx.stack) - 1 // account offset
+
+	accountIdx := cx.stack[last].Uint
+
 	if cx.Ledger == nil {
 		cx.err = fmt.Errorf("ledger not available")
 		return
 	}
 
-	balanceQuery := func(addr basics.Address, _ *config.ConsensusParams) (basics.MicroAlgos, error) {
-		return cx.Ledger.Balance(addr)
-	}
-	err := opBalanceQuery(cx, balanceQuery, "balance")
+	addr, err := cx.Txn.Txn.AddressByIndex(accountIdx, cx.Txn.Txn.Sender)
 	if err != nil {
 		cx.err = err
+		return
 	}
+
+	microAlgos, err := cx.Ledger.Balance(addr)
+	if err != nil {
+		cx.err = fmt.Errorf("failed to fetch balance of %v: %w", addr, err)
+		return
+	}
+
+	cx.stack[last].Uint = microAlgos.Raw
 }
+
 func opMinBalance(cx *evalContext) {
+	last := len(cx.stack) - 1 // account offset
+
+	accountIdx := cx.stack[last].Uint
+
 	if cx.Ledger == nil {
 		cx.err = fmt.Errorf("ledger not available")
 		return
 	}
 
-	err := opBalanceQuery(cx, cx.Ledger.MinBalance, "minimum balance")
+	addr, err := cx.Txn.Txn.AddressByIndex(accountIdx, cx.Txn.Txn.Sender)
 	if err != nil {
 		cx.err = err
+		return
 	}
+
+	microAlgos, err := cx.Ledger.MinBalance(addr, cx.Proto)
+	if err != nil {
+		cx.err = fmt.Errorf("failed to fetch minimum balance of %v: %w", addr, err)
+		return
+	}
+
+	cx.stack[last].Uint = microAlgos.Raw
 }
 
-func opAppOptedIn(cx *evalContext) {
-	last := len(cx.stack) - 1 // app
-	prev := last - 1          // account
+func opAppCheckOptedIn(cx *evalContext) {
+	last := len(cx.stack) - 1 // app id
+	prev := last - 1          // account offset
+
+	appID := cx.stack[last].Uint
+	accountIdx := cx.stack[prev].Uint
 
 	if cx.Ledger == nil {
 		cx.err = fmt.Errorf("ledger not available")
 		return
 	}
 
-	addr, _, err := accountReference(cx, cx.stack[prev])
+	addr, err := cx.Txn.Txn.AddressByIndex(accountIdx, cx.Txn.Txn.Sender)
 	if err != nil {
 		cx.err = err
 		return
 	}
 
-	app, err := appReference(cx, cx.stack[last].Uint, false)
+	optedIn, err := cx.Ledger.OptedIn(addr, basics.AppIndex(appID))
 	if err != nil {
 		cx.err = err
 		return
 	}
 
-	optedIn, err := cx.Ledger.OptedIn(addr, app)
-	if err != nil {
-		cx.err = err
-		return
-	}
-
-	cx.stack[prev].Bytes = nil
 	if optedIn {
 		cx.stack[prev].Uint = 1
 	} else {
@@ -2735,13 +2475,66 @@ func opAppOptedIn(cx *evalContext) {
 	cx.stack = cx.stack[:last]
 }
 
-func opAppLocalGet(cx *evalContext) {
+func (cx *evalContext) appReadLocalKey(appIdx uint64, accountIdx uint64, key string) (basics.TealValue, bool, error) {
+	// Convert the account offset to an address
+	addr, err := cx.Txn.Txn.AddressByIndex(accountIdx, cx.Txn.Txn.Sender)
+	if err != nil {
+		return basics.TealValue{}, false, err
+	}
+	return cx.Ledger.GetLocal(addr, basics.AppIndex(appIdx), key, accountIdx)
+}
+
+// appWriteLocalKey writes value to local key/value cow
+func (cx *evalContext) appWriteLocalKey(accountIdx uint64, key string, tv basics.TealValue) error {
+	// Convert the account offset to an address
+	addr, err := cx.Txn.Txn.AddressByIndex(accountIdx, cx.Txn.Txn.Sender)
+	if err != nil {
+		return err
+	}
+	return cx.Ledger.SetLocal(addr, key, tv, accountIdx)
+}
+
+// appDeleteLocalKey deletes a value from the key/value cow
+func (cx *evalContext) appDeleteLocalKey(accountIdx uint64, key string) error {
+	// Convert the account offset to an address
+	addr, err := cx.Txn.Txn.AddressByIndex(accountIdx, cx.Txn.Txn.Sender)
+	if err != nil {
+		return err
+	}
+	return cx.Ledger.DelLocal(addr, key, accountIdx)
+}
+
+func (cx *evalContext) appReadGlobalKey(foreignAppsIndex uint64, key string) (basics.TealValue, bool, error) {
+	if foreignAppsIndex > uint64(len(cx.Txn.Txn.ForeignApps)) {
+		err := fmt.Errorf("invalid ForeignApps index %d", foreignAppsIndex)
+		return basics.TealValue{}, false, err
+	}
+
+	appIdx := cx.Ledger.ApplicationID()
+	if foreignAppsIndex != 0 {
+		appIdx = cx.Txn.Txn.ForeignApps[foreignAppsIndex-1]
+	}
+
+	return cx.Ledger.GetGlobal(appIdx, key)
+}
+
+func (cx *evalContext) appWriteGlobalKey(key string, tv basics.TealValue) error {
+	return cx.Ledger.SetGlobal(key, tv)
+}
+
+func (cx *evalContext) appDeleteGlobalKey(key string) error {
+	return cx.Ledger.DelGlobal(key)
+}
+
+func opAppGetLocalState(cx *evalContext) {
 	last := len(cx.stack) - 1 // state key
-	prev := last - 1          // account
+	prev := last - 1          // account offset
 
 	key := cx.stack[last].Bytes
+	accountIdx := cx.stack[prev].Uint
 
-	result, _, err := opAppLocalGetImpl(cx, 0, key, cx.stack[prev])
+	var appID uint64 = 0
+	result, _, err := opAppGetLocalStateImpl(cx, appID, key, accountIdx)
 	if err != nil {
 		cx.err = err
 		return
@@ -2751,15 +2544,16 @@ func opAppLocalGet(cx *evalContext) {
 	cx.stack = cx.stack[:last]
 }
 
-func opAppLocalGetEx(cx *evalContext) {
+func opAppGetLocalStateEx(cx *evalContext) {
 	last := len(cx.stack) - 1 // state key
 	prev := last - 1          // app id
-	pprev := prev - 1         // account
+	pprev := prev - 1         // account offset
 
 	key := cx.stack[last].Bytes
 	appID := cx.stack[prev].Uint
+	accountIdx := cx.stack[pprev].Uint
 
-	result, ok, err := opAppLocalGetImpl(cx, appID, key, cx.stack[pprev])
+	result, ok, err := opAppGetLocalStateImpl(cx, appID, key, accountIdx)
 	if err != nil {
 		cx.err = err
 		return
@@ -2775,23 +2569,13 @@ func opAppLocalGetEx(cx *evalContext) {
 	cx.stack = cx.stack[:last]
 }
 
-func opAppLocalGetImpl(cx *evalContext, appID uint64, key []byte, acct stackValue) (result stackValue, ok bool, err error) {
+func opAppGetLocalStateImpl(cx *evalContext, appID uint64, key []byte, accountIdx uint64) (result stackValue, ok bool, err error) {
 	if cx.Ledger == nil {
 		err = fmt.Errorf("ledger not available")
 		return
 	}
 
-	addr, accountIdx, err := accountReference(cx, acct)
-	if err != nil {
-		return
-	}
-
-	app, err := appReference(cx, appID, false)
-	if err != nil {
-		return
-	}
-
-	tv, ok, err := cx.Ledger.GetLocal(addr, app, string(key), accountIdx)
+	tv, ok, err := cx.appReadLocalKey(appID, accountIdx, string(key))
 	if err != nil {
 		cx.err = err
 		return
@@ -2809,12 +2593,7 @@ func opAppGetGlobalStateImpl(cx *evalContext, appIndex uint64, key []byte) (resu
 		return
 	}
 
-	app, err := appReference(cx, appIndex, true)
-	if err != nil {
-		return
-	}
-	tv, ok, err := cx.Ledger.GetGlobal(app, string(key))
-
+	tv, ok, err := cx.appReadGlobalKey(appIndex, string(key))
 	if err != nil {
 		return
 	}
@@ -2825,12 +2604,13 @@ func opAppGetGlobalStateImpl(cx *evalContext, appIndex uint64, key []byte) (resu
 	return
 }
 
-func opAppGlobalGet(cx *evalContext) {
+func opAppGetGlobalState(cx *evalContext) {
 	last := len(cx.stack) - 1 // state key
 
 	key := cx.stack[last].Bytes
 
-	result, _, err := opAppGetGlobalStateImpl(cx, 0, key)
+	var index uint64 = 0 // index in txn.ForeignApps
+	result, _, err := opAppGetGlobalStateImpl(cx, index, key)
 	if err != nil {
 		cx.err = err
 		return
@@ -2839,13 +2619,14 @@ func opAppGlobalGet(cx *evalContext) {
 	cx.stack[last] = result
 }
 
-func opAppGlobalGetEx(cx *evalContext) {
+func opAppGetGlobalStateEx(cx *evalContext) {
 	last := len(cx.stack) - 1 // state key
-	prev := last - 1          // app
+	prev := last - 1
 
 	key := cx.stack[last].Bytes
+	index := cx.stack[prev].Uint // index in txn.ForeignApps
 
-	result, ok, err := opAppGetGlobalStateImpl(cx, cx.stack[prev].Uint, key)
+	result, ok, err := opAppGetGlobalStateImpl(cx, index, key)
 	if err != nil {
 		cx.err = err
 		return
@@ -2860,24 +2641,21 @@ func opAppGlobalGetEx(cx *evalContext) {
 	cx.stack[last] = isOk
 }
 
-func opAppLocalPut(cx *evalContext) {
+func opAppPutLocalState(cx *evalContext) {
 	last := len(cx.stack) - 1 // value
 	prev := last - 1          // state key
-	pprev := prev - 1         // account
+	pprev := prev - 1         // account offset
 
 	sv := cx.stack[last]
 	key := string(cx.stack[prev].Bytes)
+	accountIdx := cx.stack[pprev].Uint
 
 	if cx.Ledger == nil {
 		cx.err = fmt.Errorf("ledger not available")
 		return
 	}
 
-	addr, accountIdx, err := accountReference(cx, cx.stack[pprev])
-	if err == nil {
-		err = cx.Ledger.SetLocal(addr, key, sv.toTealValue(), accountIdx)
-	}
-
+	err := cx.appWriteLocalKey(accountIdx, key, sv.toTealValue())
 	if err != nil {
 		cx.err = err
 		return
@@ -2886,7 +2664,7 @@ func opAppLocalPut(cx *evalContext) {
 	cx.stack = cx.stack[:pprev]
 }
 
-func opAppGlobalPut(cx *evalContext) {
+func opAppPutGlobalState(cx *evalContext) {
 	last := len(cx.stack) - 1 // value
 	prev := last - 1          // state key
 
@@ -2898,7 +2676,7 @@ func opAppGlobalPut(cx *evalContext) {
 		return
 	}
 
-	err := cx.Ledger.SetGlobal(key, sv.toTealValue())
+	err := cx.appWriteGlobalKey(key, sv.toTealValue())
 	if err != nil {
 		cx.err = err
 		return
@@ -2907,21 +2685,19 @@ func opAppGlobalPut(cx *evalContext) {
 	cx.stack = cx.stack[:prev]
 }
 
-func opAppLocalDel(cx *evalContext) {
+func opAppDeleteLocalState(cx *evalContext) {
 	last := len(cx.stack) - 1 // key
-	prev := last - 1          // account
+	prev := last - 1          // account offset
 
 	key := string(cx.stack[last].Bytes)
+	accountIdx := cx.stack[prev].Uint
 
 	if cx.Ledger == nil {
 		cx.err = fmt.Errorf("ledger not available")
 		return
 	}
 
-	addr, accountIdx, err := accountReference(cx, cx.stack[prev])
-	if err == nil {
-		err = cx.Ledger.DelLocal(addr, key, accountIdx)
-	}
+	err := cx.appDeleteLocalKey(accountIdx, key)
 	if err != nil {
 		cx.err = err
 		return
@@ -2930,7 +2706,7 @@ func opAppLocalDel(cx *evalContext) {
 	cx.stack = cx.stack[:prev]
 }
 
-func opAppGlobalDel(cx *evalContext) {
+func opAppDeleteGlobalState(cx *evalContext) {
 	last := len(cx.stack) - 1 // key
 
 	key := string(cx.stack[last].Bytes)
@@ -2940,7 +2716,7 @@ func opAppGlobalDel(cx *evalContext) {
 		return
 	}
 
-	err := cx.Ledger.DelGlobal(key)
+	err := cx.appDeleteGlobalKey(key)
 	if err != nil {
 		cx.err = err
 		return
@@ -2948,98 +2724,20 @@ func opAppGlobalDel(cx *evalContext) {
 	cx.stack = cx.stack[:last]
 }
 
-// We have a difficult naming problem here. In some opcodes, TEAL
-// allows (and used to require) ASAs and Apps to to be referenced by
-// their "index" in an app call txn's foeign-apps or foreign-assets
-// arrays.  That was a small integer, no more than 2 or so, and was
-// often called an "index".  But it was not a basics.AssetIndex or
-// basics.ApplicationIndex.
-
-func appReference(cx *evalContext, ref uint64, foreign bool) (basics.AppIndex, error) {
-	if cx.version >= directRefEnabledVersion {
-		if ref == 0 {
-			return cx.Ledger.ApplicationID(), nil
-		}
-		if ref <= uint64(len(cx.Txn.Txn.ForeignApps)) {
-			return basics.AppIndex(cx.Txn.Txn.ForeignApps[ref-1]), nil
-		}
-		for _, appID := range cx.Txn.Txn.ForeignApps {
-			if appID == basics.AppIndex(ref) {
-				return appID, nil
-			}
-		}
-		// It should be legal to use your own app id, which
-		// can't be in ForeignApps during creation, because it
-		// is unknown then.  But it can be discovered in the
-		// app code.  It's tempting to combine this with the
-		// == 0 test, above, but it must come after the check
-		// for being below len(ForeignApps)
-		if ref == uint64(cx.Ledger.ApplicationID()) {
-			return cx.Ledger.ApplicationID(), nil
-		}
-	} else {
-		// Old rules
-		if foreign {
-			// In old versions, a foreign reference must be an index in ForeignAssets or 0
-			if ref == 0 {
-				return cx.Ledger.ApplicationID(), nil
-			}
-			if ref <= uint64(len(cx.Txn.Txn.ForeignApps)) {
-				return basics.AppIndex(cx.Txn.Txn.ForeignApps[ref-1]), nil
-			}
-		} else {
-			// Otherwise it's direct
-			return basics.AppIndex(ref), nil
-		}
-	}
-	return basics.AppIndex(0), fmt.Errorf("invalid App reference %d", ref)
-}
-
-func asaReference(cx *evalContext, ref uint64, foreign bool) (basics.AssetIndex, error) {
-	if cx.version >= directRefEnabledVersion {
-		// In recent versions, accept either kind of ASA reference
-		if ref < uint64(len(cx.Txn.Txn.ForeignAssets)) {
-			return basics.AssetIndex(cx.Txn.Txn.ForeignAssets[ref]), nil
-		}
-		for _, assetID := range cx.Txn.Txn.ForeignAssets {
-			if assetID == basics.AssetIndex(ref) {
-				return assetID, nil
-			}
-		}
-	} else {
-		// Old rules
-		if foreign {
-			// In old versions, a foreign reference must be an index in ForeignAssets
-			if ref < uint64(len(cx.Txn.Txn.ForeignAssets)) {
-				return basics.AssetIndex(cx.Txn.Txn.ForeignAssets[ref]), nil
-			}
-		} else {
-			// Otherwise it's direct
-			return basics.AssetIndex(ref), nil
-		}
-	}
-	return basics.AssetIndex(0), fmt.Errorf("invalid Asset reference %d", ref)
-
-}
-
 func opAssetHoldingGet(cx *evalContext) {
-	last := len(cx.stack) - 1 // asset
-	prev := last - 1          // account
+	last := len(cx.stack) - 1 // asset id
+	prev := last - 1          // account offset
+
+	assetID := cx.stack[last].Uint
+	accountIdx := cx.stack[prev].Uint
+	fieldIdx := uint64(cx.program[cx.pc+1])
 
 	if cx.Ledger == nil {
 		cx.err = fmt.Errorf("ledger not available")
 		return
 	}
 
-	fieldIdx := uint64(cx.program[cx.pc+1])
-
-	addr, _, err := accountReference(cx, cx.stack[prev])
-	if err != nil {
-		cx.err = err
-		return
-	}
-
-	asset, err := asaReference(cx, cx.stack[last].Uint, false)
+	addr, err := cx.Txn.Txn.AddressByIndex(accountIdx, cx.Txn.Txn.Sender)
 	if err != nil {
 		cx.err = err
 		return
@@ -3047,7 +2745,7 @@ func opAssetHoldingGet(cx *evalContext) {
 
 	var exist uint64 = 0
 	var value stackValue
-	if holding, err := cx.Ledger.AssetHolding(addr, asset); err == nil {
+	if holding, err := cx.Ledger.AssetHolding(addr, basics.AssetIndex(assetID)); err == nil {
 		// the holding exist, read the value
 		exist = 1
 		value, err = cx.assetHoldingEnumToValue(&holding, fieldIdx)
@@ -3062,59 +2760,28 @@ func opAssetHoldingGet(cx *evalContext) {
 }
 
 func opAssetParamsGet(cx *evalContext) {
-	last := len(cx.stack) - 1 // asset
+	last := len(cx.stack) - 1 // foreign asset id
+
+	foreignAssetsIndex := cx.stack[last].Uint
+	paramIdx := uint64(cx.program[cx.pc+1])
 
 	if cx.Ledger == nil {
 		cx.err = fmt.Errorf("ledger not available")
 		return
 	}
 
-	paramIdx := uint64(cx.program[cx.pc+1])
-
-	asset, err := asaReference(cx, cx.stack[last].Uint, true)
-	if err != nil {
-		cx.err = err
+	if foreignAssetsIndex >= uint64(len(cx.Txn.Txn.ForeignAssets)) {
+		cx.err = fmt.Errorf("invalid ForeignAssets index %d", foreignAssetsIndex)
 		return
 	}
+	assetID := cx.Txn.Txn.ForeignAssets[foreignAssetsIndex]
 
 	var exist uint64 = 0
 	var value stackValue
-	if params, creator, err := cx.Ledger.AssetParams(asset); err == nil {
+	if params, err := cx.Ledger.AssetParams(basics.AssetIndex(assetID)); err == nil {
 		// params exist, read the value
 		exist = 1
-		value, err = cx.assetParamsEnumToValue(&params, creator, paramIdx)
-		if err != nil {
-			cx.err = err
-			return
-		}
-	}
-
-	cx.stack[last] = value
-	cx.stack = append(cx.stack, stackValue{Uint: exist})
-}
-
-func opAppParamsGet(cx *evalContext) {
-	last := len(cx.stack) - 1 // app
-
-	if cx.Ledger == nil {
-		cx.err = fmt.Errorf("ledger not available")
-		return
-	}
-
-	paramIdx := uint64(cx.program[cx.pc+1])
-
-	app, err := appReference(cx, cx.stack[last].Uint, true)
-	if err != nil {
-		cx.err = err
-		return
-	}
-
-	var exist uint64 = 0
-	var value stackValue
-	if params, creator, err := cx.Ledger.AppParams(app); err == nil {
-		// params exist, read the value
-		exist = 1
-		value, err = cx.appParamsEnumToValue(&params, creator, paramIdx)
+		value, err = cx.assetParamsEnumToValue(&params, paramIdx)
 		if err != nil {
 			cx.err = err
 			return

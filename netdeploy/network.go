@@ -41,11 +41,11 @@ const maxGetRelayAddressRetry = 50
 
 // NetworkCfg contains the persisted configuration of the deployed network
 type NetworkCfg struct {
-	Name string `json:"Name,omitempty"`
+	Name string
 	// RelayDirs are directories where relays live (where we check for connection IP:Port)
 	// They are stored relative to root dir (e.g. "Primary")
-	RelayDirs    []string `json:"RelayDirs,omitempty"`
-	TemplateFile string   `json:"TemplateFile,omitempty"` // Template file used to create the network
+	RelayDirs    []string
+	TemplateFile string // Template file used to create the network
 }
 
 // Network represents an instance of a deployed network
@@ -139,14 +139,7 @@ func (n Network) Name() string {
 
 // PrimaryDataDir returns the primary data directory for the network
 func (n Network) PrimaryDataDir() string {
-	if !n.gen.DevMode || len(n.cfg.RelayDirs) > 0 {
-		return n.getNodeFullPath(n.cfg.RelayDirs[0])
-	}
-	// for devmode, there should be only a single node, so pick it up.
-	for nodeName := range n.nodeDirs {
-		return n.getNodeFullPath(nodeName)
-	}
-	panic(fmt.Errorf("neither relay directories nor node directories are defined for the network"))
+	return n.getNodeFullPath(n.cfg.RelayDirs[0])
 }
 
 // NodeDataDirs returns an array of node data directories (not the relays)
