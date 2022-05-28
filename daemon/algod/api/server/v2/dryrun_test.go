@@ -351,6 +351,7 @@ func init() {
 	proto.MaxAppProgramCost = 700
 	proto.MaxAppKeyLen = 64
 	proto.MaxAppBytesValueLen = 64
+	proto.MaxAppSumKeyValueLens = 128
 
 	config.Consensus[dryrunProtoVersion] = proto
 }
@@ -688,6 +689,54 @@ func TestDryrunLocalCheck(t *testing.T) {
 	doDryrunRequest(&dr, &response)
 	checkAppCallPass(t, &response)
 }
+
+func TestDryrunMultipleTxns(t *testing.T) {
+	t.Parallel()
+
+	var dr DryrunRequest
+	var response generated.DryrunResponse
+
+	dr.ProtocolVersion = string(dryrunProtoVersion)
+
+	txn := transactions.SignedTxn{
+		Txn: transactions.Transaction{
+			Type: protocol.ApplicationCallTx,
+			ApplicationCallTxnFields: transactions.ApplicationCallTxnFields{
+				ApplicationID: 1,
+				ApplicationArgs: [][]byte{
+					[]byte("write"),
+				},
+			},
+		},
+	}
+
+	dr.Txns = []transactions.SignedTxn{txn, txn}
+	gkv := generated.TealKeyValueStore{
+		generated.TealKeyValue{
+			Key:   b64("foo"),
+			Value: generated.TealValue{Type: uint64(basics.TealBytesType), Bytes: b64("bar")},
+		},
+	}
+	dr.Apps = []generated.Application{
+		{
+			Id: 1,
+			Params: generated.ApplicationParams{
+				ApprovalProgram: globalTestProgram,
+				GlobalState:     &gkv,
+				GlobalStateSchema: &generated.ApplicationStateSchema{
+					NumByteSlice: 10,
+					NumUint:      10,
+				},
+			},
+		},
+	}
+	doDryrunRequest(&dr, &response)
+	checkAppCallPass(t, &response)
+	if t.Failed() {
+		logResponse(t, &response)
+	}
+}
+
 func TestDryrunEncodeDecode(t *testing.T) {
 	t.Parallel()
 
