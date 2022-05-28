@@ -3,11 +3,19 @@ on:
   # Push and update benchmarks when a commit is merged into master.
   push:
     branches:
+<<<<<<< HEAD
       - teal4-bench
   # Trigger benchmark test on this PR's commit against master.
   pull_request:
     branches:
       - teal4-bench
+=======
+      - ci-master
+  # Trigger benchmark test on this PR's commit against master.
+  pull_request:
+    branches:
+      - ci-master
+>>>>>>> teal4-bench
 permissions:
   # Push benchmark performance graph to gh-pages branch.
   contents: write
