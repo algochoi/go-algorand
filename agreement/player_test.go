@@ -1856,8 +1856,11 @@ func TestPlayerRePropagatesFreshestBundle(t *testing.T) {
 }
 
 func TestPlayerPropagatesProposalPayload(t *testing.T) {
+<<<<<<< HEAD
 	partitiontest.PartitionTest(t)
 
+=======
+>>>>>>> teal4-bench
 	// if a player receives a payload from the network, it should relay it.
 	const r = round(209)
 	_, pM, helper := setupP(t, r, 0, soft)
@@ -1893,8 +1896,11 @@ func TestPlayerPropagatesProposalPayload(t *testing.T) {
 }
 
 func TestPlayerPropagatesOwnProposalPayload(t *testing.T) {
+<<<<<<< HEAD
 	partitiontest.PartitionTest(t)
 
+=======
+>>>>>>> teal4-bench
 	// if a player receives a PayloadVerified event with its own payload, it should relay it.
 	const r = round(209)
 	_, pM, helper := setupP(t, r, 0, soft)
@@ -1930,8 +1936,11 @@ func TestPlayerPropagatesOwnProposalPayload(t *testing.T) {
 }
 
 func TestPlayerPropagatesProposalPayloadFutureRound(t *testing.T) {
+<<<<<<< HEAD
 	partitiontest.PartitionTest(t)
 
+=======
+>>>>>>> teal4-bench
 	// if a player receives a proposal payload for a future round, it should still
 	// propagate it at some point.
 	const r = round(209)
@@ -2164,8 +2173,11 @@ func TestPlayerRePropagatesProposalPayload(t *testing.T) {
 }
 
 func TestPlayerPropagatesProposalVote(t *testing.T) {
+<<<<<<< HEAD
 	partitiontest.PartitionTest(t)
 
+=======
+>>>>>>> teal4-bench
 	const r = round(209)
 	_, pM, helper := setupP(t, r, 0, soft)
 	_, pV := helper.MakeRandomProposalPayload(t, r)
@@ -2188,8 +2200,11 @@ func TestPlayerPropagatesProposalVote(t *testing.T) {
 }
 
 func TestPlayerPropagatesSoftVote(t *testing.T) {
+<<<<<<< HEAD
 	partitiontest.PartitionTest(t)
 
+=======
+>>>>>>> teal4-bench
 	const r = round(209)
 	_, pM, helper := setupP(t, r, 0, soft)
 	_, pV := helper.MakeRandomProposalPayload(t, r)
@@ -2212,8 +2227,11 @@ func TestPlayerPropagatesSoftVote(t *testing.T) {
 }
 
 func TestPlayerPropagatesCertVote(t *testing.T) {
+<<<<<<< HEAD
 	partitiontest.PartitionTest(t)
 
+=======
+>>>>>>> teal4-bench
 	const r = round(209)
 	_, pM, helper := setupP(t, r, 0, cert)
 	_, pV := helper.MakeRandomProposalPayload(t, r)
@@ -2238,8 +2256,11 @@ func TestPlayerPropagatesCertVote(t *testing.T) {
 // Malformed Messages
 // check both proposals, proposal payloads, and votes, bundles
 func TestPlayerDisconnectsFromMalformedProposalVote(t *testing.T) {
+<<<<<<< HEAD
 	partitiontest.PartitionTest(t)
 
+=======
+>>>>>>> teal4-bench
 	const r = round(201221)
 	const p = period(0)
 	_, pM, helper := setupP(t, r, p, cert)
@@ -2316,8 +2337,11 @@ func TestPlayerIgnoresMalformedPayload(t *testing.T) {
 }
 
 func TestPlayerDisconnectsFromMalformedVotes(t *testing.T) {
+<<<<<<< HEAD
 	partitiontest.PartitionTest(t)
 
+=======
+>>>>>>> teal4-bench
 	const r = round(201221)
 	const p = period(0)
 	_, pM, helper := setupP(t, r, p, cert)
@@ -2356,8 +2380,11 @@ func TestPlayerDisconnectsFromMalformedVotes(t *testing.T) {
 }
 
 func TestPlayerDisconnectsFromMalformedBundles(t *testing.T) {
+<<<<<<< HEAD
 	partitiontest.PartitionTest(t)
 
+=======
+>>>>>>> teal4-bench
 	const r = round(201221)
 	const p = period(0)
 	_, pM, _ := setupP(t, r, p, cert)

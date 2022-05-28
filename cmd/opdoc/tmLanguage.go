@@ -172,11 +172,18 @@ func buildSyntaxHighlight() *tmLanguage {
 				Name:  "keyword.other.unit.teal",
 				Match: fmt.Sprintf("^(%s)\\b", strings.Join(names, "|")),
 			})
+<<<<<<< HEAD
 		// For these, accumulate into allArithmetics,
 		// and only add to keyword.Patterns later, when all
 		// have been collected.
 		case "Arithmetic", "Byte Array Slicing", "Byte Array Arithmetic",
 			"Byte Array Logic", "Inner Transactions":
+=======
+		// For these four, accumulate into allArithmetics,
+		// and only add to keyword.Patterns later, when all
+		// have been collected.
+		case "Arithmetic", "Byte Array Slicing", "Byteslice Arithmetic", "Byteslice Logic":
+>>>>>>> teal4-bench
 			escape := map[rune]bool{
 				'*': true,
 				'+': true,

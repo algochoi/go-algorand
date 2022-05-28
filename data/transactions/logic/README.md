@@ -139,6 +139,7 @@ For three-argument ops, `A` is the element two below the top, `B` is the penulti
 | `getbyte` | pop a byte-array A and integer B. Extract the Bth byte of A and push it as an integer |
 | `setbyte` | pop a byte-array A, integer B, and small integer C (between 0..255). Set the Bth byte of A to C, and push the result |
 | `concat` | pop two byte-arrays A and B and join them, push the result |
+<<<<<<< HEAD
 
 These opcodes return portions of byte arrays, accessed by position, in
 various sizes.
@@ -152,6 +153,8 @@ various sizes.
 | `extract16bits` | pop a byte-array A and integer B. Extract a range of bytes from A starting at B up to but not including B+2, convert bytes as big endian and push the uint64 result. If B or B+2 is larger than the array length, the program fails |
 | `extract32bits` | pop a byte-array A and integer B. Extract a range of bytes from A starting at B up to but not including B+4, convert bytes as big endian and push the uint64 result. If B or B+4 is larger than the array length, the program fails |
 | `extract64bits` | pop a byte-array A and integer B. Extract a range of bytes from A starting at B up to but not including B+8, convert bytes as big endian and push the uint64 result. If B or B+8 is larger than the array length, the program fails |
+=======
+>>>>>>> teal4-bench
 
 These opcodes take byte-array values that are interpreted as
 big-endian unsigned integers.  For mathematical operators, the
@@ -191,6 +194,7 @@ these results may contain leading zero bytes.
 | `b&` | A bitwise-and B, where A and B are byte-arrays, zero-left extended to the greater of their lengths |
 | `b^` | A bitwise-xor B, where A and B are byte-arrays, zero-left extended to the greater of their lengths |
 | `b~` | X with all bits inverted |
+<<<<<<< HEAD
 
 The following opcodes allow for the construction and submission of
 "inner transaction"
@@ -200,6 +204,8 @@ The following opcodes allow for the construction and submission of
 | `tx_begin` | Prepare a new application action |
 | `tx_field f` | Set field F of the current application action |
 | `tx_submit` | Execute the current application action. Panic on any failure. |
+=======
+>>>>>>> teal4-bench
 
 
 ### Loading Values
@@ -305,7 +311,10 @@ Some of these have immediate data in the byte or bytes after the opcode.
 | 54 | LocalNumUint | uint64 | Number of local state integers in ApplicationCall. LogicSigVersion >= 3. |
 | 55 | LocalNumByteSlice | uint64 | Number of local state byteslices in ApplicationCall. LogicSigVersion >= 3. |
 | 56 | ExtraProgramPages | uint64 | Number of additional pages for each of the application's approval and clear state programs. An ExtraProgramPages of 1 means 2048 more total bytes, or 1024 for each program. LogicSigVersion >= 4. |
+<<<<<<< HEAD
 | 57 | Nonparticipation | uint64 | Marks an account nonparticipating for rewards. LogicSigVersion >= 5. |
+=======
+>>>>>>> teal4-bench
 
 
 Additional details in the [opcodes document](TEAL_opcodes.md#txn) on the `txn` op.
@@ -369,7 +378,10 @@ App fields used in the `app_params_get` opcode.
 | 5 | AppLocalNumByteSlice | uint64 | Number of byte array values allowed in Local State |
 | 6 | AppExtraProgramPages | uint64 | Number of Extra Program Pages of code space |
 | 7 | AppCreator | []byte | Creator address |
+<<<<<<< HEAD
 | 8 | AppAddress | []byte | Address for which this application has authority |
+=======
+>>>>>>> teal4-bench
 
 
 ### Flow Control
@@ -411,7 +423,10 @@ App fields used in the `app_params_get` opcode.
 | `asset_holding_get i` | read from account A and asset B holding field X (imm arg) => {0 or 1 (top), value} |
 | `asset_params_get i` | read from asset A params field X (imm arg) => {0 or 1 (top), value} |
 | `app_params_get i` | read from app A params field X (imm arg) => {0 or 1 (top), value} |
+<<<<<<< HEAD
 | `log` | write bytes to log state of the current application |
+=======
+>>>>>>> teal4-bench
 
 # Assembler Syntax
 

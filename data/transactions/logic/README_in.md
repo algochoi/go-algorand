@@ -77,10 +77,24 @@ For three-argument ops, `A` is the element two below the top, `B` is the penulti
 
 @@ Arithmetic.md @@
 
+<<<<<<< HEAD
 These opcodes return portions of byte arrays, accessed by position, in
 various sizes.
 
 @@ Byte_Array_Slicing.md @@
+=======
+These opcodes take byte-array values that are interpreted as
+big-endian unsigned integers.  For mathematical operators, the
+returned values are the shortest byte-array that can represent the
+returned value.  For example, the zero value is the empty
+byte-array. For comparison operators, the returned value is a uint64
+
+Input lengths are limited to a maximum length 64 bytes, which
+represents a 512 bit unsigned integer. Output lengths are not
+explicitly restricted, though only `b*` and `b+` can produce a larger
+output than their inputs, so there is an implicit length limit of 128
+bytes on outputs.
+>>>>>>> teal4-bench
 
 These opcodes take byte-array values that are interpreted as
 big-endian unsigned integers.  For mathematical operators, the

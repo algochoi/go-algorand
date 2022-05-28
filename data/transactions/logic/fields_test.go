@@ -14,6 +14,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
 
+<<<<<<< HEAD
 package logic
 
 import (
@@ -25,11 +26,31 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions/logictest"
 	"github.com/algorand/go-algorand/test/partitiontest"
+=======
+<<<<<<<< HEAD:cmd/partitiontest_linter/linter_test.go
+package linter
+========
+package logic
+>>>>>>>> teal4-bench:data/transactions/logic/fields_test.go
+
+import (
+	"testing"
+
+<<<<<<<< HEAD:cmd/partitiontest_linter/linter_test.go
+	"golang.org/x/tools/go/analysis/analysistest"
+)
+
+func TestAll(t *testing.T) {
+	analysistest.Run(t, analysistest.TestData(), Analyzer)
+========
+	"github.com/stretchr/testify/require"
+>>>>>>> teal4-bench
 )
 
 func TestArrayFields(t *testing.T) {
 	require.Equal(t, len(TxnaFieldNames), len(TxnaFieldTypes))
 	require.Equal(t, len(txnaFieldSpecByField), len(TxnaFieldTypes))
+<<<<<<< HEAD
 }
 
 // ensure v2+ fields fail in TEAL assembler and evaluator on a version before they introduced
@@ -238,4 +259,7 @@ func TestFieldVersions(t *testing.T) {
 	for _, fs := range appParamsFieldSpecs {
 		require.Equal(t, uint64(5), fs.version)
 	}
+=======
+>>>>>>>> teal4-bench:data/transactions/logic/fields_test.go
+>>>>>>> teal4-bench
 }

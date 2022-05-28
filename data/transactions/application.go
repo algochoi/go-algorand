@@ -232,6 +232,7 @@ func (ac *ApplicationCallTxnFields) IndexByAddress(target basics.Address, sender
 	}
 
 	return 0, fmt.Errorf("invalid Account reference %s", target)
+<<<<<<< HEAD
 }
 
 // AppIDByIndex converts an integer index into an application id associated with the
@@ -274,4 +275,6 @@ func (ac *ApplicationCallTxnFields) IndexByAppID(appID basics.AppIndex) (uint64,
 	}
 
 	return 0, fmt.Errorf("invalid Foreign App reference %d", appID)
+=======
+>>>>>>> teal4-bench
 }

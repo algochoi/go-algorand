@@ -101,7 +101,10 @@ func defaultEvalParamsWithVersion(sb *strings.Builder, txn *transactions.SignedT
 	ep.Proto = &proto
 	ep.Txn = pt
 	ep.PastSideEffects = MakePastSideEffects(5)
+<<<<<<< HEAD
 	ep.Specials = &transactions.SpecialAddresses{}
+=======
+>>>>>>> teal4-bench
 	if sb != nil { // have to do this since go's nil semantics: https://golang.org/doc/faq#nil_error
 		ep.Trace = sb
 	}
@@ -619,8 +622,11 @@ func TestDivModw(t *testing.T) {
 }
 
 func TestWideMath(t *testing.T) {
+<<<<<<< HEAD
 	partitiontest.PartitionTest(t)
 
+=======
+>>>>>>> teal4-bench
 	// 2^64 = 18446744073709551616, we use a bunch of numbers close to that below
 	pattern := `
 int %d
@@ -664,6 +670,7 @@ int 1
 	}
 }
 
+<<<<<<< HEAD
 func TestMulDiv(t *testing.T) {
 	// Demonstrate a "function" that expects three u64s on stack,
 	// and calculates B*C/A. (Following opcode documentation
@@ -693,6 +700,8 @@ retsub
 	testAccepts(t, "int 500000000000; int 80000000000; int 100000000000; callsub muldiv; int 16000000000; ==; return;"+muldiv, 4)
 }
 
+=======
+>>>>>>> teal4-bench
 func TestDivZero(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
@@ -992,11 +1001,15 @@ const globalV4TestProgram = globalV3TestProgram + `
 `
 
 const globalV5TestProgram = globalV4TestProgram + `
+<<<<<<< HEAD
 global CurrentApplicationAddress
 len
 int 32
 ==
 &&
+=======
+// No new globals in v5
+>>>>>>> teal4-bench
 `
 
 func TestGlobal(t *testing.T) {
@@ -1025,7 +1038,11 @@ func TestGlobal(t *testing.T) {
 			EvalStateful, CheckStateful,
 		},
 		5: {
+<<<<<<< HEAD
 			CurrentApplicationAddress, globalV5TestProgram,
+=======
+			CreatorAddress, globalV5TestProgram,
+>>>>>>> teal4-bench
 			EvalStateful, CheckStateful,
 		},
 	}
@@ -1035,8 +1052,13 @@ func TestGlobal(t *testing.T) {
 	ledger := logictest.MakeLedger(nil)
 	addr, err := basics.UnmarshalChecksumAddress(testAddr)
 	require.NoError(t, err)
+<<<<<<< HEAD
 	ledger.NewApp(addr, basics.AppIndex(42), basics.AppParams{})
 	for v := uint64(1); v <= AssemblerMaxVersion; v++ {
+=======
+	ledger.creatorAddr = addr
+	for v := uint64(0); v <= AssemblerMaxVersion; v++ {
+>>>>>>> teal4-bench
 		_, ok := tests[v]
 		require.True(t, ok)
 		t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
@@ -1418,6 +1440,7 @@ assert
 int 1
 `
 
+<<<<<<< HEAD
 const testTxnProgramTextV5 = testTxnProgramTextV4 + `
 txn Nonparticipation
 pop
@@ -1425,6 +1448,8 @@ int 1
 ==
 `
 
+=======
+>>>>>>> teal4-bench
 func makeSampleTxn() transactions.SignedTxn {
 	var txn transactions.SignedTxn
 	copy(txn.Txn.Sender[:], []byte("aoeuiaoeuiaoeuiaoeuiaoeuiaoeui00"))
@@ -1511,7 +1536,11 @@ func TestTxn(t *testing.T) {
 
 	t.Parallel()
 	for _, txnField := range TxnFieldNames {
+<<<<<<< HEAD
 		if !strings.Contains(testTxnProgramTextV5, txnField) {
+=======
+		if !strings.Contains(testTxnProgramTextV4, txnField) {
+>>>>>>> teal4-bench
 			if txnField != FirstValidTime.String() {
 				t.Errorf("TestTxn missing field %v", txnField)
 			}
@@ -1523,7 +1552,10 @@ func TestTxn(t *testing.T) {
 		2: testTxnProgramTextV2,
 		3: testTxnProgramTextV3,
 		4: testTxnProgramTextV4,
+<<<<<<< HEAD
 		5: testTxnProgramTextV5,
+=======
+>>>>>>> teal4-bench
 	}
 
 	clearOps := testProg(t, "int 1", 1)
@@ -1560,7 +1592,11 @@ func TestTxn(t *testing.T) {
 			}
 			sb := strings.Builder{}
 			ep := defaultEvalParams(&sb, &txn)
+<<<<<<< HEAD
 			ep.Ledger = logictest.MakeLedger(nil)
+=======
+			ep.Ledger = makeTestLedger(nil)
+>>>>>>> teal4-bench
 			ep.GroupIndex = 3
 			pass, err := Eval(ops.Program, ep)
 			if !pass {
@@ -1646,8 +1682,11 @@ return
 }
 
 func TestGaid(t *testing.T) {
+<<<<<<< HEAD
 	partitiontest.PartitionTest(t)
 
+=======
+>>>>>>> teal4-bench
 	t.Parallel()
 	checkCreatableIDProg := `
 gaid 0
@@ -1663,8 +1702,15 @@ int 100
 	targetTxn.Txn.Type = protocol.AssetConfigTx
 	txgroup[0] = targetTxn
 	sb := strings.Builder{}
+<<<<<<< HEAD
 	ledger := logictest.MakeLedger(nil)
 	ledger.SetTrackedCreatable(0, basics.CreatableLocator{Index: 100})
+=======
+	ledger := makeTestLedger(nil)
+	ledger.setTrackedCreatable(0, basics.CreatableLocator{
+		Index: 100,
+	})
+>>>>>>> teal4-bench
 	ep := defaultEvalParams(&sb, &txn)
 	ep.Ledger = ledger
 	ep.TxnGroup = txgroup
@@ -1705,7 +1751,12 @@ int 0
 	ep.TxnGroup[0].Txn.Type = protocol.AssetConfigTx
 
 	// should fail when no creatable was created
+<<<<<<< HEAD
 	ledger.SetTrackedCreatable(0, basics.CreatableLocator{})
+=======
+	var nilIndex basics.CreatableIndex
+	ledger.trackedCreatables[0] = nilIndex
+>>>>>>> teal4-bench
 	_, err = EvalStateful(ops.Program, ep)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "the txn did not create anything")
@@ -2253,8 +2304,11 @@ int 5
 }
 
 func TestGload(t *testing.T) {
+<<<<<<< HEAD
 	partitiontest.PartitionTest(t)
 
+=======
+>>>>>>> teal4-bench
 	t.Parallel()
 
 	// for simple app-call-only transaction groups
@@ -2453,8 +2507,11 @@ int 1`,
 }
 
 func TestGloads(t *testing.T) {
+<<<<<<< HEAD
 	partitiontest.PartitionTest(t)
 
+=======
+>>>>>>> teal4-bench
 	t.Parallel()
 
 	// Multiple app calls

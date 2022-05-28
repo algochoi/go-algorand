@@ -107,7 +107,10 @@ func waitForAccountToProposeBlock(a *require.Assertions, fixture *fixtures.RestC
 //   it should not be proposing blocks
 // - When the account balance receives enough stake, it should be proposing after lookback rounds
 func TestNewAccountCanGoOnlineAndParticipate(t *testing.T) {
+<<<<<<< HEAD
 	partitiontest.PartitionTest(t)
+=======
+>>>>>>> teal4-bench
 	if testing.Short() {
 		t.Skip()
 	}

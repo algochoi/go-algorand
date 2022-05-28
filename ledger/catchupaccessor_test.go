@@ -140,8 +140,11 @@ func BenchmarkRestoringFromCatchpointFile(b *testing.B) {
 }
 
 func TestCatchupAcessorFoo(t *testing.T) {
+<<<<<<< HEAD
 	partitiontest.PartitionTest(t)
 
+=======
+>>>>>>> teal4-bench
 	log := logging.TestingLog(t)
 	dbBaseFileName := t.Name()
 	const inMem = true
@@ -195,8 +198,11 @@ func TestCatchupAcessorFoo(t *testing.T) {
 }
 
 func TestBuildMerkleTrie(t *testing.T) {
+<<<<<<< HEAD
 	partitiontest.PartitionTest(t)
 
+=======
+>>>>>>> teal4-bench
 	// setup boilerplate
 	log := logging.TestingLog(t)
 	dbBaseFileName := t.Name()
@@ -294,8 +300,11 @@ func TestBuildMerkleTrie(t *testing.T) {
 // TODO: blockEnsureSingleBlock called from EnsureFirstBlock()
 
 func TestCatchupAccessorBlockdb(t *testing.T) {
+<<<<<<< HEAD
 	partitiontest.PartitionTest(t)
 
+=======
+>>>>>>> teal4-bench
 	// setup boilerplate
 	log := logging.TestingLog(t)
 	dbBaseFileName := t.Name()
@@ -320,8 +329,11 @@ func TestCatchupAccessorBlockdb(t *testing.T) {
 }
 
 func TestVerifyCatchpoint(t *testing.T) {
+<<<<<<< HEAD
 	partitiontest.PartitionTest(t)
 
+=======
+>>>>>>> teal4-bench
 	// setup boilerplate
 	log := logging.TestingLog(t)
 	dbBaseFileName := t.Name()

@@ -1197,8 +1197,11 @@ func TestCowSetKey(t *testing.T) {
 }
 
 func TestCowSetKeyVFuture(t *testing.T) {
+<<<<<<< HEAD
 	partitiontest.PartitionTest(t)
 
+=======
+>>>>>>> teal4-bench
 	a := require.New(t)
 
 	addr := getRandomAddress(a)

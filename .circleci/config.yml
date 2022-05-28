@@ -1,4 +1,5 @@
 version: 2.1
+<<<<<<< HEAD
 
 orbs:
   win: circleci/windows@2.3.0
@@ -845,3 +846,12 @@ jobs:
             export MAKE=mingw32-make
             $msys2 scripts/travis/build_test.sh
           shell: bash.exe
+=======
+orbs:
+  welcome: circleci/welcome-orb@0.4.1
+workflows:
+  welcome:
+    jobs:
+      - welcome/run
+
+>>>>>>> teal4-bench

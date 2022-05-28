@@ -66,8 +66,11 @@ func TestRoundLRUBasic(t *testing.T) {
 }
 
 func TestRoundLRUReIndex(t *testing.T) {
+<<<<<<< HEAD
 	partitiontest.PartitionTest(t)
 
+=======
+>>>>>>> teal4-bench
 	cache := heapLRUCache{
 		entries: lruHeap{
 			heap: []lruEntry{

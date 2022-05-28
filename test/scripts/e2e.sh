@@ -112,6 +112,7 @@ export GOPATH=$(go env GOPATH)
 # Change current directory to test/scripts so we can just use ./test.sh to exec.
 cd "${SCRIPT_PATH}"
 
+<<<<<<< HEAD
 if [ -z "$E2E_TEST_FILTER" ] || [ "$E2E_TEST_FILTER" == "SCRIPTS" ]; then
     ./timeout 200 ./e2e_basic_start_stop.sh
     duration "e2e_basic_start_stop.sh"
@@ -121,14 +122,44 @@ if [ -z "$E2E_TEST_FILTER" ] || [ "$E2E_TEST_FILTER" == "SCRIPTS" ]; then
     "${TEMPDIR}/ve/bin/pip3" install --upgrade pip
     "${TEMPDIR}/ve/bin/pip3" install --upgrade py-algorand-sdk cryptography
     duration "e2e client setup"
+=======
+./timeout 200 ./e2e_basic_start_stop.sh
+duration "e2e_basic_start_stop.sh"
+
+python3 -m venv "${TEMPDIR}/ve"
+. "${TEMPDIR}/ve/bin/activate"
+"${TEMPDIR}/ve/bin/pip3" install --upgrade pip
+"${TEMPDIR}/ve/bin/pip3" install --upgrade py-algorand-sdk cryptography
+duration "e2e client setup"
+
+"${TEMPDIR}/ve/bin/python3" e2e_client_runner.py ${RUN_KMD_WITH_UNSAFE_SCRYPT} "$SRCROOT"/test/scripts/e2e_subs/*.sh
+duration "parallel client runner"
+
+for vdir in "$SRCROOT"/test/scripts/e2e_subs/v??; do
+    "${TEMPDIR}/ve/bin/python3" e2e_client_runner.py ${RUN_KMD_WITH_UNSAFE_SCRYPT} --version "$(basename "$vdir")" "$vdir"/*.sh
+done
+duration "vdir client runners"
+
+for script in "$SRCROOT"/test/scripts/e2e_subs/serial/*; do
+    "${TEMPDIR}/ve/bin/python3" e2e_client_runner.py ${RUN_KMD_WITH_UNSAFE_SCRYPT} $script
+done
+duration "serial client runners"
+
+deactivate
+>>>>>>> teal4-bench
 
     "${TEMPDIR}/ve/bin/python3" e2e_client_runner.py ${RUN_KMD_WITH_UNSAFE_SCRYPT} "$SRCROOT"/test/scripts/e2e_subs/*.sh
     duration "parallel client runner"
 
+<<<<<<< HEAD
     for vdir in "$SRCROOT"/test/scripts/e2e_subs/v??; do
         "${TEMPDIR}/ve/bin/python3" e2e_client_runner.py ${RUN_KMD_WITH_UNSAFE_SCRYPT} --version "$(basename "$vdir")" "$vdir"/*.sh
     done
     duration "vdir client runners"
+=======
+./e2e_go_tests.sh ${GO_TEST_ARGS}
+duration "e2e_go_tests.sh"
+>>>>>>> teal4-bench
 
     for script in "$SRCROOT"/test/scripts/e2e_subs/serial/*; do
         "${TEMPDIR}/ve/bin/python3" e2e_client_runner.py ${RUN_KMD_WITH_UNSAFE_SCRYPT} $script

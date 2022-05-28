@@ -128,7 +128,11 @@ func TxnBatchVerify(s *transactions.SignedTxn, txnIdx int, groupCtx *GroupContex
 		return err
 	}
 
+<<<<<<< HEAD
 	return stxnVerifyCore(s, txnIdx, groupCtx, verifier)
+=======
+	return stxnVerifyCore(s, txnIdx, groupCtx)
+>>>>>>> teal4-bench
 }
 
 // TxnGroup verifies a []SignedTxn as being signed and having no obviously inconsistent data.
@@ -177,7 +181,11 @@ func TxnGroupBatchVerify(stxs []transactions.SignedTxn, contextHdr bookkeeping.B
 		return
 	}
 	// feesPaid may have saturated. That's ok. Since we know
+<<<<<<< HEAD
 	// feeNeeded did not overflow, simple comparison tells us
+=======
+	// feeNeeded did not overlfow, simple comparison tells us
+>>>>>>> teal4-bench
 	// feesPaid was enough.
 	if feesPaid < feeNeeded {
 		err = fmt.Errorf("txgroup had %d in fees, which is less than the minimum %d * %d",

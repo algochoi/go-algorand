@@ -81,7 +81,10 @@ func TestUGetBlockWs(t *testing.T) {
 
 // TestUGetBlockHTTP tests the universal fetcher http peer case
 func TestUGetBlockHTTP(t *testing.T) {
+<<<<<<< HEAD
 	partitiontest.PartitionTest(t)
+=======
+>>>>>>> teal4-bench
 
 	cfg := config.GetDefaultLocal()
 
@@ -141,7 +144,10 @@ func TestUGetBlockUnsupported(t *testing.T) {
 
 // TestprocessBlockBytesErrors checks the error handling in processBlockBytes
 func TestProcessBlockBytesErrors(t *testing.T) {
+<<<<<<< HEAD
 	partitiontest.PartitionTest(t)
+=======
+>>>>>>> teal4-bench
 
 	blk := bookkeeping.Block{
 		BlockHeader: bookkeeping.BlockHeader{
@@ -173,7 +179,10 @@ func TestProcessBlockBytesErrors(t *testing.T) {
 
 // TestRequestBlockBytesErrors checks the error handling in requestBlockBytes
 func TestRequestBlockBytesErrors(t *testing.T) {
+<<<<<<< HEAD
 	partitiontest.PartitionTest(t)
+=======
+>>>>>>> teal4-bench
 
 	cfg := config.GetDefaultLocal()
 
@@ -239,7 +248,10 @@ func (thh *TestHTTPHandler) ServeHTTP(response http.ResponseWriter, request *htt
 
 // TestGetBlockBytesHTTPErrors tests the errors reported from getblockBytes for http peer
 func TestGetBlockBytesHTTPErrors(t *testing.T) {
+<<<<<<< HEAD
 	partitiontest.PartitionTest(t)
+=======
+>>>>>>> teal4-bench
 
 	cfg := config.GetDefaultLocal()
 	net := &httpTestPeerSource{}
@@ -288,8 +300,11 @@ func (et ErrTest) Error() string {
 
 // TestErrorTypes tests the error types are implemented correctly
 func TestErrorTypes(t *testing.T) {
+<<<<<<< HEAD
 	partitiontest.PartitionTest(t)
 
+=======
+>>>>>>> teal4-bench
 	err1 := makeErrWrongCertFromPeer(1, 2, "somepeer1")
 	require.Equal(t, "processBlockBytes: got wrong cert from peer somepeer1: wanted 1, got 2", err1.Error())
 

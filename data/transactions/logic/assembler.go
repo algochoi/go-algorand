@@ -1007,7 +1007,11 @@ func assembleAssetHolding(ops *OpStream, spec *OpSpec, args []string) error {
 	}
 	fs, ok := assetHoldingFieldSpecByName[args[0]]
 	if !ok {
+<<<<<<< HEAD
 		return ops.errorf("%s unknown field: %#v", spec.Name, args[0])
+=======
+		return ops.errorf("%s unknown arg: %#v", spec.Name, args[0])
+>>>>>>> teal4-bench
 	}
 	if fs.version > ops.Version {
 		//nolint:errcheck // we continue to maintain typestack
@@ -1028,7 +1032,11 @@ func assembleAssetParams(ops *OpStream, spec *OpSpec, args []string) error {
 	}
 	fs, ok := assetParamsFieldSpecByName[args[0]]
 	if !ok {
+<<<<<<< HEAD
 		return ops.errorf("%s unknown field: %#v", spec.Name, args[0])
+=======
+		return ops.errorf("%s unknown arg: %#v", spec.Name, args[0])
+>>>>>>> teal4-bench
 	}
 	if fs.version > ops.Version {
 		//nolint:errcheck // we continue to maintain typestack
@@ -1078,6 +1086,20 @@ func asmTxField(ops *OpStream, spec *OpSpec, args []string) error {
 	}
 	ops.pending.WriteByte(spec.Opcode)
 	ops.pending.WriteByte(uint8(fs.field))
+	return nil
+}
+
+func assembleAppParams(ops *OpStream, spec *OpSpec, args []string) error {
+	if len(args) != 1 {
+		return ops.errorf("%s expects one argument", spec.Name)
+	}
+	val, ok := appParamsFields[args[0]]
+	if !ok {
+		return ops.errorf("%s unknown arg: %#v", spec.Name, args[0])
+	}
+	ops.pending.WriteByte(spec.Opcode)
+	ops.pending.WriteByte(uint8(val))
+	ops.returns(AppParamsFieldTypes[val], StackUint64)
 	return nil
 }
 
@@ -1262,10 +1284,16 @@ var keywords = map[string]OpSpec{
 	"int":  {0, "int", nil, assembleInt, nil, nil, oneInt, 1, modeAny, opDetails{1, 2, nil, nil, nil}},
 	"byte": {0, "byte", nil, assembleByte, nil, nil, oneBytes, 1, modeAny, opDetails{1, 2, nil, nil, nil}},
 	// parse basics.Address, actually just another []byte constant
+<<<<<<< HEAD
 	"addr": {0, "addr", nil, assembleAddr, nil, nil, oneBytes, 1, modeAny, opDetails{1, 2, nil, nil, nil}},
 	// take a signature, hash it, and take first 4 bytes, actually just another []byte constant
 	"method": {0, "method", nil, assembleMethod, nil, nil, oneBytes, 1, modeAny, opDetails{1, 2, nil, nil, nil}},
 }
+=======
+	"addr": {0, "addr", nil, assembleAddr, nil, nil, oneBytes, 1, modeAny, opDetails{1, 2, nil, nil}},
+	// take a signature, hash it, and take first 4 bytes, actually just another []byte constant
+	"method": {0, "method", nil, assembleMethod, nil, nil, oneBytes, 1, modeAny, opDetails{1, 2, nil, nil}}}
+>>>>>>> teal4-bench
 
 type lineError struct {
 	Line int
@@ -2465,6 +2493,7 @@ func disAppParams(dis *disassembleState, spec *OpSpec) (string, error) {
 		return "", fmt.Errorf("invalid app params arg index %d at pc=%d", arg, dis.pc)
 	}
 	return fmt.Sprintf("%s %s", spec.Name, AppParamsFieldNames[arg]), nil
+<<<<<<< HEAD
 }
 
 func disTxField(dis *disassembleState, spec *OpSpec) (string, error) {
@@ -2479,6 +2508,8 @@ func disTxField(dis *disassembleState, spec *OpSpec) (string, error) {
 		return "", fmt.Errorf("invalid txfield arg index %d at pc=%d", arg, dis.pc)
 	}
 	return fmt.Sprintf("%s %s", spec.Name, TxnFieldNames[arg]), nil
+=======
+>>>>>>> teal4-bench
 }
 
 type disInfo struct {

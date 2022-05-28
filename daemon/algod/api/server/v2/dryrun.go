@@ -417,12 +417,20 @@ func doDryrunRequest(dr *DryrunRequest, response *generated.DryrunResponse) {
 	for ti, stxn := range dr.Txns {
 		pse := logic.MakePastSideEffects(len(dr.Txns))
 		ep := logic.EvalParams{
+<<<<<<< HEAD
 			Txn:                     &stxn,
 			Proto:                   &proto,
 			TxnGroup:                dr.Txns,
 			GroupIndex:              ti,
 			PastSideEffects:         pse,
 			PooledApplicationBudget: &pooledAppBudget,
+=======
+			Txn:             &stxn,
+			Proto:           &proto,
+			TxnGroup:        dr.Txns,
+			GroupIndex:      ti,
+			PastSideEffects: pse,
+>>>>>>> teal4-bench
 		}
 		var result generated.DryrunTxnResult
 		if len(stxn.Lsig.Logic) > 0 {

@@ -79,7 +79,11 @@ func makeRoundCowState(b roundCowParent, hdr bookkeeping.BlockHeader, proto conf
 	cb := roundCowState{
 		lookupParent:      b,
 		commitParent:      nil,
+<<<<<<< HEAD
 		proto:             proto,
+=======
+		proto:             config.Consensus[hdr.CurrentProtocol],
+>>>>>>> teal4-bench
 		mods:              ledgercore.MakeStateDelta(&hdr, prevTimestamp, hint, 0),
 		sdeltas:           make(map[basics.Address]map[storagePtr]*storageDelta),
 		trackedCreatables: make(map[int]basics.CreatableIndex),
@@ -192,6 +196,10 @@ func (cb *roundCowState) compactCertNext() basics.Round {
 
 func (cb *roundCowState) blockHdr(r basics.Round) (bookkeeping.BlockHeader, error) {
 	return cb.lookupParent.blockHdr(r)
+}
+
+func (cb *roundCowState) trackCreatable(creatableIndex basics.CreatableIndex) {
+	cb.trackedCreatables[cb.groupIdx] = creatableIndex
 }
 
 func (cb *roundCowState) trackCreatable(creatableIndex basics.CreatableIndex) {

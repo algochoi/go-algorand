@@ -23,12 +23,18 @@ import (
 
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
+<<<<<<< HEAD
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
 func TestOnlineTopHeap_Less(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
+=======
+)
+
+func TestOnlineTopHeap_Less(t *testing.T) {
+>>>>>>> teal4-bench
 	h := onlineTopHeap{
 		accts: []*onlineAccount{
 			{
@@ -56,8 +62,11 @@ func TestOnlineTopHeap_Less(t *testing.T) {
 }
 
 func TestOnlineTopHeap_Swap(t *testing.T) {
+<<<<<<< HEAD
 	partitiontest.PartitionTest(t)
 
+=======
+>>>>>>> teal4-bench
 	h := onlineTopHeap{
 		accts: []*onlineAccount{
 			{
@@ -85,8 +94,11 @@ func TestOnlineTopHeap_Swap(t *testing.T) {
 }
 
 func TestOnlineTopHeap_Push(t *testing.T) {
+<<<<<<< HEAD
 	partitiontest.PartitionTest(t)
 
+=======
+>>>>>>> teal4-bench
 	h := onlineTopHeap{
 		accts: []*onlineAccount{
 			{
@@ -116,8 +128,11 @@ func TestOnlineTopHeap_Push(t *testing.T) {
 }
 
 func TestOnlineTopHeap_Pop(t *testing.T) {
+<<<<<<< HEAD
 	partitiontest.PartitionTest(t)
 
+=======
+>>>>>>> teal4-bench
 	h := onlineTopHeap{
 		accts: []*onlineAccount{
 			{

@@ -153,11 +153,14 @@ const ConsensusV28 = ConsensusVersion(
 	"https://github.com/algorandfoundation/specs/tree/65b4ab3266c52c56a0fa7d591754887d68faad0a",
 )
 
+<<<<<<< HEAD
 // ConsensusV29 fixes application update by using ExtraProgramPages in size calculations
 const ConsensusV29 = ConsensusVersion(
 	"https://github.com/algorandfoundation/specs/tree/abc54f79f9ad679d2d22f0fb9909fb005c16f8a1",
 )
 
+=======
+>>>>>>> teal4-bench
 // ConsensusFuture is a protocol that should not appear in any production
 // network, but is used to test features before they are released.
 const ConsensusFuture = ConsensusVersion(
@@ -170,7 +173,11 @@ const ConsensusFuture = ConsensusVersion(
 
 // ConsensusCurrentVersion is the latest version and should be used
 // when a specific version is not provided.
+<<<<<<< HEAD
 const ConsensusCurrentVersion = ConsensusV29
+=======
+const ConsensusCurrentVersion = ConsensusV28
+>>>>>>> teal4-bench
 
 // Error is used to indicate that an unsupported protocol has been detected.
 type Error ConsensusVersion

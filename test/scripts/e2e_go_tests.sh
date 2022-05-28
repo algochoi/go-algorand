@@ -99,6 +99,7 @@ if [[ "${ARCHTYPE}" = arm* ]]; then
     PARALLEL_FLAG="-p 1"
 fi
 
+<<<<<<< HEAD
 PACKAGES="./..."
 if [ "$RUN_EXPECT" != "" ]; then
   PACKAGES=$(go list ./...|grep expect)
@@ -112,6 +113,15 @@ if [ "${#TESTPATTERNS[@]}" -eq 0 ]; then
 else
     for TEST in ${TESTPATTERNS[@]}; do
         ${GOTESTCOMMAND} ${RACE_OPTION} ${PARALLEL_FLAG} -timeout 1h -v ${SHORTTEST} -run ${TEST} ${PACKAGES}
+=======
+echo "PARALLEL_FLAG = ${PARALLEL_FLAG}"
+
+if [ "${#TESTPATTERNS[@]}" -eq 0 ]; then
+    ${GOTESTCOMMAND} ${RACE_OPTION} ${PARALLEL_FLAG} -timeout 1h -v ${SHORTTEST} ./...
+else
+    for TEST in ${TESTPATTERNS[@]}; do
+        ${GOTESTCOMMAND} ${RACE_OPTION} ${PARALLEL_FLAG} -timeout 1h -v ${SHORTTEST} -run ${TEST} ./...
+>>>>>>> teal4-bench
     done
 fi
 

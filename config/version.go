@@ -33,7 +33,11 @@ const VersionMajor = 2
 
 // VersionMinor is the Minor semantic version number (x.#.z) - changed when backwards-compatible features are introduced.
 // Not enforced until after initial public release (x > 0).
+<<<<<<< HEAD
 const VersionMinor = 10
+=======
+const VersionMinor = 8
+>>>>>>> teal4-bench
 
 // Version is the type holding our full version information.
 type Version struct {

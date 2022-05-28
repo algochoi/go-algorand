@@ -19,7 +19,6 @@ package participation
 import (
 	"fmt"
 	"path/filepath"
-	"runtime"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -135,11 +134,14 @@ func TestOnlineOfflineRewards(t *testing.T) {
 }
 
 func TestPartkeyOnlyRewards(t *testing.T) {
+<<<<<<< HEAD
 	partitiontest.PartitionTest(t)
 
 	if runtime.GOOS == "darwin" {
 		t.Skip()
 	}
+=======
+>>>>>>> teal4-bench
 	if testing.Short() {
 		t.Skip()
 	}

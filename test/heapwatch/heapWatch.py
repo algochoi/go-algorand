@@ -144,6 +144,7 @@ class algodDir:
         logger.debug('%s -> %s', self.nick, outpath)
 
     def get_blockinfo(self, snapshot_name=None, outdir=None):
+<<<<<<< HEAD
         try:
             algod = self.algod()
             status = algod.status()
@@ -151,6 +152,10 @@ class algodDir:
             logger.error('could not get blockinfo from %s: %s', self.net, e)
             self._algod = None
             return
+=======
+        algod = self.algod()
+        status = algod.status()
+>>>>>>> teal4-bench
         bi = msgpack.loads(algod.block_info(status['last-round'], response_format='msgpack'), strict_map_key=False)
         if snapshot_name is None:
             snapshot_name = time.strftime('%Y%m%d_%H%M%S', time.gmtime())
@@ -278,7 +283,10 @@ def main():
     ap.add_argument('--admin-token', default='', help='default algod admin-api token to use')
     ap.add_argument('--tf-roles', default='relay', help='comma separated list of terraform roles to follow')
     ap.add_argument('--tf-name-re', action='append', default=[], help='regexp to match terraform node names, may be repeated')
+<<<<<<< HEAD
     ap.add_argument('--no-svg', dest='svg', default=True, action='store_false', help='do not automatically run `go tool pprof` to generate svg from collected data')
+=======
+>>>>>>> teal4-bench
     ap.add_argument('-o', '--out', default=None, help='directory to write to')
     ap.add_argument('--verbose', default=False, action='store_true')
     args = ap.parse_args()

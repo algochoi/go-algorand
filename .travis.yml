@@ -88,6 +88,11 @@ jobs:
 
     - stage: build_release
       os: linux
+      name: Ubuntu AMD64 CodeGen Verification
+      script:
+        - scripts/travis/codegen_verification.sh
+    - # same stage, parallel job
+      os: linux
       name: Ubuntu AMD64 Build
       script:
         - ./scripts/travis/build_test.sh
@@ -206,6 +211,9 @@ before_cache:
      ;;
    esac
    docker save -o $HOME/docker_cache/images.tar $(docker images -a -q)
+
+after_success:
+  - scripts/travis/upload_coverage.sh || true
 
 addons:
   apt:

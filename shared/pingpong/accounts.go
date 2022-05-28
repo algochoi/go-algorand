@@ -736,6 +736,17 @@ func (pps *WorkerState) prepareApps(accounts map[string]*pingPongAccount, client
 		for i := begin; i < end; i++ {
 			var tx transactions.Transaction
 
+<<<<<<< HEAD
+=======
+			// generate app program with roughly some number of operations
+			prog, asm := genAppProgram(cfg.AppProgOps, cfg.AppProgHashes, cfg.AppProgHashSize, cfg.AppGlobKeys, cfg.AppLocalKeys)
+			if !cfg.Quiet {
+				fmt.Printf("generated program: \n%s\n", asm)
+			}
+
+			globSchema := basics.StateSchema{NumByteSlice: proto.MaxGlobalSchemaEntries}
+			locSchema := basics.StateSchema{NumByteSlice: proto.MaxLocalSchemaEntries}
+>>>>>>> teal4-bench
 			tx, err = client.MakeUnsignedAppCreateTx(transactions.NoOpOC, prog, prog, globSchema, locSchema, nil, nil, nil, nil, 0)
 			if err != nil {
 				fmt.Printf("Cannot create app txn\n")
