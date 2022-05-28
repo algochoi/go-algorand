@@ -236,7 +236,10 @@ func TestLogicLedgerAsset(t *testing.T) {
 	c.brs = map[basics.Address]basics.AccountData{
 		addr1: {AssetParams: map[basics.AssetIndex]basics.AssetParams{assetIdx: {Total: 1000}}},
 	}
+<<<<<<< HEAD
 
+=======
+>>>>>>> teal4-bench
 	ap, creator, err := l.AssetParams(assetIdx)
 	a.NoError(err)
 	a.Equal(addr1, creator)
@@ -974,7 +977,11 @@ return`
 		ApplicationCallTxnFields: appCallFields,
 	}
 	err = l.appendUnvalidatedTx(t, nil, initKeys, appCall, transactions.ApplyData{
+<<<<<<< HEAD
 		EvalDelta: transactions.EvalDelta{
+=======
+		EvalDelta: basics.EvalDelta{
+>>>>>>> teal4-bench
 			LocalDeltas: map[uint64]basics.StateDelta{0: {"lk": basics.ValueDelta{
 				Action: basics.SetBytesAction,
 				Bytes:  "local",

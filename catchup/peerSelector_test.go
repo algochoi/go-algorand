@@ -448,7 +448,10 @@ func TestPenalty(t *testing.T) {
 
 // TestPeerDownloadDurationToRank tests all the cases handled by peerDownloadDurationToRank
 func TestPeerDownloadDurationToRank(t *testing.T) {
+<<<<<<< HEAD
 	partitiontest.PartitionTest(t)
+=======
+>>>>>>> teal4-bench
 
 	peers1 := []network.Peer{&mockHTTPPeer{address: "a1"}, &mockHTTPPeer{address: "a2"}, &mockHTTPPeer{address: "a3"}}
 	peers2 := []network.Peer{&mockHTTPPeer{address: "b1"}, &mockHTTPPeer{address: "b2"}}
@@ -489,8 +492,11 @@ func TestPeerDownloadDurationToRank(t *testing.T) {
 }
 
 func TestLowerUpperBounds(t *testing.T) {
+<<<<<<< HEAD
 	partitiontest.PartitionTest(t)
 
+=======
+>>>>>>> teal4-bench
 	classes := []peerClass{{initialRank: peerRankInitialFirstPriority, peerClass: network.PeersPhonebookArchivers},
 		{initialRank: peerRankInitialSecondPriority, peerClass: network.PeersPhonebookRelays},
 		{initialRank: peerRankInitialThirdPriority, peerClass: network.PeersConnectedOut},
@@ -508,8 +514,11 @@ func TestLowerUpperBounds(t *testing.T) {
 }
 
 func TestFullResetRequestPenalty(t *testing.T) {
+<<<<<<< HEAD
 	partitiontest.PartitionTest(t)
 
+=======
+>>>>>>> teal4-bench
 	class := peerClass{initialRank: 10, peerClass: network.PeersPhonebookArchivers}
 	hs := makeHistoricStatus(10, class)
 	hs.push(5, 1, class)
@@ -523,7 +532,10 @@ func TestFullResetRequestPenalty(t *testing.T) {
 // This was a bug where the resetRequestPenalty was not bounding the returned rank, and was having download failures.
 // Initializing rankSamples to 0 makes this works, since the dropped value subtracts 0 from rankSum.
 func TestClassUpperBound(t *testing.T) {
+<<<<<<< HEAD
 	partitiontest.PartitionTest(t)
+=======
+>>>>>>> teal4-bench
 
 	peers1 := []network.Peer{&mockHTTPPeer{address: "a1"}, &mockHTTPPeer{address: "a2"}}
 	pClass := peerClass{initialRank: peerRankInitialSecondPriority, peerClass: network.PeersPhonebookArchivers}
@@ -557,7 +569,10 @@ func TestClassUpperBound(t *testing.T) {
 // This was a bug where the resetRequestPenalty was not bounding the returned rank, and the rankSum was not
 // initialized to give the average of class.initialRank
 func TestClassLowerBound(t *testing.T) {
+<<<<<<< HEAD
 	partitiontest.PartitionTest(t)
+=======
+>>>>>>> teal4-bench
 
 	peers1 := []network.Peer{&mockHTTPPeer{address: "a1"}, &mockHTTPPeer{address: "a2"}}
 	pClass := peerClass{initialRank: peerRankInitialSecondPriority, peerClass: network.PeersPhonebookArchivers}
@@ -586,7 +601,10 @@ func TestClassLowerBound(t *testing.T) {
 
 // TestEviction tests that the peer is evicted after several download failures, and it handles same address for different peer classes
 func TestEvictionAndUpgrade(t *testing.T) {
+<<<<<<< HEAD
 	partitiontest.PartitionTest(t)
+=======
+>>>>>>> teal4-bench
 
 	peers1 := []network.Peer{&mockHTTPPeer{address: "a1"}}
 	peers2 := []network.Peer{&mockHTTPPeer{address: "a1"}}

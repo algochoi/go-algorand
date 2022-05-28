@@ -116,6 +116,7 @@ func MakeExpectTest(t *testing.T) *ExpectFixture {
 	return ef
 }
 
+<<<<<<< HEAD
 func skipExpectTests() bool {
 	// Explicitly enabled.
 	if strings.ToUpper(os.Getenv("RUN_EXPECT")) == "TRUE" {
@@ -143,6 +144,8 @@ func skipExpectTests() bool {
 	return false
 }
 
+=======
+>>>>>>> teal4-bench
 // Run Process all expect script files with suffix Test.exp within the current directory
 func (ef *ExpectFixture) Run() {
 	disabledTest := map[string]string{

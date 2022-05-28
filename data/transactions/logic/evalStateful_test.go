@@ -31,6 +31,39 @@ import (
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
+<<<<<<< HEAD
+=======
+type balanceRecord struct {
+	addr     basics.Address
+	balance  uint64
+	locals   map[basics.AppIndex]basics.TealKeyValue
+	holdings map[basics.AssetIndex]basics.AssetHolding
+	mods     map[basics.AppIndex]map[string]basics.ValueDelta
+}
+
+// In our test ledger, we don't store the creatables with their
+// creators, so we need to carry the creator around with them.
+type appParams struct {
+	basics.AppParams
+	Creator basics.Address
+}
+
+type asaParams struct {
+	basics.AssetParams
+	Creator basics.Address
+}
+
+type testLedger struct {
+	balances          map[basics.Address]balanceRecord
+	applications      map[basics.AppIndex]appParams
+	assets            map[basics.AssetIndex]asaParams
+	trackedCreatables map[int]basics.CreatableIndex
+	appID             basics.AppIndex
+	creatorAddr       basics.Address
+	mods              map[basics.AppIndex]map[string]basics.ValueDelta
+}
+
+>>>>>>> teal4-bench
 func makeApp(li uint64, lb uint64, gi uint64, gb uint64) basics.AppParams {
 	return basics.AppParams{
 		ApprovalProgram:   []byte{},
@@ -41,6 +74,372 @@ func makeApp(li uint64, lb uint64, gi uint64, gb uint64) basics.AppParams {
 			GlobalStateSchema: basics.StateSchema{NumUint: gi, NumByteSlice: gb},
 		},
 		ExtraProgramPages: 0,
+<<<<<<< HEAD
+=======
+	}
+}
+
+func makeBalanceRecord(addr basics.Address, balance uint64) balanceRecord {
+	br := balanceRecord{
+		addr:     addr,
+		balance:  balance,
+		locals:   make(map[basics.AppIndex]basics.TealKeyValue),
+		holdings: make(map[basics.AssetIndex]basics.AssetHolding),
+		mods:     make(map[basics.AppIndex]map[string]basics.ValueDelta),
+	}
+	return br
+}
+
+func makeSampleEnv() (EvalParams, *testLedger) {
+	txn := makeSampleTxn()
+	ep := defaultEvalParams(nil, &txn)
+	ep.TxnGroup = makeSampleTxnGroup(txn)
+	ledger := makeTestLedger(map[basics.Address]uint64{})
+	ep.Ledger = ledger
+	return ep, ledger
+}
+
+func makeTestLedger(balances map[basics.Address]uint64) *testLedger {
+	l := new(testLedger)
+	l.balances = make(map[basics.Address]balanceRecord)
+	for addr, balance := range balances {
+		l.newAccount(addr, balance)
+	}
+	l.applications = make(map[basics.AppIndex]appParams)
+	l.assets = make(map[basics.AssetIndex]asaParams)
+	l.trackedCreatables = make(map[int]basics.CreatableIndex)
+	l.mods = make(map[basics.AppIndex]map[string]basics.ValueDelta)
+	return l
+}
+
+func (l *testLedger) reset() {
+	l.mods = make(map[basics.AppIndex]map[string]basics.ValueDelta)
+	for addr, br := range l.balances {
+		br.mods = make(map[basics.AppIndex]map[string]basics.ValueDelta)
+		l.balances[addr] = br
+	}
+}
+
+func (l *testLedger) newAccount(addr basics.Address, balance uint64) {
+	l.balances[addr] = makeBalanceRecord(addr, balance)
+}
+
+func (l *testLedger) newApp(creator basics.Address, appID basics.AppIndex, params basics.AppParams) {
+	l.appID = appID
+	params = params.Clone()
+	if params.GlobalState == nil {
+		params.GlobalState = make(basics.TealKeyValue)
+	}
+	l.applications[appID] = appParams{
+		Creator:   creator,
+		AppParams: params.Clone(),
+	}
+	br, ok := l.balances[creator]
+	if !ok {
+		br = makeBalanceRecord(creator, 0)
+	}
+	br.locals[appID] = make(map[string]basics.TealValue)
+	l.balances[creator] = br
+}
+
+func (l *testLedger) newAsset(creator basics.Address, assetID basics.AssetIndex, params basics.AssetParams) {
+	l.assets[assetID] = asaParams{
+		Creator:     creator,
+		AssetParams: params,
+	}
+	br, ok := l.balances[creator]
+	if !ok {
+		br = makeBalanceRecord(creator, 0)
+	}
+	br.holdings[assetID] = basics.AssetHolding{Amount: params.Total, Frozen: params.DefaultFrozen}
+	l.balances[creator] = br
+}
+
+func (l *testLedger) setHolding(addr basics.Address, assetID uint64, amount uint64, frozen bool) {
+	br, ok := l.balances[addr]
+	if !ok {
+		br = makeBalanceRecord(addr, 0)
+	}
+	br.holdings[basics.AssetIndex(assetID)] = basics.AssetHolding{Amount: amount, Frozen: frozen}
+	l.balances[addr] = br
+}
+
+func (l *testLedger) Round() basics.Round {
+	return basics.Round(rand.Uint32() + 1)
+}
+
+func (l *testLedger) LatestTimestamp() int64 {
+	return int64(rand.Uint32() + 1)
+}
+
+func (l *testLedger) Balance(addr basics.Address) (amount basics.MicroAlgos, err error) {
+	if l.balances == nil {
+		err = fmt.Errorf("empty ledger")
+		return
+	}
+	br, ok := l.balances[addr]
+	if !ok {
+		err = fmt.Errorf("no such address")
+		return
+	}
+	return basics.MicroAlgos{Raw: br.balance}, nil
+}
+
+func (l *testLedger) MinBalance(addr basics.Address, proto *config.ConsensusParams) (amount basics.MicroAlgos, err error) {
+	if l.balances == nil {
+		err = fmt.Errorf("empty ledger")
+		return
+	}
+	br, ok := l.balances[addr]
+	if !ok {
+		err = fmt.Errorf("no such address")
+		return
+	}
+
+	var min uint64
+
+	// First, base MinBalance
+	min = proto.MinBalance
+
+	// MinBalance for each Asset
+	assetCost := basics.MulSaturate(proto.MinBalance, uint64(len(br.holdings)))
+	min = basics.AddSaturate(min, assetCost)
+
+	// Base MinBalance + GlobalStateSchema.MinBalance + ExtraProgramPages MinBalance for each created application
+	for _, params := range l.applications {
+		if params.Creator == addr {
+			min = basics.AddSaturate(min, proto.AppFlatParamsMinBalance)
+			min = basics.AddSaturate(min, params.GlobalStateSchema.MinBalance(proto).Raw)
+			min = basics.AddSaturate(min, basics.MulSaturate(proto.AppFlatParamsMinBalance, uint64(params.ExtraProgramPages)))
+		}
+	}
+
+	// Base MinBalance + LocalStateSchema.MinBalance for each opted in application
+	for idx := range br.locals {
+		min = basics.AddSaturate(min, proto.AppFlatParamsMinBalance)
+		min = basics.AddSaturate(min, l.applications[idx].LocalStateSchema.MinBalance(proto).Raw)
+	}
+
+	return basics.MicroAlgos{Raw: min}, nil
+}
+
+func (l *testLedger) GetGlobal(appIdx basics.AppIndex, key string) (basics.TealValue, bool, error) {
+	if appIdx == basics.AppIndex(0) {
+		appIdx = l.appID
+	}
+	params, ok := l.applications[appIdx]
+	if !ok {
+		return basics.TealValue{}, false, fmt.Errorf("no such app")
+	}
+
+	// return most recent value if available
+	tkvm, ok := l.mods[appIdx]
+	if ok {
+		val, ok := tkvm[key]
+		if ok {
+			tv, ok := val.ToTealValue()
+			return tv, ok, nil
+		}
+	}
+
+	// otherwise return original one
+	val, ok := params.GlobalState[key]
+	return val, ok, nil
+}
+
+func (l *testLedger) SetGlobal(key string, value basics.TealValue) error {
+	appIdx := l.appID
+	params, ok := l.applications[appIdx]
+	if !ok {
+		return fmt.Errorf("no such app")
+	}
+
+	// if writing the same value, return
+	// this simulates real ledger behavior for tests
+	val, ok := params.GlobalState[key]
+	if ok && val == value {
+		return nil
+	}
+
+	// write to deltas
+	_, ok = l.mods[appIdx]
+	if !ok {
+		l.mods[appIdx] = make(map[string]basics.ValueDelta)
+	}
+	l.mods[appIdx][key] = value.ToValueDelta()
+	return nil
+}
+
+func (l *testLedger) DelGlobal(key string) error {
+	appIdx := l.appID
+	params, ok := l.applications[appIdx]
+	if !ok {
+		return fmt.Errorf("no such app")
+	}
+
+	exist := false
+	if _, ok := params.GlobalState[key]; ok {
+		exist = true
+	}
+
+	_, ok = l.mods[appIdx]
+	if !ok && !exist {
+		// nothing to delete
+		return nil
+	}
+	if !ok {
+		l.mods[appIdx] = make(map[string]basics.ValueDelta)
+	}
+	_, ok = l.mods[appIdx][key]
+	if ok || exist {
+		l.mods[appIdx][key] = basics.ValueDelta{Action: basics.DeleteAction}
+	}
+	return nil
+}
+
+func (l *testLedger) GetLocal(addr basics.Address, appIdx basics.AppIndex, key string, accountIdx uint64) (basics.TealValue, bool, error) {
+	if appIdx == 0 {
+		appIdx = l.appID
+	}
+	br, ok := l.balances[addr]
+	if !ok {
+		return basics.TealValue{}, false, fmt.Errorf("no such address")
+	}
+	tkvd, ok := br.locals[appIdx]
+	if !ok {
+		return basics.TealValue{}, false, fmt.Errorf("no app for account")
+	}
+
+	// check deltas first
+	tkvm, ok := br.mods[appIdx]
+	if ok {
+		val, ok := tkvm[key]
+		if ok {
+			tv, ok := val.ToTealValue()
+			return tv, ok, nil
+		}
+	}
+
+	val, ok := tkvd[key]
+	return val, ok, nil
+}
+
+func (l *testLedger) SetLocal(addr basics.Address, key string, value basics.TealValue, accountIdx uint64) error {
+	appIdx := l.appID
+
+	br, ok := l.balances[addr]
+	if !ok {
+		return fmt.Errorf("no such address")
+	}
+	tkv, ok := br.locals[appIdx]
+	if !ok {
+		return fmt.Errorf("no app for account")
+	}
+
+	// if writing the same value, return
+	// this simulates real ledger behavior for tests
+	val, ok := tkv[key]
+	if ok && val == value {
+		return nil
+	}
+
+	// write to deltas
+	_, ok = br.mods[appIdx]
+	if !ok {
+		br.mods[appIdx] = make(map[string]basics.ValueDelta)
+	}
+	br.mods[appIdx][key] = value.ToValueDelta()
+	return nil
+}
+
+func (l *testLedger) DelLocal(addr basics.Address, key string, accountIdx uint64) error {
+	appIdx := l.appID
+
+	br, ok := l.balances[addr]
+	if !ok {
+		return fmt.Errorf("no such address")
+	}
+	tkv, ok := br.locals[appIdx]
+	if !ok {
+		return fmt.Errorf("no app for account")
+	}
+	exist := false
+	if _, ok := tkv[key]; ok {
+		exist = true
+	}
+
+	_, ok = br.mods[appIdx]
+	if !ok && !exist {
+		// nothing to delete
+		return nil
+	}
+	if !ok {
+		br.mods[appIdx] = make(map[string]basics.ValueDelta)
+	}
+	_, ok = br.mods[appIdx][key]
+	if ok || exist {
+		br.mods[appIdx][key] = basics.ValueDelta{Action: basics.DeleteAction}
+	}
+	return nil
+}
+
+func (l *testLedger) OptedIn(addr basics.Address, appIdx basics.AppIndex) (bool, error) {
+	if appIdx == 0 {
+		appIdx = l.appID
+	}
+	br, ok := l.balances[addr]
+	if !ok {
+		return false, fmt.Errorf("no such address")
+	}
+	_, ok = br.locals[appIdx]
+	return ok, nil
+}
+
+func (l *testLedger) setTrackedCreatable(groupIdx int, cl basics.CreatableLocator) {
+	l.trackedCreatables[groupIdx] = cl.Index
+}
+
+func (l *testLedger) GetCreatableID(groupIdx int) basics.CreatableIndex {
+	return l.trackedCreatables[groupIdx]
+}
+
+func (l *testLedger) AssetHolding(addr basics.Address, assetID basics.AssetIndex) (basics.AssetHolding, error) {
+	if br, ok := l.balances[addr]; ok {
+		if asset, ok := br.holdings[assetID]; ok {
+			return asset, nil
+		}
+		return basics.AssetHolding{}, fmt.Errorf("No asset for account")
+	}
+	return basics.AssetHolding{}, fmt.Errorf("no such address")
+}
+
+func (l *testLedger) AssetParams(assetID basics.AssetIndex) (basics.AssetParams, basics.Address, error) {
+	if asset, ok := l.assets[assetID]; ok {
+		return asset.AssetParams, asset.Creator, nil
+	}
+	return basics.AssetParams{}, basics.Address{}, fmt.Errorf("no such asset")
+}
+
+func (l *testLedger) AppParams(appID basics.AppIndex) (basics.AppParams, basics.Address, error) {
+	if app, ok := l.applications[appID]; ok {
+		return app.AppParams, app.Creator, nil
+	}
+	return basics.AppParams{}, basics.Address{}, fmt.Errorf("no such app")
+}
+
+func (l *testLedger) ApplicationID() basics.AppIndex {
+	return l.appID
+}
+
+func (l *testLedger) CreatorAddress() basics.Address {
+	return l.creatorAddr
+}
+
+func (l *testLedger) LocalSchema() basics.StateSchema {
+	return basics.StateSchema{
+		NumUint:      100,
+		NumByteSlice: 100,
+>>>>>>> teal4-bench
 	}
 }
 
@@ -236,9 +635,15 @@ log
 			txn.Txn.Sender: 1,
 		},
 	)
+<<<<<<< HEAD
 	ledger.NewApp(txn.Txn.Sender, 100, basics.AppParams{})
 	ledger.NewLocal(txn.Txn.Sender, 100, "ALGO", algoValue)
 	ledger.NewAsset(txn.Txn.Sender, 5, params)
+=======
+	ledger.newApp(txn.Txn.Sender, 100, basics.AppParams{})
+	ledger.balances[txn.Txn.Sender].locals[100]["ALGO"] = algoValue
+	ledger.newAsset(txn.Txn.Sender, 5, params)
+>>>>>>> teal4-bench
 
 	for mode, test := range tests {
 		t.Run(fmt.Sprintf("opcodes_mode=%d", mode), func(t *testing.T) {
@@ -286,6 +691,7 @@ log
 		"arg_2",
 		"arg_3",
 	}
+<<<<<<< HEAD
 	for _, source := range disallowedV4 {
 		ops := testProg(t, source, 4)
 		ep := defaultEvalParams(nil, nil)
@@ -308,6 +714,12 @@ log
 		ops := testProg(t, source, AssemblerMaxVersion)
 		ep := defaultEvalParams(nil, nil)
 		err := CheckStateful(ops.Program, ep)
+=======
+	for _, source := range disallowed {
+		ops := testProg(t, source, AssemblerMaxVersion)
+		ep := defaultEvalParams(nil, nil)
+		err := CheckStateful(ops.Program, ep)
+>>>>>>> teal4-bench
 		require.Error(t, err)
 		_, err = EvalStateful(ops.Program, ep)
 		require.Error(t, err)
@@ -329,7 +741,10 @@ log
 		"int 0\nint 0\nasset_holding_get AssetFrozen",
 		"int 0\nint 0\nasset_params_get AssetManager",
 		"int 0\nint 0\napp_params_get AppApprovalProgram",
+<<<<<<< HEAD
 		"byte 0x01\nlog",
+=======
+>>>>>>> teal4-bench
 	}
 
 	for _, source := range statefulOpcodeCalls {
@@ -355,7 +770,11 @@ func TestBalance(t *testing.T) {
 
 	ep, ledger := makeSampleEnv()
 	text := "int 2; balance; int 177; =="
+<<<<<<< HEAD
 	ledger.NewAccount(ep.Txn.Txn.Receiver, 177)
+=======
+	ledger.newAccount(ep.Txn.Txn.Receiver, 177)
+>>>>>>> teal4-bench
 	testApp(t, text, ep, "invalid Account reference")
 
 	text = `int 1; balance; int 177; ==`
@@ -367,6 +786,7 @@ func TestBalance(t *testing.T) {
 	// but legal after that
 	testApp(t, text, ep)
 
+<<<<<<< HEAD
 	text = "int 0; balance; int 13; ==; assert; int 1"
 	var addr basics.Address
 	copy(addr[:], []byte("aoeuiaoeuiaoeuiaoeuiaoeuiaoeui02"))
@@ -379,6 +799,19 @@ func TestBalance(t *testing.T) {
 
 func testApp(t *testing.T, program string, ep EvalParams, problems ...string) transactions.EvalDelta {
 	t.Helper()
+=======
+	text = "int 0; balance; int 13; =="
+	var addr basics.Address
+	copy(addr[:], []byte("aoeuiaoeuiaoeuiaoeuiaoeuiaoeui02"))
+	ledger.newAccount(addr, 13)
+	testApp(t, text, ep, "failed to fetch balance")
+
+	ledger.newAccount(ep.Txn.Txn.Sender, 13)
+	testApp(t, text, ep)
+}
+
+func testApp(t *testing.T, program string, ep EvalParams, problems ...string) basics.EvalDelta {
+>>>>>>> teal4-bench
 	ops := testProg(t, program, ep.Proto.LogicSigVersion)
 	err := CheckStateful(ops.Program, ep)
 	require.NoError(t, err)
@@ -424,6 +857,7 @@ func TestMinBalance(t *testing.T) {
 
 	ep, ledger := makeSampleEnv()
 
+<<<<<<< HEAD
 	ledger.NewAccount(ep.Txn.Txn.Sender, 234)
 	ledger.NewAccount(ep.Txn.Txn.Receiver, 123)
 
@@ -433,14 +867,31 @@ func TestMinBalance(t *testing.T) {
 	testApp(t, "int 0; min_balance; int 2002; ==", ep)
 	schemas := makeApp(1, 2, 3, 4)
 	ledger.NewApp(ep.Txn.Txn.Sender, 77, schemas)
+=======
+	ledger.newAccount(ep.Txn.Txn.Sender, 234)
+	ledger.newAccount(ep.Txn.Txn.Receiver, 123)
+
+	testApp(t, "int 0; min_balance; int 1001; ==", ep)
+	// Sender makes an asset, min balance goes up
+	ledger.newAsset(ep.Txn.Txn.Sender, 7, basics.AssetParams{Total: 1000})
+	testApp(t, "int 0; min_balance; int 2002; ==", ep)
+	schemas := makeApp(1, 2, 3, 4)
+	ledger.newApp(ep.Txn.Txn.Sender, 77, schemas)
+>>>>>>> teal4-bench
 	// create + optin + 10 schema base + 4 ints + 6 bytes (local
 	// and global count b/c NewApp opts the creator in)
 	minb := 2*1002 + 10*1003 + 4*1004 + 6*1005
 	testApp(t, fmt.Sprintf("int 0; min_balance; int %d; ==", 2002+minb), ep)
 	// request extra program pages, min balance increase
+<<<<<<< HEAD
 	withepp := makeApp(1, 2, 3, 4)
 	withepp.ExtraProgramPages = 2
 	ledger.NewApp(ep.Txn.Txn.Sender, 77, withepp)
+=======
+	app := ledger.applications[77]
+	app.ExtraProgramPages = 2
+	ledger.applications[77] = app
+>>>>>>> teal4-bench
 	minb += 2 * 1002
 	testApp(t, fmt.Sprintf("int 0; min_balance; int %d; ==", 2002+minb), ep)
 
@@ -450,7 +901,11 @@ func TestMinBalance(t *testing.T) {
 	testProg(t, "txn Accounts 1; min_balance; int 1001; ==", directRefEnabledVersion)
 	testApp(t, "txn Accounts 1; min_balance; int 1001; ==", ep) // 1 == Accounts[0]
 	// Receiver opts in
+<<<<<<< HEAD
 	ledger.NewHolding(ep.Txn.Txn.Receiver, 7, 1, true)
+=======
+	ledger.setHolding(ep.Txn.Txn.Receiver, 7, 1, true)
+>>>>>>> teal4-bench
 	testApp(t, "int 1; min_balance; int 2002; ==", ep) // 1 == Accounts[0]
 
 	testApp(t, "int 2; min_balance; int 1001; ==", ep, "invalid Account reference 2")
@@ -491,7 +946,11 @@ func TestAppCheckOptedIn(t *testing.T) {
 	testApp(t, "int 0; int 100; app_opted_in; int 0; ==", now)
 
 	// Receiver opted in
+<<<<<<< HEAD
 	ledger.NewApp(txn.Txn.Receiver, 100, basics.AppParams{})
+=======
+	ledger.newApp(txn.Txn.Receiver, 100, basics.AppParams{})
+>>>>>>> teal4-bench
 	testApp(t, "int 1; int 100; app_opted_in; int 1; ==", now)
 	testApp(t, "int 1; int 2; app_opted_in; int 1; ==", now)
 	testApp(t, "int 1; int 2; app_opted_in; int 0; ==", pre) // in pre, int 2 is an actual app id
@@ -500,7 +959,11 @@ func TestAppCheckOptedIn(t *testing.T) {
 		expect{3, "app_opted_in arg 0 wanted type uint64..."})
 
 	// Sender opted in
+<<<<<<< HEAD
 	ledger.NewApp(txn.Txn.Sender, 100, basics.AppParams{})
+=======
+	ledger.newApp(txn.Txn.Sender, 100, basics.AppParams{})
+>>>>>>> teal4-bench
 	testApp(t, "int 0; int 100; app_opted_in; int 1; ==", now)
 }
 
@@ -523,8 +986,29 @@ exit:
 int 1
 ==`
 
+<<<<<<< HEAD
 	pre, now, ledger := makeOldAndNewEnv(directRefEnabledVersion - 1)
 	ledger.NewAccount(now.Txn.Txn.Receiver, 1)
+=======
+	txn := makeSampleTxn()
+	txgroup := makeSampleTxnGroup(txn)
+	now := defaultEvalParams(nil, nil)
+	now.Txn = &txn
+	now.TxnGroup = txgroup
+	pre := defaultEvalParamsWithVersion(nil, nil, directRefEnabledVersion-1)
+	pre.Txn = &txn
+	pre.TxnGroup = txgroup
+
+	testApp(t, text, now, "ledger not available")
+
+	ledger := makeTestLedger(
+		map[basics.Address]uint64{
+			txn.Txn.Receiver: 1,
+		},
+	)
+	now.Ledger = ledger
+	pre.Ledger = ledger
+>>>>>>> teal4-bench
 	testApp(t, text, now, "invalid Account reference")
 
 	text = `int 1  // account idx
@@ -543,11 +1027,19 @@ int 1`
 	testApp(t, text, now, "no app for account")
 
 	// Make a different app (not 100)
+<<<<<<< HEAD
 	ledger.NewApp(now.Txn.Txn.Receiver, 9999, basics.AppParams{})
 	testApp(t, text, now, "no app for account")
 
 	// create the app and check the value from ApplicationArgs[0] (protocol.PaymentTx) does not exist
 	ledger.NewApp(now.Txn.Txn.Receiver, 100, basics.AppParams{})
+=======
+	ledger.newApp(txn.Txn.Receiver, 9999, basics.AppParams{})
+	testApp(t, text, now, "no app for account")
+
+	// create the app and check the value from ApplicationArgs[0] (protocol.PaymentTx) does not exist
+	ledger.newApp(txn.Txn.Receiver, 100, basics.AppParams{})
+>>>>>>> teal4-bench
 	testApp(t, text, now)
 
 	text = `int 1  // account idx
@@ -569,7 +1061,11 @@ byte 0x414c474f
 	// Next we're testing if the use of the current app's id works
 	// as a direct reference. The error is because the sender
 	// account is not opted into 123.
+<<<<<<< HEAD
 	ledger.NewApp(now.Txn.Txn.RekeyTo, 123, basics.AppParams{})
+=======
+	ledger.appID = basics.AppIndex(123)
+>>>>>>> teal4-bench
 	testApp(t, strings.Replace(text, "int 100 // app id", "int 123", -1), now, "no app for account")
 	testApp(t, strings.Replace(text, "int 100 // app id", "int 2", -1), pre, "no app for account")
 	testApp(t, strings.Replace(text, "int 100 // app id", "int 9", -1), now, "invalid App reference 9")
@@ -577,7 +1073,11 @@ byte 0x414c474f
 		"no such address")
 
 	// check special case account idx == 0 => sender
+<<<<<<< HEAD
 	ledger.NewApp(now.Txn.Txn.Sender, 100, basics.AppParams{})
+=======
+	ledger.newApp(txn.Txn.Sender, 100, basics.AppParams{})
+>>>>>>> teal4-bench
 	text = `int 0  // account idx
 int 100 // app id
 txn ApplicationArgs 0
@@ -588,15 +1088,24 @@ exist:
 byte 0x414c474f
 ==`
 
+<<<<<<< HEAD
 	ledger.NewLocal(now.Txn.Txn.Sender, 100, string(protocol.PaymentTx), basics.TealValue{Type: basics.TealBytesType, Bytes: "ALGO"})
+=======
+	ledger.balances[txn.Txn.Sender].locals[100][string(protocol.PaymentTx)] = basics.TealValue{Type: basics.TealBytesType, Bytes: "ALGO"}
+>>>>>>> teal4-bench
 	testApp(t, text, now)
 	testApp(t, strings.Replace(text, "int 0  // account idx", "byte \"aoeuiaoeuiaoeuiaoeuiaoeuiaoeui00\"", -1), now)
 	testApp(t, strings.Replace(text, "int 0  // account idx", "byte \"aoeuiaoeuiaoeuiaoeuiaoeuiaoeui02\"", -1), now,
 		"invalid Account reference")
 
 	// check reading state of other app
+<<<<<<< HEAD
 	ledger.NewApp(now.Txn.Txn.Sender, 56, basics.AppParams{})
 	ledger.NewApp(now.Txn.Txn.Sender, 100, basics.AppParams{})
+=======
+	ledger.newApp(txn.Txn.Sender, 56, basics.AppParams{})
+	ledger.newApp(txn.Txn.Sender, 100, basics.AppParams{})
+>>>>>>> teal4-bench
 	text = `int 0  // account idx
 int 56 // app id
 txn ApplicationArgs 0
@@ -607,7 +1116,11 @@ exist:
 byte 0x414c474f
 ==`
 
+<<<<<<< HEAD
 	ledger.NewLocal(now.Txn.Txn.Sender, 56, string(protocol.PaymentTx), basics.TealValue{Type: basics.TealBytesType, Bytes: "ALGO"})
+=======
+	ledger.balances[txn.Txn.Sender].locals[56][string(protocol.PaymentTx)] = basics.TealValue{Type: basics.TealBytesType, Bytes: "ALGO"}
+>>>>>>> teal4-bench
 	testApp(t, text, now)
 
 	// check app_local_get
@@ -617,7 +1130,11 @@ app_local_get
 byte 0x414c474f
 ==`
 
+<<<<<<< HEAD
 	ledger.NewLocal(now.Txn.Txn.Sender, 100, string(protocol.PaymentTx), basics.TealValue{Type: basics.TealBytesType, Bytes: "ALGO"})
+=======
+	ledger.balances[txn.Txn.Sender].locals[100][string(protocol.PaymentTx)] = basics.TealValue{Type: basics.TealBytesType, Bytes: "ALGO"}
+>>>>>>> teal4-bench
 	testApp(t, text, now)
 	testApp(t, strings.Replace(text, "int 0  // account idx", "byte \"aoeuiaoeuiaoeuiaoeuiaoeuiaoeui00\"", -1), now)
 	testProg(t, strings.Replace(text, "int 0  // account idx", "byte \"aoeuiaoeuiaoeuiaoeuiaoeuiaoeui00\"", -1), directRefEnabledVersion-1,
@@ -633,7 +1150,11 @@ app_local_get
 int 0
 ==`
 
+<<<<<<< HEAD
 	ledger.NewLocal(now.Txn.Txn.Sender, 100, string(protocol.PaymentTx), basics.TealValue{Type: basics.TealBytesType, Bytes: "ALGO"})
+=======
+	ledger.balances[txn.Txn.Sender].locals[100][string(protocol.PaymentTx)] = basics.TealValue{Type: basics.TealBytesType, Bytes: "ALGO"}
+>>>>>>> teal4-bench
 	testApp(t, text, now)
 }
 
@@ -665,15 +1186,40 @@ byte 0x414c474f
 ==
 &&
 `
+<<<<<<< HEAD
 	pre, now, ledger := makeOldAndNewEnv(directRefEnabledVersion - 1)
 	ledger.NewAccount(now.Txn.Txn.Sender, 1)
+=======
+	txn := makeSampleTxn()
+	txgroup := makeSampleTxnGroup(txn)
+	now := defaultEvalParams(nil, nil)
+	now.Txn = &txn
+	now.TxnGroup = txgroup
+	pre := defaultEvalParamsWithVersion(nil, nil, directRefEnabledVersion-1)
+	pre.Txn = &txn
+	pre.TxnGroup = txgroup
+
+	testApp(t, text, now, "ledger not available")
+
+	ledger := makeTestLedger(
+		map[basics.Address]uint64{
+			txn.Txn.Sender: 1,
+		},
+	)
+	now.Ledger = ledger
+	pre.Ledger = ledger
+>>>>>>> teal4-bench
 
 	now.Txn.Txn.ApplicationID = 100
 	now.Txn.Txn.ForeignApps = []basics.AppIndex{now.Txn.Txn.ApplicationID}
 	testApp(t, text, now, "no such app")
 
 	// create the app and check the value from ApplicationArgs[0] (protocol.PaymentTx) does not exist
+<<<<<<< HEAD
 	ledger.NewApp(now.Txn.Txn.Sender, 100, basics.AppParams{})
+=======
+	ledger.newApp(txn.Txn.Sender, 100, basics.AppParams{})
+>>>>>>> teal4-bench
 
 	testApp(t, text, now, "err opcode")
 
@@ -692,7 +1238,11 @@ byte 0x414c474f
 	// check app_global_get default value
 	text = "byte 0x414c474f55; app_global_get; int 0; =="
 
+<<<<<<< HEAD
 	ledger.NewLocal(now.Txn.Txn.Sender, 100, string(protocol.PaymentTx), basics.TealValue{Type: basics.TealBytesType, Bytes: "ALGO"})
+=======
+	ledger.balances[txn.Txn.Sender].locals[100][string(protocol.PaymentTx)] = basics.TealValue{Type: basics.TealBytesType, Bytes: "ALGO"}
+>>>>>>> teal4-bench
 	testApp(t, text, now)
 
 	text = `
@@ -716,13 +1266,21 @@ int 4141
 	testApp(t, text, now)
 
 	// Direct reference to the current app also works
+<<<<<<< HEAD
 	ledger.NewApp(now.Txn.Txn.Receiver, 100, basics.AppParams{})
+=======
+	ledger.appID = basics.AppIndex(100)
+>>>>>>> teal4-bench
 	now.Txn.Txn.ForeignApps = []basics.AppIndex{}
 	testApp(t, strings.Replace(text, "int 1  // ForeignApps index", "int 100", -1), now)
 	testApp(t, strings.Replace(text, "int 1  // ForeignApps index", "global CurrentApplicationID", -1), now)
 }
 
+<<<<<<< HEAD
 const assetsTestTemplate = `int 0//account
+=======
+const assetsTestProgram = `int 0//account
+>>>>>>> teal4-bench
 int 55
 asset_holding_get AssetBalance
 !
@@ -819,7 +1377,16 @@ bnz ok
 error:
 err
 ok:
+<<<<<<< HEAD
 %s
+=======
+int 0//params
+asset_params_get AssetCreator
+pop
+txn Sender
+==
+assert
+>>>>>>> teal4-bench
 int 1
 `
 
@@ -862,9 +1429,14 @@ func testAssetsByVersion(t *testing.T, assetsTestProgram string, version uint64)
 
 	txn := makeSampleTxn()
 	pre := defaultEvalParamsWithVersion(nil, &txn, directRefEnabledVersion-1)
+<<<<<<< HEAD
 	require.GreaterOrEqual(t, version, uint64(directRefEnabledVersion))
 	now := defaultEvalParamsWithVersion(nil, &txn, version)
 	ledger := logictest.MakeLedger(
+=======
+	now := defaultEvalParams(nil, &txn)
+	ledger := makeTestLedger(
+>>>>>>> teal4-bench
 		map[basics.Address]uint64{
 			txn.Txn.Sender: 1,
 		},
@@ -881,7 +1453,11 @@ func testAssetsByVersion(t *testing.T, assetsTestProgram string, version uint64)
 
 	// it wasn't legal to use a direct ref for account
 	testProg(t, `byte "aoeuiaoeuiaoeuiaoeuiaoeuiaoeui00"; int 54; asset_holding_get AssetBalance`,
+<<<<<<< HEAD
 		directRefEnabledVersion-1, expect{3, "asset_holding_get AssetBalance arg 0 wanted type uint64..."})
+=======
+		directRefEnabledVersion-1, expect{3, "asset_holding_get arg 0 wanted type uint64..."})
+>>>>>>> teal4-bench
 	// but it is now (empty asset yields 0,0 on stack)
 	testApp(t, `byte "aoeuiaoeuiaoeuiaoeuiaoeuiaoeui00"; int 55; asset_holding_get AssetBalance; ==`, now)
 	// This is receiver, who is in Assets array
@@ -905,6 +1481,7 @@ func testAssetsByVersion(t *testing.T, assetsTestProgram string, version uint64)
 		Freeze:        txn.Txn.Receiver,
 		Clawback:      txn.Txn.Receiver,
 	}
+<<<<<<< HEAD
 
 	ledger.NewAsset(txn.Txn.Sender, 55, params)
 	ledger.NewHolding(txn.Txn.Sender, 55, 123, true)
@@ -914,6 +1491,17 @@ func testAssetsByVersion(t *testing.T, assetsTestProgram string, version uint64)
 	// but previous code would still try to read ASA 0
 	testApp(t, "int 0; int 0; asset_holding_get AssetBalance; int 0; ==; assert; int 0; ==", pre)
 
+=======
+
+	ledger.newAsset(txn.Txn.Sender, 55, params)
+	ledger.setHolding(txn.Txn.Sender, 55, 123, true)
+	// For consistency you can now use an indirect ref in holding_get
+	// (recall ForeignAssets[0] = 55, which has balance 123)
+	testApp(t, "int 0; int 0; asset_holding_get AssetBalance; int 1; ==; assert; int 123; ==", now)
+	// but previous code would still try to read ASA 0
+	testApp(t, "int 0; int 0; asset_holding_get AssetBalance; int 0; ==; assert; int 0; ==", pre)
+
+>>>>>>> teal4-bench
 	testApp(t, assetsTestProgram, now)
 
 	// In current versions, can swap out the account index for the account
@@ -924,6 +1512,7 @@ func testAssetsByVersion(t *testing.T, assetsTestProgram string, version uint64)
 	testApp(t, strings.Replace(assetsTestProgram, "int 55", "int 0", -1), now)
 
 	// but old code cannot
+<<<<<<< HEAD
 	testProg(t, strings.Replace(assetsTestProgram, "int 0//account", "byte \"aoeuiaoeuiaoeuiaoeuiaoeuiaoeui00\"", -1), directRefEnabledVersion-1, expect{3, "asset_holding_get AssetBalance arg 0 wanted type uint64..."})
 
 	if version < 5 {
@@ -931,6 +1520,11 @@ func testAssetsByVersion(t *testing.T, assetsTestProgram string, version uint64)
 		testApp(t, strings.Replace(assetsTestProgram, "int 0//params", "int 55", -1), pre, "invalid Asset ref")
 		testApp(t, strings.Replace(assetsTestProgram, "int 55", "int 0", -1), pre, "err opcode")
 	}
+=======
+	testProg(t, strings.Replace(assetsTestProgram, "int 0//account", "byte \"aoeuiaoeuiaoeuiaoeuiaoeuiaoeui00\"", -1), directRefEnabledVersion-1, expect{3, "asset_holding_get arg 0 wanted type uint64..."})
+	testApp(t, strings.Replace(assetsTestProgram, "int 0//params", "int 55", -1), pre, "invalid Asset ref")
+	testApp(t, strings.Replace(assetsTestProgram, "int 55", "int 0", -1), pre, "err opcode")
+>>>>>>> teal4-bench
 
 	// check holdings bool value
 	source := `intcblock 0 55 1
@@ -947,11 +1541,19 @@ err
 ok:
 intc_2 // 1
 `
+<<<<<<< HEAD
 	ledger.NewHolding(txn.Txn.Sender, 55, 123, false)
 	testApp(t, source, now)
 
 	// check holdings invalid offsets
 	ops := testProg(t, source, version)
+=======
+	ledger.setHolding(txn.Txn.Sender, 55, 123, false)
+	testApp(t, source, now)
+
+	// check holdings invalid offsets
+	ops := testProg(t, source, AssemblerMaxVersion)
+>>>>>>> teal4-bench
 	require.Equal(t, OpsByName[now.Proto.LogicSigVersion]["asset_holding_get"].Opcode, ops.Program[8])
 	ops.Program[9] = 0x02
 	_, err := EvalStateful(ops.Program, now)
@@ -973,10 +1575,17 @@ ok:
 intc_1
 `
 	params.DefaultFrozen = true
+<<<<<<< HEAD
 	ledger.NewAsset(txn.Txn.Sender, 55, params)
 	testApp(t, source, now)
 	// check holdings invalid offsets
 	ops = testProg(t, source, version)
+=======
+	ledger.newAsset(txn.Txn.Sender, 55, params)
+	testApp(t, source, now)
+	// check holdings invalid offsets
+	ops = testProg(t, source, AssemblerMaxVersion)
+>>>>>>> teal4-bench
 	require.Equal(t, OpsByName[now.Proto.LogicSigVersion]["asset_params_get"].Opcode, ops.Program[6])
 	ops.Program[7] = 0x20
 	_, err = EvalStateful(ops.Program, now)
@@ -999,7 +1608,11 @@ ok:
 intc_1
 `
 	params.URL = ""
+<<<<<<< HEAD
 	ledger.NewAsset(txn.Txn.Sender, 55, params)
+=======
+	ledger.newAsset(txn.Txn.Sender, 55, params)
+>>>>>>> teal4-bench
 	testApp(t, source, now)
 
 	source = `intcblock 1 9
@@ -1017,7 +1630,11 @@ ok:
 intc_0
 `
 	params.URL = "foobarbaz"
+<<<<<<< HEAD
 	ledger.NewAsset(txn.Txn.Sender, 77, params)
+=======
+	ledger.newAsset(txn.Txn.Sender, 77, params)
+>>>>>>> teal4-bench
 	testApp(t, source, now)
 
 	source = `intcblock 0 1
@@ -1034,15 +1651,24 @@ ok:
 intc_1
 `
 	params.URL = ""
+<<<<<<< HEAD
 	ledger.NewAsset(txn.Txn.Sender, 55, params)
+=======
+	ledger.newAsset(txn.Txn.Sender, 55, params)
+>>>>>>> teal4-bench
 	testApp(t, source, now, "cannot compare ([]byte to uint64)")
 }
 
 func TestAppParams(t *testing.T) {
 	t.Parallel()
 	ep, ledger := makeSampleEnv()
+<<<<<<< HEAD
 	ledger.NewAccount(ep.Txn.Txn.Sender, 1)
 	ledger.NewApp(ep.Txn.Txn.Sender, 100, basics.AppParams{})
+=======
+	ledger.newAccount(ep.Txn.Txn.Sender, 1)
+	ledger.newApp(ep.Txn.Txn.Sender, 100, basics.AppParams{})
+>>>>>>> teal4-bench
 
 	/* app id is in ForeignApps, but does not exist */
 	source := "int 56; app_params_get AppExtraProgramPages; int 0; ==; assert; int 0; =="
@@ -1143,7 +1769,11 @@ intc_1
 			require.Error(t, err)
 			require.Contains(t, err.Error(), "no app for account")
 
+<<<<<<< HEAD
 			ledger.NewApp(txn.Txn.Sender, 100, basics.AppParams{})
+=======
+			ledger.newApp(txn.Txn.Sender, 100, basics.AppParams{})
+>>>>>>> teal4-bench
 
 			if name == "read" {
 				_, err = EvalStateful(ops.Program, ep)
@@ -1185,7 +1815,11 @@ func TestAppLocalStateReadWrite(t *testing.T) {
 		},
 	)
 	ep.Ledger = ledger
+<<<<<<< HEAD
 	ledger.NewApp(txn.Txn.Sender, 100, basics.AppParams{})
+=======
+	ledger.newApp(txn.Txn.Sender, 100, basics.AppParams{})
+>>>>>>> teal4-bench
 
 	// write int and bytes values
 	source := `int 0 // account
@@ -1500,7 +2134,11 @@ int 1
 			require.Error(t, err)
 			require.Contains(t, err.Error(), "no such app")
 
+<<<<<<< HEAD
 			ledger.NewApp(txn.Txn.Sender, 100, makeApp(0, 0, 1, 0))
+=======
+			ledger.newApp(txn.Txn.Sender, 100, makeApp(0, 0, 1, 0))
+>>>>>>> teal4-bench
 
 			// a special test for read
 			if name == "read" {
@@ -1597,7 +2235,11 @@ int 0x77
 		},
 	)
 	ep.Ledger = ledger
+<<<<<<< HEAD
 	ledger.NewApp(txn.Txn.Sender, 100, basics.AppParams{})
+=======
+	ledger.newApp(txn.Txn.Sender, 100, basics.AppParams{})
+>>>>>>> teal4-bench
 
 	ops, err := AssembleStringWithVersion(source, AssemblerMaxVersion)
 	require.NoError(t, err)
@@ -1769,14 +2411,23 @@ byte "myval"
 		},
 	)
 	ep.Ledger = ledger
+<<<<<<< HEAD
 	ledger.NewApp(txn.Txn.Sender, 100, basics.AppParams{})
+=======
+	ledger.newApp(txn.Txn.Sender, 100, basics.AppParams{})
+>>>>>>> teal4-bench
 
 	delta := testApp(t, source, ep, "no such app")
 	require.Empty(t, delta.GlobalDelta)
 	require.Empty(t, delta.LocalDeltas)
 
+<<<<<<< HEAD
 	ledger.NewApp(txn.Txn.Receiver, 101, basics.AppParams{})
 	ledger.NewApp(txn.Txn.Receiver, 100, basics.AppParams{}) // this keeps current app id = 100
+=======
+	ledger.newApp(txn.Txn.Receiver, 101, basics.AppParams{})
+	ledger.newApp(txn.Txn.Receiver, 100, basics.AppParams{}) // this keeps current app id = 100
+>>>>>>> teal4-bench
 	algoValue := basics.TealValue{Type: basics.TealBytesType, Bytes: "myval"}
 	ledger.NewGlobal(101, "mykey", algoValue)
 
@@ -1786,8 +2437,11 @@ byte "myval"
 }
 
 func TestBlankKey(t *testing.T) {
+<<<<<<< HEAD
 	partitiontest.PartitionTest(t)
 
+=======
+>>>>>>> teal4-bench
 	t.Parallel()
 	source := `
 byte ""
@@ -1809,13 +2463,21 @@ int 7
 	txn := makeSampleTxn()
 	txn.Txn.ApplicationID = 100
 	ep.Txn = &txn
+<<<<<<< HEAD
 	ledger := logictest.MakeLedger(
+=======
+	ledger := makeTestLedger(
+>>>>>>> teal4-bench
 		map[basics.Address]uint64{
 			txn.Txn.Sender: 1,
 		},
 	)
 	ep.Ledger = ledger
+<<<<<<< HEAD
 	ledger.NewApp(txn.Txn.Sender, 100, basics.AppParams{})
+=======
+	ledger.newApp(txn.Txn.Sender, 100, basics.AppParams{})
+>>>>>>> teal4-bench
 
 	delta := testApp(t, source, ep)
 	require.Empty(t, delta.LocalDeltas)
@@ -1862,7 +2524,11 @@ int 1
 		},
 	)
 	ep.Ledger = ledger
+<<<<<<< HEAD
 	ledger.NewApp(txn.Txn.Sender, 100, basics.AppParams{})
+=======
+	ledger.newApp(txn.Txn.Sender, 100, basics.AppParams{})
+>>>>>>> teal4-bench
 
 	delta := testApp(t, source, ep)
 	require.Len(t, delta.GlobalDelta, 2)
@@ -2029,9 +2695,15 @@ int 1
 		},
 	)
 	ep.Ledger = ledger
+<<<<<<< HEAD
 	ledger.NewApp(txn.Txn.Sender, 100, basics.AppParams{})
 	ledger.NewAccount(txn.Txn.Receiver, 1)
 	ledger.NewLocals(txn.Txn.Receiver, 100)
+=======
+	ledger.newApp(txn.Txn.Sender, 100, basics.AppParams{})
+	ledger.balances[txn.Txn.Receiver] = makeBalanceRecord(txn.Txn.Receiver, 1)
+	ledger.balances[txn.Txn.Receiver].locals[100] = make(basics.TealKeyValue)
+>>>>>>> teal4-bench
 
 	sb := strings.Builder{}
 	ep.Trace = &sb
@@ -2042,7 +2714,11 @@ int 1
 	require.Equal(t, 0, len(delta.GlobalDelta))
 	require.Equal(t, 2, len(delta.LocalDeltas))
 
+<<<<<<< HEAD
 	ledger.Reset()
+=======
+	ledger.reset()
+>>>>>>> teal4-bench
 	// test that app_local_put and _app_local_del can use byte addresses
 	testApp(t, strings.Replace(source, "int 0 // sender", "byte \"aoeuiaoeuiaoeuiaoeuiaoeuiaoeui00\"", -1), ep)
 	// But won't compile in old teal
@@ -2054,11 +2730,19 @@ int 1
 	require.Equal(t, 0, len(delta.GlobalDelta))
 	require.Equal(t, 2, len(delta.LocalDeltas))
 
+<<<<<<< HEAD
 	ledger.Reset()
 	ledger.NoLocal(txn.Txn.Sender, 100, "ALGOA")
 	ledger.NoLocal(txn.Txn.Sender, 100, "ALGO")
 	ledger.NoLocal(txn.Txn.Receiver, 100, "ALGOA")
 	ledger.NoLocal(txn.Txn.Receiver, 100, "ALGO")
+=======
+	ledger.reset()
+	delete(ledger.balances[txn.Txn.Sender].locals[100], "ALGOA")
+	delete(ledger.balances[txn.Txn.Sender].locals[100], "ALGO")
+	delete(ledger.balances[txn.Txn.Receiver].locals[100], "ALGOA")
+	delete(ledger.balances[txn.Txn.Receiver].locals[100], "ALGO")
+>>>>>>> teal4-bench
 
 	algoValue := basics.TealValue{Type: basics.TealUintType, Uint: 0x77}
 	ledger.NewLocal(txn.Txn.Sender, 100, "ALGO", algoValue)
@@ -2337,11 +3021,19 @@ func TestReturnTypes(t *testing.T) {
 		Freeze:        txn.Txn.Receiver,
 		Clawback:      txn.Txn.Receiver,
 	}
+<<<<<<< HEAD
 	ledger.NewAsset(txn.Txn.Sender, 1, params)
 	ledger.NewApp(txn.Txn.Sender, 1, basics.AppParams{})
 	ledger.SetTrackedCreatable(0, basics.CreatableLocator{Index: 1})
 	ledger.NewAccount(txn.Txn.Receiver, 1000000)
 	ledger.NewLocals(txn.Txn.Receiver, 1)
+=======
+	ledger.newAsset(txn.Txn.Sender, 1, params)
+	ledger.newApp(txn.Txn.Sender, 1, basics.AppParams{})
+	ledger.setTrackedCreatable(0, basics.CreatableLocator{Index: 1})
+	ledger.balances[txn.Txn.Receiver] = makeBalanceRecord(txn.Txn.Receiver, 1)
+	ledger.balances[txn.Txn.Receiver].locals[1] = make(basics.TealKeyValue)
+>>>>>>> teal4-bench
 	key, err := hex.DecodeString("33343536")
 	require.NoError(t, err)
 	algoValue := basics.TealValue{Type: basics.TealUintType, Uint: 0x77}
@@ -2435,7 +3127,10 @@ func TestReturnTypes(t *testing.T) {
 }
 
 func TestRound(t *testing.T) {
+<<<<<<< HEAD
 	partitiontest.PartitionTest(t)
+=======
+>>>>>>> teal4-bench
 	t.Parallel()
 	ep, _ := makeSampleEnv()
 	source := "global Round; int 1; >="
@@ -2443,7 +3138,10 @@ func TestRound(t *testing.T) {
 }
 
 func TestLatestTimestamp(t *testing.T) {
+<<<<<<< HEAD
 	partitiontest.PartitionTest(t)
+=======
+>>>>>>> teal4-bench
 	t.Parallel()
 	ep, _ := makeSampleEnv()
 	source := "global LatestTimestamp; int 1; >="
@@ -2451,16 +3149,25 @@ func TestLatestTimestamp(t *testing.T) {
 }
 
 func TestCurrentApplicationID(t *testing.T) {
+<<<<<<< HEAD
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 	ep, ledger := makeSampleEnv()
 	ledger.NewApp(ep.Txn.Txn.Receiver, 42, basics.AppParams{})
+=======
+	t.Parallel()
+	ep, ledger := makeSampleEnv()
+	ledger.appID = basics.AppIndex(42)
+>>>>>>> teal4-bench
 	source := "global CurrentApplicationID; int 42; =="
 	testApp(t, source, ep)
 }
 
 func TestAppLoop(t *testing.T) {
+<<<<<<< HEAD
 	partitiontest.PartitionTest(t)
+=======
+>>>>>>> teal4-bench
 	t.Parallel()
 	ep, _ := makeSampleEnv()
 
@@ -2469,6 +3176,7 @@ func TestAppLoop(t *testing.T) {
 	// Double until > 10. Should be 16
 	testApp(t, stateful+"int 1; loop: int 2; *; dup; int 10; <; bnz loop; int 16; ==", ep)
 
+<<<<<<< HEAD
 	// Infinite loop because multiply by one instead of two
 	testApp(t, stateful+"int 1; loop:; int 1; *; dup; int 10; <; bnz loop; int 16; ==", ep, "dynamic cost")
 }
@@ -2513,4 +3221,10 @@ func TestAppAddress(t *testing.T) {
 	a := "U7C5FUHZM5PL5EIS2KHHLL456GS66DZBEEKL2UBQLMKH2X5X5I643ZIM6U"
 	source = fmt.Sprintf("int 0; app_params_get AppAddress; assert; addr %s; ==;", a)
 	testApp(t, source, ep)
+=======
+	testApp(t, stateful+"int 1; loop: int 2; *; dup; int 10; <; bnz loop; int 16; ==", ep)
+
+	// Infinite loop because multiply by one instead of two
+	testApp(t, stateful+"int 1; loop:; int 1; *; dup; int 10; <; bnz loop; int 16; ==", ep, "dynamic cost")
+>>>>>>> teal4-bench
 }

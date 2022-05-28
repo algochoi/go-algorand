@@ -453,7 +453,11 @@ def main():
 
     rs = RunSet(env)
     for scriptname in args.scripts:
+<<<<<<< HEAD
         rs.start(os.path.abspath(scriptname), args.timeout-10)
+=======
+        rs.start(scriptname, args.timeout-10)
+>>>>>>> teal4-bench
     rs.wait(args.timeout)
     if rs.errors:
         retcode = 1

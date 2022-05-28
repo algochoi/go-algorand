@@ -36,8 +36,11 @@ import (
 )
 
 func TestCompactCerts(t *testing.T) {
+<<<<<<< HEAD
 	partitiontest.PartitionTest(t)
 
+=======
+>>>>>>> teal4-bench
 	t.Skip("Disabling since they need work and shouldn't block releases")
 	t.Parallel()
 	r := require.New(fixtures.SynchronizedTest(t))

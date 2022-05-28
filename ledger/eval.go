@@ -250,7 +250,20 @@ func (cs *roundCowState) GetCreator(cidx basics.CreatableIndex, ctype basics.Cre
 }
 
 func (cs *roundCowState) Put(addr basics.Address, acct basics.AccountData) error {
+<<<<<<< HEAD
 	cs.mods.Accts.Upsert(addr, acct)
+=======
+	return cs.PutWithCreatable(addr, acct, nil, nil)
+}
+
+func (cs *roundCowState) PutWithCreatable(addr basics.Address, acct basics.AccountData, newCreatable *basics.CreatableLocator, deletedCreatable *basics.CreatableLocator) error {
+	cs.put(addr, acct, newCreatable, deletedCreatable)
+
+	// store the creatable locator
+	if newCreatable != nil {
+		cs.trackCreatable(newCreatable.Index)
+	}
+>>>>>>> teal4-bench
 	return nil
 }
 
@@ -702,6 +715,7 @@ func (eval *BlockEvaluator) prepareEvalParams(txgroup []transactions.SignedTxnWi
 		}
 
 		res[i] = &logic.EvalParams{
+<<<<<<< HEAD
 			Txn:                     &groupNoAD[i],
 			Proto:                   &eval.proto,
 			TxnGroup:                groupNoAD,
@@ -711,6 +725,14 @@ func (eval *BlockEvaluator) prepareEvalParams(txgroup []transactions.SignedTxnWi
 			PooledApplicationBudget: &pooledApplicationBudget,
 			FeeCredit:               &credit,
 			Specials:                &eval.specials,
+=======
+			Txn:             &groupNoAD[i],
+			Proto:           &eval.proto,
+			TxnGroup:        groupNoAD,
+			GroupIndex:      i,
+			PastSideEffects: pastSideEffects,
+			MinTealVersion:  &minTealVersion,
+>>>>>>> teal4-bench
 		}
 	}
 	return res
@@ -1254,7 +1276,11 @@ transactionGroupLoop:
 		}
 	}
 
+<<<<<<< HEAD
 	// Finally, process any pending end-of-block state changes.
+=======
+	// Finally, proceeds any pending end-of-block state changes
+>>>>>>> teal4-bench
 	err = eval.endOfBlock()
 	if err != nil {
 		return ledgercore.StateDelta{}, err

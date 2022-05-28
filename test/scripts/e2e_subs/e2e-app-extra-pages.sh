@@ -42,14 +42,20 @@ function generate_teal() {
 BIG_TEAL_FILE="$TEMPDIR/big-app.teal"
 BIG_TEAL_V4_FILE="$TEMPDIR/big-app-v4.teal"
 SMALL_TEAL_FILE="$TEMPDIR/sm-app.teal"
+<<<<<<< HEAD
 APPR_PROG="$TEMPDIR/appr-prog.teal"
 BIG_APPR_PROG="$TEMPDIR/big-appr-prog.teal"
+=======
+>>>>>>> teal4-bench
 
 generate_teal "$BIG_TEAL_FILE" 3 4090 1 "int 0\nbalance\npop\n"
 generate_teal "$BIG_TEAL_V4_FILE" 4 4090 1 "int 0\nbalance\npop\n"
 generate_teal "$SMALL_TEAL_FILE" 3 10 1 "int 0\nbalance\npop\n"
+<<<<<<< HEAD
 generate_teal "$APPR_PROG" 4 3072 1 "int 0\nbalance\npop\n"
 generate_teal "$BIG_APPR_PROG" 4 4098 1 "int 0\nbalance\npop\n"
+=======
+>>>>>>> teal4-bench
 
 # App create fails. Approval program too long
 RES=$(${gcmd} app create --creator ${ACCOUNT} --approval-prog "${BIG_TEAL_FILE}" --clear-prog "${BIG_TEAL_FILE}" --global-byteslices 1 --global-ints 0 --local-byteslices 0 --local-ints 0 2>&1 || true)
@@ -77,12 +83,17 @@ fi
 
 # App create with extra pages, v4 teal
 RES=$(${gcmd} app create --creator ${ACCOUNT} --approval-prog "${BIG_TEAL_V4_FILE}" --clear-prog "${BIG_TEAL_V4_FILE}" --extra-pages 3 --global-byteslices 1 --global-ints 0 --local-byteslices 0 --local-ints 0 2>&1 || true)
+<<<<<<< HEAD
 EXPERROR="pc=704 dynamic cost budget exceeded, executing intc_0: remaining budget is 700 but program cost was 701"
+=======
+EXPERROR="pc=704 dynamic cost budget of 700 exceeded, executing intc_0"
+>>>>>>> teal4-bench
 if [[ $RES != *"${EXPERROR}"* ]]; then
     date '+app-extra-pages-test FAIL the application creation should fail %Y%m%d_%H%M%S'
     false
 fi
 
+<<<<<<< HEAD
 # App create with extra pages, succeeded
 RES=$(${gcmd} app create --creator ${ACCOUNT} --approval-prog "${SMALL_TEAL_FILE}" --clear-prog "${SMALL_TEAL_FILE}" --extra-pages 1 --global-byteslices 1 --global-ints 0 --local-byteslices 0 --local-ints 0 2>&1 || true)
 EXP="Created app"
@@ -120,3 +131,7 @@ if [[ $RES != *"${EXTRAPAGES}"* ]]; then
     date '+app-extra-pages-test FAIL the application extra pages value is incorrect after update %Y%m%d_%H%M%S'
     false
 fi
+=======
+# App create with extra pages, succeedd
+${gcmd} app create --creator ${ACCOUNT} --approval-prog "${SMALL_TEAL_FILE}" --clear-prog "${SMALL_TEAL_FILE}" --extra-pages 1 --global-byteslices 1 --global-ints 0 --local-byteslices 0 --local-ints 0
+>>>>>>> teal4-bench

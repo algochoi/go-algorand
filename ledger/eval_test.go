@@ -405,11 +405,33 @@ func TestPrepareEvalParams(t *testing.T) {
 				res := eval.prepareEvalParams(testCase.group)
 				require.Equal(t, len(res), len(testCase.group))
 
+<<<<<<< HEAD
 				// Compute the expected transaction group without ApplyData for
 				// the test case
 				expGroupNoAD := make([]transactions.SignedTxn, len(testCase.group))
 				for k := range testCase.group {
 					expGroupNoAD[k] = testCase.group[k].SignedTxn
+=======
+			// Compute the expected transaction group without ApplyData for
+			// the test case
+			expGroupNoAD := make([]transactions.SignedTxn, len(testCase.group))
+			for j := range testCase.group {
+				expGroupNoAD[j] = testCase.group[j].SignedTxn
+			}
+
+			// Ensure non app calls have a nil evaluator, and that non-nil
+			// evaluators point to the right transactions and values
+			for j, present := range testCase.expected {
+				if present {
+					require.NotNil(t, res[j])
+					require.NotNil(t, res[j].PastSideEffects)
+					require.Equal(t, res[j].GroupIndex, j)
+					require.Equal(t, res[j].TxnGroup, expGroupNoAD)
+					require.Equal(t, *res[j].Proto, eval.proto)
+					require.Equal(t, *res[j].Txn, testCase.group[j].SignedTxn)
+				} else {
+					require.Nil(t, res[j])
+>>>>>>> teal4-bench
 				}
 
 				// Ensure non app calls have a nil evaluator, and that non-nil

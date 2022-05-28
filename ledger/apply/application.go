@@ -118,8 +118,20 @@ func createApplication(ac *transactions.ApplicationCallTxnFields, balances Balan
 	// Update the cached TotalExtraAppPages for this account, used
 	// when computing MinBalance
 	totalExtraPages := record.TotalExtraAppPages
+<<<<<<< HEAD
 	totalExtraPages = basics.AddSaturate32(totalExtraPages, ac.ExtraProgramPages)
 	record.TotalExtraAppPages = totalExtraPages
+=======
+	totalExtraPages += ac.ExtraProgramPages
+	record.TotalExtraAppPages = totalExtraPages
+
+	// Tell the cow what app we created
+	created := &basics.CreatableLocator{
+		Creator: creator,
+		Type:    basics.AppCreatable,
+		Index:   basics.CreatableIndex(appIdx),
+	}
+>>>>>>> teal4-bench
 
 	// Write back to the creator's balance record
 	err = balances.Put(creator, record)
@@ -166,7 +178,25 @@ func deleteApplication(balances Balances, creator basics.Address, appIdx basics.
 	// Delete the AppParams
 	delete(record.AppParams, appIdx)
 
+<<<<<<< HEAD
 	err = balances.Put(creator, record)
+=======
+	// Delete app's extra program pages
+	totalExtraPages := record.TotalExtraAppPages
+	if totalExtraPages > 0 {
+		extraPages := record.AppParams[appIdx].ExtraProgramPages
+		totalExtraPages -= extraPages
+		record.TotalExtraAppPages = totalExtraPages
+	}
+
+	// Tell the cow what app we deleted
+	deleted := &basics.CreatableLocator{
+		Creator: creator,
+		Type:    basics.AppCreatable,
+		Index:   basics.CreatableIndex(appIdx),
+	}
+	err = balances.PutWithCreatable(creator, record, nil, deleted)
+>>>>>>> teal4-bench
 	if err != nil {
 		return err
 	}

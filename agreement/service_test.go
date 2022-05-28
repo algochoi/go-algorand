@@ -959,7 +959,10 @@ func TestAgreementSynchronous5(t *testing.T) {
 }
 
 func TestAgreementSynchronous10(t *testing.T) {
+<<<<<<< HEAD
 	partitiontest.PartitionTest(t)
+=======
+>>>>>>> teal4-bench
 	t.Skip("Skipping flaky agreement integration test")
 	if testing.Short() {
 		t.Skip("Skipping agreement integration test")

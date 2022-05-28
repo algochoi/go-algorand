@@ -261,7 +261,10 @@ func loadWithoutDefaults(cfg Local) (Local, error) {
 }
 
 func TestConfigMigrate(t *testing.T) {
+<<<<<<< HEAD
 	partitiontest.PartitionTest(t)
+=======
+>>>>>>> teal4-bench
 
 	a := require.New(t)
 

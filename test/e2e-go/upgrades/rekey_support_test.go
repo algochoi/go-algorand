@@ -68,9 +68,12 @@ func TestRekeyUpgrade(t *testing.T) {
 	round := curStatus.LastRound
 
 	// no consensus upgrade took place (yet)
+<<<<<<< HEAD
 	// in fact on slow environment it might happen faster than the test advances.
 	// that's why errors from BroadcastTransaction are checked for exact specific errors
 	// rather than simply "rekeying not yet enable" or "nonempty AuthAddr"
+=======
+>>>>>>> teal4-bench
 
 	// Ensure no rekeying happened
 	ad, err := client.AccountData(accountA)
@@ -82,6 +85,7 @@ func TestRekeyUpgrade(t *testing.T) {
 	a.NoError(err)
 
 	tx.RekeyTo = addrB
+<<<<<<< HEAD
 	rekey, err := client.SignTransactionWithWalletAndSigner(wh, nil, "", tx)
 	a.NoError(err)
 
@@ -98,12 +102,25 @@ func TestRekeyUpgrade(t *testing.T) {
 		curStatus, err := client.Status()
 		a.NoError(err)
 		a.NotEqual(consensusTestUnupgradedProtocol, protocol.ConsensusVersion(curStatus.LastVersion))
+=======
+
+	rekey, err := client.SignTransactionWithWalletAndSigner(wh, nil, "", tx)
+	a.NoError(err)
+
+	_, err = client.BroadcastTransaction(rekey)
+	a.Error(err)
+	// should be either "transaction has RekeyTo set but rekeying not yet enable" or "txn dead"
+	if !strings.Contains(err.Error(), "transaction has RekeyTo set but rekeying not yet enable") &&
+		!strings.Contains(err.Error(), "txn dead") {
+		a.NoErrorf(err, "error message should be one of :\n%s\n%s", "transaction has RekeyTo set but rekeying not yet enable", "txn dead")
+>>>>>>> teal4-bench
 	}
 
 	// use rekeyed key to authorize (AuthAddr check)
 	tx.RekeyTo = basics.Address{}
 	rekeyed, err := client.SignTransactionWithWalletAndSigner(wh, nil, accountB, tx)
 	a.NoError(err)
+<<<<<<< HEAD
 
 	_, err = client.BroadcastTransaction(rekeyed)
 	// non empty err means the upgrade have not happened yet (as expected), ensure the error
@@ -118,6 +135,13 @@ func TestRekeyUpgrade(t *testing.T) {
 		curStatus, err := client.Status()
 		a.NoError(err)
 		a.NotEqual(consensusTestUnupgradedProtocol, protocol.ConsensusVersion(curStatus.LastVersion))
+=======
+	_, err = client.BroadcastTransaction(rekeyed)
+	// should be either "nonempty AuthAddr but rekeying not supported" or "txn dead"
+	if !strings.Contains(err.Error(), "nonempty AuthAddr but rekeying not supported") &&
+		!strings.Contains(err.Error(), "txn dead") {
+		a.NoErrorf(err, "error message should be one of :\n%s\n%s", "nonempty AuthAddr but rekeying not supported", "txn dead")
+>>>>>>> teal4-bench
 	}
 
 	// go to upgrade
@@ -125,6 +149,10 @@ func TestRekeyUpgrade(t *testing.T) {
 	a.NoError(err)
 
 	startLoopTime := time.Now()
+<<<<<<< HEAD
+=======
+
+>>>>>>> teal4-bench
 	// wait until the network upgrade : this can take a while.
 	for protocol.ConsensusVersion(curStatus.LastVersion) != consensusTestFastUpgrade(firstProtocolWithApplicationSupport) {
 		curStatus, err = client.Status()

@@ -108,11 +108,14 @@ type ConsensusParams struct {
 	// each Txn has a MinFee.
 	EnableFeePooling bool
 
+<<<<<<< HEAD
 	// EnableAppCostPooling specifies that the sum of fees for application calls
 	// in a group is checked against the sum of the budget for application calls,
 	// rather than check each individual app call is within the budget.
 	EnableAppCostPooling bool
 
+=======
+>>>>>>> teal4-bench
 	// RewardUnit specifies the number of MicroAlgos corresponding to one reward
 	// unit.
 	//
@@ -283,9 +286,12 @@ type ConsensusParams struct {
 	// maximum sum of the lengths of the key and value of one app state entry
 	MaxAppSumKeyValueLens int
 
+<<<<<<< HEAD
 	// maximum number of inner transactions that can be created by an app call
 	MaxInnerTransactions int
 
+=======
+>>>>>>> teal4-bench
 	// maximum number of applications a single account can create and store
 	// AppParams for at once
 	MaxAppsCreated int
@@ -497,10 +503,13 @@ func checkSetAllocBounds(p ConsensusParams) {
 	checkSetMax(p.MaxExtraAppProgramPages, &MaxExtraAppProgramLen)
 	// MaxAvailableAppProgramLen is the max of supported app program size
 	MaxAvailableAppProgramLen = MaxAppProgramLen * (1 + MaxExtraAppProgramLen)
+<<<<<<< HEAD
 	// There is no consensus parameter for MaxLogCalls and MaxAppProgramLen as an approximation
 	// Its value is much larger than any possible reasonable MaxLogCalls value in future
 	checkSetMax(p.MaxAppProgramLen, &MaxLogCalls)
 	checkSetMax(p.MaxInnerTransactions, &MaxInnerTransactions)
+=======
+>>>>>>> teal4-bench
 }
 
 // SaveConfigurableConsensus saves the configurable protocols file to the provided data directory.
@@ -990,6 +999,7 @@ func initConsensusProtocols() {
 	// v27 can be upgraded to v28, with an update delay of 7 days ( see calculation above )
 	v27.ApprovedUpgrades[protocol.ConsensusV28] = 140000
 
+<<<<<<< HEAD
 	// v29 fixes application update by using ExtraProgramPages in size calculations
 	v29 := v28
 	v29.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
@@ -1005,6 +1015,11 @@ func initConsensusProtocols() {
 	// ConsensusFuture is used to test features that are implemented
 	// but not yet released in a production protocol version.
 	vFuture := v29
+=======
+	// ConsensusFuture is used to test features that are implemented
+	// but not yet released in a production protocol version.
+	vFuture := v28
+>>>>>>> teal4-bench
 	vFuture.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
 
 	// FilterTimeout for period 0 should take a new optimized, configured value, need to revisit this later
@@ -1019,6 +1034,7 @@ func initConsensusProtocols() {
 
 	// Enable TEAL 5 / AVM 1.0
 	vFuture.LogicSigVersion = 5
+<<<<<<< HEAD
 
 	// Enable App calls to pool budget in grouped transactions
 	vFuture.EnableAppCostPooling = true
@@ -1026,6 +1042,8 @@ func initConsensusProtocols() {
 
 	// Allow 50 app opt ins
 	vFuture.MaxAppsOptedIn = 50
+=======
+>>>>>>> teal4-bench
 
 	Consensus[protocol.ConsensusFuture] = vFuture
 }

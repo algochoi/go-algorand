@@ -10,18 +10,28 @@ function usage {
   echo "By default all packages are installed."
   echo "usage: $0 [-o packagename]"
   echo "  -o packagename    when used only packagename is installed."
+<<<<<<< HEAD
   echo "  -c commandname    if it is one command from a package provide this."
   echo "  -h                print this usage information."
 }
 
 while getopts ":o:c:h" opt; do
+=======
+  echo "  -h                print this usage information."
+}
+
+while getopts ":o:h" opt; do
+>>>>>>> teal4-bench
   case $opt in
     o)
       BUILDTOOLS_INSTALL="$OPTARG"
       ;;
+<<<<<<< HEAD
     c)
       BUILDTOOLS_COMMAND="$OPTARG"
       ;;
+=======
+>>>>>>> teal4-bench
     h)
       usage
       exit 0
@@ -85,7 +95,11 @@ function install_go_module {
 }
 
 if [[ "${BUILDTOOLS_INSTALL}" != "ALL" ]]; then
+<<<<<<< HEAD
   install_go_module "${BUILDTOOLS_INSTALL}" "${BUILDTOOLS_COMMAND}"
+=======
+  install_go_module "${BUILDTOOLS_INSTALL}"
+>>>>>>> teal4-bench
   exit 0
 fi
 
@@ -94,4 +108,7 @@ install_go_module golang.org/x/tools golang.org/x/tools/cmd/stringer
 install_go_module github.com/go-swagger/go-swagger github.com/go-swagger/go-swagger/cmd/swagger
 install_go_module github.com/algorand/msgp
 install_go_module gotest.tools/gotestsum
+<<<<<<< HEAD
 install_go_module github.com/algorand/oapi-codegen github.com/algorand/oapi-codegen/cmd/oapi-codegen
+=======
+>>>>>>> teal4-bench

@@ -95,6 +95,7 @@ var testedDatatypesForAllocBoundMu = deadlock.Mutex{}
 func checkMsgpAllocBoundDirective(dataType reflect.Type) bool {
 	// does any of the go files in the package directory has the msgp:allocbound defined for that datatype ?
 	gopath := os.Getenv("GOPATH")
+<<<<<<< HEAD
 	const repositoryRoot = "go-algorand/"
 	const thisFile = "protocol/codec_tester.go"
 	packageFilesPath := path.Join(gopath, "src", dataType.PkgPath())
@@ -125,6 +126,9 @@ func checkMsgpAllocBoundDirective(dataType reflect.Type) bool {
 			return false
 		}
 	}
+=======
+	packageFilesPath := path.Join(gopath, "src", dataType.PkgPath())
+>>>>>>> teal4-bench
 	packageFiles := []string{}
 	filepath.Walk(packageFilesPath, func(path string, info os.FileInfo, err error) error {
 		if filepath.Ext(path) == ".go" {

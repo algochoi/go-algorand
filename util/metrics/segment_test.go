@@ -33,8 +33,11 @@ type SegmentTest struct {
 }
 
 func TestMetricSegment(t *testing.T) {
+<<<<<<< HEAD
 	partitiontest.PartitionTest(t)
 
+=======
+>>>>>>> teal4-bench
 	const initialSleepDuration = 10 * time.Millisecond
 	const maxSleepDuration = 4 * time.Second
 	done := false

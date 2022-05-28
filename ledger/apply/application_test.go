@@ -566,7 +566,11 @@ func TestAppCallApplyCreate(t *testing.T) {
 	ac.ExtraProgramPages = 1
 	err = ApplicationCall(ac, h, &b, ad, &ep, txnCounter)
 	a.NoError(err)
+<<<<<<< HEAD
 	br = b.putBalances[creator]
+=======
+	br = b.putWithBalances[creator]
+>>>>>>> teal4-bench
 	a.Equal(uint32(1), br.AppParams[appIdx].ExtraProgramPages)
 	a.Equal(uint32(1), br.TotalExtraAppPages)
 }
@@ -1198,6 +1202,7 @@ func TestAppCallApplyDelete(t *testing.T) {
 	br = b.putBalances[creator]
 	a.Equal(basics.AppParams{}, br.AppParams[appIdx])
 	a.Equal(basics.StateSchema{}, br.TotalAppSchema)
+<<<<<<< HEAD
 	a.Equal(transactions.EvalDelta{}, ad.EvalDelta)
 	a.Equal(uint32(1), br.TotalExtraAppPages)
 	b.ResetWrites()
@@ -1241,6 +1246,10 @@ func TestAppCallApplyDelete(t *testing.T) {
 	err = ApplicationCall(ac, h, &b, ad, &ep, txnCounter)
 	a.NoError(err)
 	a.Equal(transactions.EvalDelta{Logs: logs}, ad.EvalDelta)
+=======
+	a.Equal(basics.EvalDelta{}, ad.EvalDelta)
+	a.Equal(uint32(0), br.TotalExtraAppPages)
+>>>>>>> teal4-bench
 }
 
 func TestAppCallApplyCreateClearState(t *testing.T) {

@@ -146,9 +146,12 @@ const (
 	// ExtraProgramPages AppParams.ExtraProgramPages
 	ExtraProgramPages
 
+<<<<<<< HEAD
 	// Nonparticipation Transaction.Nonparticipation
 	Nonparticipation
 
+=======
+>>>>>>> teal4-bench
 	invalidTxnField // fence for some setup that loops from Sender..invalidTxnField
 )
 
@@ -235,7 +238,10 @@ var txnFieldSpecs = []txnFieldSpec{
 	{LocalNumUint, StackUint64, 3},
 	{LocalNumByteSlice, StackUint64, 3},
 	{ExtraProgramPages, StackUint64, 4},
+<<<<<<< HEAD
 	{Nonparticipation, StackUint64, 5},
+=======
+>>>>>>> teal4-bench
 }
 
 // TxnaFieldNames are arguments to the 'txna' opcode
@@ -458,6 +464,29 @@ const (
 // AssetParamsFieldNames are arguments to the 'asset_params_get' opcode
 var AssetParamsFieldNames []string
 
+<<<<<<< HEAD
+=======
+type assetParamsFieldType struct {
+	field AssetParamsField
+	ftype StackType
+}
+
+var assetParamsFieldTypeList = []assetParamsFieldType{
+	{AssetTotal, StackUint64},
+	{AssetDecimals, StackUint64},
+	{AssetDefaultFrozen, StackUint64},
+	{AssetUnitName, StackBytes},
+	{AssetName, StackBytes},
+	{AssetURL, StackBytes},
+	{AssetMetadataHash, StackBytes},
+	{AssetManager, StackBytes},
+	{AssetReserve, StackBytes},
+	{AssetFreeze, StackBytes},
+	{AssetClawback, StackBytes},
+	{AssetCreator, StackBytes},
+}
+
+>>>>>>> teal4-bench
 // AssetParamsFieldTypes is StackUint64 StackBytes in parallel with AssetParamsFieldNames
 var AssetParamsFieldTypes []StackType
 
@@ -562,6 +591,55 @@ func (s appNameSpecMap) getExtraFor(name string) (extra string) {
 	return
 }
 
+// AppParamsField is an enum for `app_params_get` opcode
+type AppParamsField int
+
+const (
+	// AppApprovalProgram AppParams.ApprovalProgram
+	AppApprovalProgram AppParamsField = iota
+	// AppClearStateProgram AppParams.ClearStateProgram
+	AppClearStateProgram
+	// AppGlobalNumUint AppParams.StateSchemas.GlobalStateSchema.NumUint
+	AppGlobalNumUint
+	// AppGlobalNumByteSlice AppParams.StateSchemas.GlobalStateSchema.NumByteSlice
+	AppGlobalNumByteSlice
+	// AppLocalNumUint AppParams.StateSchemas.LocalStateSchema.NumUint
+	AppLocalNumUint
+	// AppLocalNumByteSlice AppParams.StateSchemas.LocalStateSchema.NumByteSlice
+	AppLocalNumByteSlice
+	// AppExtraProgramPages AppParams.ExtraProgramPages
+	AppExtraProgramPages
+
+	// AppCreator is not *in* the Params, but it is uniquely determined.
+	AppCreator
+
+	invalidAppParamsField
+)
+
+// AppParamsFieldNames are arguments to the 'app_params_get' opcode
+var AppParamsFieldNames []string
+
+type appParamsFieldType struct {
+	field AppParamsField
+	ftype StackType
+}
+
+var appParamsFieldTypeList = []appParamsFieldType{
+	{AppApprovalProgram, StackBytes},
+	{AppClearStateProgram, StackBytes},
+	{AppGlobalNumUint, StackUint64},
+	{AppGlobalNumByteSlice, StackUint64},
+	{AppLocalNumUint, StackUint64},
+	{AppLocalNumByteSlice, StackUint64},
+	{AppExtraProgramPages, StackUint64},
+	{AppCreator, StackBytes},
+}
+
+// AppParamsFieldTypes is StackUint64 StackBytes in parallel with AppParamsFieldNames
+var AppParamsFieldTypes []StackType
+
+var appParamsFields map[string]uint64
+
 func init() {
 	TxnFieldNames = make([]string, int(invalidTxnField))
 	for fi := Sender; fi < invalidTxnField; fi++ {
@@ -639,6 +717,19 @@ func init() {
 	appParamsFieldSpecByName = make(appNameSpecMap, len(AppParamsFieldNames))
 	for i, apfn := range AppParamsFieldNames {
 		appParamsFieldSpecByName[apfn] = appParamsFieldSpecByField[AppParamsField(i)]
+	}
+
+	AppParamsFieldNames = make([]string, int(invalidAppParamsField))
+	for i := AppApprovalProgram; i < invalidAppParamsField; i++ {
+		AppParamsFieldNames[int(i)] = i.String()
+	}
+	AppParamsFieldTypes = make([]StackType, len(AppParamsFieldNames))
+	for _, ft := range appParamsFieldTypeList {
+		AppParamsFieldTypes[int(ft.field)] = ft.ftype
+	}
+	appParamsFields = make(map[string]uint64)
+	for i, fn := range AppParamsFieldNames {
+		appParamsFields[fn] = uint64(i)
 	}
 
 	txnTypeIndexes = make(map[string]uint64, len(TxnTypeNames))

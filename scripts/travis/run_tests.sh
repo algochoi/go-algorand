@@ -16,7 +16,11 @@ if [ "${BUILD_TYPE}" = "integration" ]; then
     fi
     export SHORTTEST 
     make integration
+<<<<<<< HEAD
 elif [ "${TRAVIS_EVENT_TYPE}" = "cron" ] || [[ "${TRAVIS_BRANCH}" =~ ^rel/ ]] || [[ "${TRAVIS_BRANCH}" =~ ^hotfix/ ]]; then
+=======
+elif [ "${TRAVIS_EVENT_TYPE}" = "cron" ] || [[ "${TRAVIS_BRANCH}" =~ ^rel/ ]]; then
+>>>>>>> teal4-bench
     make fulltest -j2
 else
     make shorttest -j2

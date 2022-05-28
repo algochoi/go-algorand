@@ -167,7 +167,10 @@ func MakeFull(log logging.Logger, rootDir string, cfg config.Local, phonebookAdd
 	if node.devMode {
 		cfg.DisableNetworking = true
 	}
+<<<<<<< HEAD
 	node.config = cfg
+=======
+>>>>>>> teal4-bench
 
 	// tie network, block fetcher, and agreement services together
 	p2pNode, err := network.NewWebsocketNetwork(node.log, node.config, phonebookAddresses, genesis.ID(), genesis.Network)

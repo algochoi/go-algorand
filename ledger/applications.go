@@ -87,6 +87,7 @@ func (al *logicLedger) MinBalance(addr basics.Address, proto *config.ConsensusPa
 	return record.MinBalance(proto), nil
 }
 
+<<<<<<< HEAD
 func (al *logicLedger) Authorizer(addr basics.Address) (basics.Address, error) {
 	record, err := al.cow.Get(addr, false) // pending rewards unneeded
 	if err != nil {
@@ -98,6 +99,8 @@ func (al *logicLedger) Authorizer(addr basics.Address) (basics.Address, error) {
 	return addr, nil
 }
 
+=======
+>>>>>>> teal4-bench
 func (al *logicLedger) GetCreatableID(groupIdx int) basics.CreatableIndex {
 	return al.cow.GetCreatableID(groupIdx)
 }

@@ -85,8 +85,11 @@ func TestStateDeltaValid(t *testing.T) {
 }
 
 func TestStateDeltaValidV24(t *testing.T) {
+<<<<<<< HEAD
 	partitiontest.PartitionTest(t)
 
+=======
+>>>>>>> teal4-bench
 	a := require.New(t)
 
 	// v24: short key, value too long: hits MaxAppBytesValueLen

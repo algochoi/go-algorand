@@ -344,7 +344,10 @@ func (tx Transaction) WellFormed(spec SpecialAddresses, proto config.ConsensusPa
 			}
 		}
 
+<<<<<<< HEAD
 		effectiveEPP := tx.ExtraProgramPages
+=======
+>>>>>>> teal4-bench
 		// Schemas and ExtraProgramPages may only be set during application creation
 		if tx.ApplicationID != 0 {
 			if tx.LocalStateSchema != (basics.StateSchema{}) ||
@@ -354,11 +357,14 @@ func (tx Transaction) WellFormed(spec SpecialAddresses, proto config.ConsensusPa
 			if tx.ExtraProgramPages != 0 {
 				return fmt.Errorf("tx.ExtraProgramPages is immutable")
 			}
+<<<<<<< HEAD
 
 			if proto.EnableExtraPagesOnAppUpdate {
 				effectiveEPP = uint32(proto.MaxExtraAppProgramPages)
 			}
 
+=======
+>>>>>>> teal4-bench
 		}
 
 		// Limit total number of arguments
@@ -402,7 +408,11 @@ func (tx Transaction) WellFormed(spec SpecialAddresses, proto config.ConsensusPa
 
 		lap := len(tx.ApprovalProgram)
 		lcs := len(tx.ClearStateProgram)
+<<<<<<< HEAD
 		pages := int(1 + effectiveEPP)
+=======
+		pages := int(1 + tx.ExtraProgramPages)
+>>>>>>> teal4-bench
 		if lap > pages*proto.MaxAppProgramLen {
 			return fmt.Errorf("approval program too long. max len %d bytes", pages*proto.MaxAppProgramLen)
 		}

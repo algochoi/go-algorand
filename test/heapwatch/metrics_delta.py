@@ -112,11 +112,14 @@ def dictMin(dest, more):
             dest[k] = min(ov,v)
     return dest
 
+<<<<<<< HEAD
 def meanOrZero(seq):
     if not seq:
         return 0
     return statistics.mean(seq)
 
+=======
+>>>>>>> teal4-bench
 class summary:
     def __init__(self):
         self.tpsMeanSum = 0
@@ -130,9 +133,15 @@ class summary:
             return
         self.nodes[nick] = ttr
         logger.debug('%d points from %s', len(ttr.tpsList), nick)
+<<<<<<< HEAD
         self.tpsMeanSum += meanOrZero(ttr.tpsList)
         self.txBpsMeanSum += meanOrZero(ttr.txBpsList)
         self.rxBpsMeanSum += meanOrZero(ttr.rxBpsList)
+=======
+        self.tpsMeanSum += statistics.mean(ttr.tpsList)
+        self.txBpsMeanSum += statistics.mean(ttr.txBpsList)
+        self.rxBpsMeanSum += statistics.mean(ttr.rxBpsList)
+>>>>>>> teal4-bench
         self.sumsCount += 1
 
     def byMsg(self):
@@ -167,6 +176,7 @@ class summary:
             lines.append('{}\t{:.0f}\t{:.0f}'.format(msg, txBps, rxBps))
         return '\n'.join(lines)
 
+<<<<<<< HEAD
     def txPool(self):
         mins = []
         maxs = []
@@ -185,6 +195,11 @@ class summary:
 
     def __str__(self):
         return '{}\n{}\nsummary: {:0.2f} TPS, {:0.0f} tx B/s, {:0.0f} rx B/s'.format(self.byMsg(), self.txPool(), self.tpsMeanSum/self.sumsCount, self.txBpsMeanSum/self.sumsCount, self.rxBpsMeanSum/self.sumsCount)
+=======
+
+    def __str__(self):
+        return '{}\nsummary: {:0.2f} TPS, {:0.0f} tx B/s, {:0.0f} rx B/s'.format(self.byMsg(), self.tpsMeanSum/self.sumsCount, self.txBpsMeanSum/self.sumsCount, self.rxBpsMeanSum/self.sumsCount)
+>>>>>>> teal4-bench
 
 def anynickre(nick_re, nicks):
     if not nick_re:
@@ -196,6 +211,7 @@ def anynickre(nick_re, nicks):
                 return True
     return False
 
+<<<<<<< HEAD
 def gather_metrics_files_by_nick(metrics_files, metrics_dirs=None):
     '''return {"node nickname":[path, path, ...], ...}'''
     metrics_fname_re = re.compile(r'(.*)\.(.*).metrics')
@@ -218,6 +234,8 @@ def gather_metrics_files_by_nick(metrics_files, metrics_dirs=None):
         dapp(filesByNick, nick, path)
     return filesByNick
 
+=======
+>>>>>>> teal4-bench
 def main():
     test_metric_line_re()
     ap = argparse.ArgumentParser()
@@ -240,7 +258,27 @@ def main():
     if args.dir:
         metrics_dirs.add(args.dir)
         metrics_files += glob.glob(os.path.join(args.dir, '*.metrics'))
+<<<<<<< HEAD
     filesByNick = gather_metrics_files_by_nick(metrics_files, metrics_dirs)
+=======
+    metrics_fname_re = re.compile(r'(.*)\.(.*).metrics')
+    filesByNick = {}
+    nonick = []
+    tf_inventory_path = None
+    for path in metrics_files:
+        fname = os.path.basename(path)
+        if fname == 'terraform-inventory.host':
+            tf_inventory_path = path
+            continue
+        metrics_dirs.add(os.path.dirname(path))
+        m = metrics_fname_re.match(fname)
+        if not m:
+            logger.error('could not parse metrics file name %r', fname)
+            nonick.append(path)
+            continue
+        nick = m.group(1)
+        dapp(filesByNick, nick, path)
+>>>>>>> teal4-bench
     if not tf_inventory_path:
         for md in metrics_dirs:
             tp = os.path.join(md, 'terraform-inventory.host')
@@ -305,7 +343,10 @@ def perProtocol(prefix, lists, sums, deltas, dt):
             sums[sub] = sums.get(sub,0) + v
 
 def process_files(args, nick, paths):
+<<<<<<< HEAD
     "returns a nodestats object"
+=======
+>>>>>>> teal4-bench
     return nodestats().process_files(args, nick, paths)
 
 class nodestats:
@@ -326,11 +367,16 @@ class nodestats:
         # algod_network_sent_bytes_*
         self.txPLists = {}
         self.txPSums = {}
+<<<<<<< HEAD
         # algod_tx_pool_count{}
         self.txPool = []
 
     def process_files(self, args, nick=None, metrics_files=None):
         "returns self, a nodestats object"
+=======
+
+    def process_files(self, args, nick=None, metrics_files=None):
+>>>>>>> teal4-bench
         self.args = args
         self.nick = nick
         if metrics_files is None:
@@ -363,7 +409,10 @@ class nodestats:
                 with open(bijsonpath, 'rt') as fin:
                     bi = json.load(fin)
             curtime = os.path.getmtime(path)
+<<<<<<< HEAD
             self.txPool.append(cur.get('algod_tx_pool_count{}'))
+=======
+>>>>>>> teal4-bench
             #logger.debug('%s: %r', path, cur)
             if prev is not None:
                 d = metrics_delta(prev, cur)

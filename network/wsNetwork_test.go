@@ -2067,7 +2067,10 @@ func TestParseHostOrURL(t *testing.T) {
 		{"1.2.3.4:123", url.URL{Scheme: "http", Host: "1.2.3.4:123"}},
 		{"[::]:123", url.URL{Scheme: "http", Host: "[::]:123"}},
 		{"r2-devnet.devnet.algodev.network:4560", url.URL{Scheme: "http", Host: "r2-devnet.devnet.algodev.network:4560"}},
+<<<<<<< HEAD
 		{"::11.22.33.44:123", url.URL{Scheme: "http", Host: "::11.22.33.44:123"}},
+=======
+>>>>>>> teal4-bench
 	}
 	badUrls := []string{
 		"justahost",
@@ -2079,6 +2082,7 @@ func TestParseHostOrURL(t *testing.T) {
 		"//localhost:WAT",
 		"://badaddress", // See rpcs/blockService_test.go TestRedirectFallbackEndpoints
 		"://localhost:1234",
+<<<<<<< HEAD
 		":xxx",
 		":xxx:1234",
 		"::11.22.33.44",
@@ -2088,6 +2092,8 @@ func TestParseHostOrURL(t *testing.T) {
 		":a",
 		":",
 		"",
+=======
+>>>>>>> teal4-bench
 	}
 	for _, tc := range urlTestCases {
 		t.Run(tc.text, func(t *testing.T) {

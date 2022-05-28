@@ -209,6 +209,31 @@ func (se *EvalSideEffects) setScratchSpace(scratch scratchSpace) {
 	se.scratchSpace = scratch
 }
 
+// EvalSideEffects contains data returned from evaluation
+type EvalSideEffects struct {
+	scratchSpace scratchSpace
+}
+
+// MakePastSideEffects allocates and initializes a slice of EvalSideEffects of length `size`
+func MakePastSideEffects(size int) (pastSideEffects []EvalSideEffects) {
+	pastSideEffects = make([]EvalSideEffects, size)
+	for j := range pastSideEffects {
+		pastSideEffects[j] = EvalSideEffects{}
+	}
+	return
+}
+
+// getScratchValue loads and clones a stackValue
+// The value is cloned so the original bytes are protected from changes
+func (se *EvalSideEffects) getScratchValue(scratchPos uint8) stackValue {
+	return se.scratchSpace[scratchPos].clone()
+}
+
+// setScratchSpace stores the scratch space
+func (se *EvalSideEffects) setScratchSpace(scratch scratchSpace) {
+	se.scratchSpace = scratch
+}
+
 // EvalParams contains data that comes into condition evaluation.
 type EvalParams struct {
 	// the transaction being evaluated
@@ -304,15 +329,30 @@ func (ep EvalParams) log() logging.Logger {
 
 type scratchSpace = [256]stackValue
 
+<<<<<<< HEAD
 // EvalContext is the execution context of AVM bytecode.  It contains
 // the full state of the running program, and tracks some of the
 // things that the program has been done, like log message and inner
 // transactions.
 type EvalContext struct {
+=======
+type evalContext struct {
+>>>>>>> teal4-bench
 	EvalParams
 
 	stack     []stackValue
 	callstack []int
+<<<<<<< HEAD
+=======
+	program   []byte // txn.Lsig.Logic ?
+	pc        int
+	nextpc    int
+	err       error
+	intc      []uint64
+	bytec     [][]byte
+	version   uint64
+	scratch   scratchSpace
+>>>>>>> teal4-bench
 
 	program []byte
 	pc      int
@@ -403,6 +443,7 @@ func EvalStatefulCx(program []byte, params EvalParams) (bool, *EvalContext, erro
 	var cx EvalContext
 	cx.EvalParams = params
 	cx.runModeFlags = runModeApplication
+<<<<<<< HEAD
 	pass, err := eval(program, &cx)
 
 	// The following two updates show a need for something like a
@@ -424,6 +465,13 @@ func EvalStatefulCx(program []byte, params EvalParams) (bool, *EvalContext, erro
 func EvalStateful(program []byte, params EvalParams) (bool, error) {
 	pass, _, err := EvalStatefulCx(program, params)
 	return pass, err
+=======
+	pass, err = eval(program, &cx)
+
+	// set side effects
+	cx.PastSideEffects[cx.GroupIndex].setScratchSpace(cx.scratch)
+	return
+>>>>>>> teal4-bench
 }
 
 // Eval checks to see if a transaction passes logic
@@ -1774,14 +1822,26 @@ func (cx *EvalContext) assetHoldingToValue(holding *basics.AssetHolding, fs asse
 		return
 	}
 
+<<<<<<< HEAD
 	if !typecheck(fs.ftype, sv.argType()) {
 		err = fmt.Errorf("%s expected field type is %s but got %s", fs.field.String(), fs.ftype.String(), sv.argType().String())
+=======
+	assetHoldingField := AssetHoldingField(field)
+	assetHoldingFieldType := AssetHoldingFieldTypes[assetHoldingField]
+	if !typecheck(assetHoldingFieldType, sv.argType()) {
+		err = fmt.Errorf("%s expected field type is %s but got %s", assetHoldingField.String(), assetHoldingFieldType.String(), sv.argType().String())
+>>>>>>> teal4-bench
 	}
 	return
 }
 
+<<<<<<< HEAD
 func (cx *EvalContext) assetParamsToValue(params *basics.AssetParams, creator basics.Address, fs assetParamsFieldSpec) (sv stackValue, err error) {
 	switch fs.field {
+=======
+func (cx *evalContext) assetParamsEnumToValue(params *basics.AssetParams, creator basics.Address, field uint64) (sv stackValue, err error) {
+	switch AssetParamsField(field) {
+>>>>>>> teal4-bench
 	case AssetTotal:
 		sv.Uint = params.Total
 	case AssetDecimals:
@@ -1811,6 +1871,7 @@ func (cx *EvalContext) assetParamsToValue(params *basics.AssetParams, creator ba
 		return
 	}
 
+<<<<<<< HEAD
 	if !typecheck(fs.ftype, sv.argType()) {
 		err = fmt.Errorf("%s expected field type is %s but got %s", fs.field.String(), fs.ftype.String(), sv.argType().String())
 	}
@@ -1841,6 +1902,43 @@ func (cx *EvalContext) appParamsToValue(params *basics.AppParams, fs appParamsFi
 
 	if !typecheck(fs.ftype, sv.argType()) {
 		err = fmt.Errorf("%s expected field type is %s but got %s", fs.field.String(), fs.ftype.String(), sv.argType().String())
+=======
+	assetParamsField := AssetParamsField(field)
+	assetParamsFieldType := AssetParamsFieldTypes[assetParamsField]
+	if !typecheck(assetParamsFieldType, sv.argType()) {
+		err = fmt.Errorf("%s expected field type is %s but got %s", assetParamsField.String(), assetParamsFieldType.String(), sv.argType().String())
+>>>>>>> teal4-bench
+	}
+	return
+}
+
+func (cx *evalContext) appParamsEnumToValue(params *basics.AppParams, creator basics.Address, field uint64) (sv stackValue, err error) {
+	switch AppParamsField(field) {
+	case AppApprovalProgram:
+		sv.Bytes = params.ApprovalProgram[:]
+	case AppClearStateProgram:
+		sv.Bytes = params.ClearStateProgram[:]
+	case AppGlobalNumUint:
+		sv.Uint = params.GlobalStateSchema.NumUint
+	case AppGlobalNumByteSlice:
+		sv.Uint = params.GlobalStateSchema.NumByteSlice
+	case AppLocalNumUint:
+		sv.Uint = params.LocalStateSchema.NumUint
+	case AppLocalNumByteSlice:
+		sv.Uint = params.LocalStateSchema.NumByteSlice
+	case AppExtraProgramPages:
+		sv.Uint = uint64(params.ExtraProgramPages)
+	case AppCreator:
+		sv.Bytes = creator[:]
+	default:
+		err = fmt.Errorf("invalid app params field %d", field)
+		return
+	}
+
+	appParamsField := AppParamsField(field)
+	appParamsFieldType := AppParamsFieldTypes[appParamsField]
+	if !typecheck(appParamsFieldType, sv.argType()) {
+		err = fmt.Errorf("%s expected field type is %s but got %s", appParamsField.String(), appParamsFieldType.String(), sv.argType().String())
 	}
 	return
 }
@@ -2195,7 +2293,11 @@ func opGtxnsa(cx *EvalContext) {
 	cx.stack[last] = sv
 }
 
+<<<<<<< HEAD
 func opGaidImpl(cx *EvalContext, groupIdx int, opName string) (sv stackValue, err error) {
+=======
+func opGaidImpl(cx *evalContext, groupIdx int, opName string) (sv stackValue, err error) {
+>>>>>>> teal4-bench
 	if groupIdx >= len(cx.TxnGroup) {
 		err = fmt.Errorf("%s lookup TxnGroup[%d] but it only has %d", opName, groupIdx, len(cx.TxnGroup))
 		return
@@ -2222,7 +2324,11 @@ func opGaidImpl(cx *EvalContext, groupIdx int, opName string) (sv stackValue, er
 	return
 }
 
+<<<<<<< HEAD
 func opGaid(cx *EvalContext) {
+=======
+func opGaid(cx *evalContext) {
+>>>>>>> teal4-bench
 	groupIdx := int(uint(cx.program[cx.pc+1]))
 	sv, err := opGaidImpl(cx, groupIdx, "gaid")
 	if err != nil {
@@ -2233,7 +2339,11 @@ func opGaid(cx *EvalContext) {
 	cx.stack = append(cx.stack, sv)
 }
 
+<<<<<<< HEAD
 func opGaids(cx *EvalContext) {
+=======
+func opGaids(cx *evalContext) {
+>>>>>>> teal4-bench
 	last := len(cx.stack) - 1
 	groupIdx := int(cx.stack[last].Uint)
 	sv, err := opGaidImpl(cx, groupIdx, "gaids")
@@ -2245,7 +2355,11 @@ func opGaids(cx *EvalContext) {
 	cx.stack[last] = sv
 }
 
+<<<<<<< HEAD
 func (cx *EvalContext) getRound() (rnd uint64, err error) {
+=======
+func (cx *evalContext) getRound() (rnd uint64, err error) {
+>>>>>>> teal4-bench
 	if cx.Ledger == nil {
 		err = fmt.Errorf("ledger not available")
 		return
@@ -2273,6 +2387,7 @@ func (cx *EvalContext) getApplicationID() (uint64, error) {
 	return uint64(cx.Ledger.ApplicationID()), nil
 }
 
+<<<<<<< HEAD
 func (cx *EvalContext) getApplicationAddress() (basics.Address, error) {
 	if cx.Ledger == nil {
 		return basics.Address{}, fmt.Errorf("ledger not available")
@@ -2295,6 +2410,9 @@ func (cx *EvalContext) getApplicationAddress() (basics.Address, error) {
 }
 
 func (cx *EvalContext) getCreatableID(groupIndex int) (cid uint64, err error) {
+=======
+func (cx *evalContext) getCreatableID(groupIndex int) (cid uint64, err error) {
+>>>>>>> teal4-bench
 	if cx.Ledger == nil {
 		err = fmt.Errorf("ledger not available")
 		return
@@ -2302,7 +2420,11 @@ func (cx *EvalContext) getCreatableID(groupIndex int) (cid uint64, err error) {
 	return uint64(cx.Ledger.GetCreatableID(groupIndex)), nil
 }
 
+<<<<<<< HEAD
 func (cx *EvalContext) getCreatorAddress() ([]byte, error) {
+=======
+func (cx *evalContext) getCreatorAddress() ([]byte, error) {
+>>>>>>> teal4-bench
 	if cx.Ledger == nil {
 		return nil, fmt.Errorf("ledger not available")
 	}
@@ -2370,6 +2492,15 @@ func opGlobal(cx *EvalContext) {
 		return
 	}
 
+<<<<<<< HEAD
+=======
+	globalFieldType := GlobalFieldTypes[globalField]
+	if !typecheck(globalFieldType, sv.argType()) {
+		cx.err = fmt.Errorf("%s expected field type is %s but got %s", globalField.String(), globalFieldType.String(), sv.argType().String())
+		return
+	}
+
+>>>>>>> teal4-bench
 	cx.stack = append(cx.stack, sv)
 }
 
@@ -2435,7 +2566,11 @@ func opStore(cx *EvalContext) {
 	cx.stack = cx.stack[:last]
 }
 
+<<<<<<< HEAD
 func opGloadImpl(cx *EvalContext, groupIdx int, scratchIdx int, opName string) (scratchValue stackValue, err error) {
+=======
+func opGloadImpl(cx *evalContext, groupIdx int, scratchIdx int, opName string) (scratchValue stackValue, err error) {
+>>>>>>> teal4-bench
 	if groupIdx >= len(cx.TxnGroup) {
 		err = fmt.Errorf("%s lookup TxnGroup[%d] but it only has %d", opName, groupIdx, len(cx.TxnGroup))
 		return
@@ -2457,7 +2592,11 @@ func opGloadImpl(cx *EvalContext, groupIdx int, scratchIdx int, opName string) (
 	return
 }
 
+<<<<<<< HEAD
 func opGload(cx *EvalContext) {
+=======
+func opGload(cx *evalContext) {
+>>>>>>> teal4-bench
 	groupIdx := int(uint(cx.program[cx.pc+1]))
 	scratchIdx := int(uint(cx.program[cx.pc+2]))
 	scratchValue, err := opGloadImpl(cx, groupIdx, scratchIdx, "gload")
@@ -2469,7 +2608,11 @@ func opGload(cx *EvalContext) {
 	cx.stack = append(cx.stack, scratchValue)
 }
 
+<<<<<<< HEAD
 func opGloads(cx *EvalContext) {
+=======
+func opGloads(cx *evalContext) {
+>>>>>>> teal4-bench
 	last := len(cx.stack) - 1
 	groupIdx := int(cx.stack[last].Uint)
 	scratchIdx := int(uint(cx.program[cx.pc+1]))
@@ -2482,7 +2625,11 @@ func opGloads(cx *EvalContext) {
 	cx.stack[last] = scratchValue
 }
 
+<<<<<<< HEAD
 func opConcat(cx *EvalContext) {
+=======
+func opConcat(cx *evalContext) {
+>>>>>>> teal4-bench
 	last := len(cx.stack) - 1
 	prev := last - 1
 	a := cx.stack[prev].Bytes
@@ -2659,6 +2806,7 @@ func opExtractImpl(x []byte, start, length int) (out []byte, err error) {
 	end := start + length
 	if start > len(x) || end > len(x) {
 		err = errors.New("extract range beyond length of string")
+<<<<<<< HEAD
 		return
 	}
 	out = x[start:end]
@@ -2801,6 +2949,131 @@ func opMinBalance(cx *EvalContext) {
 }
 
 func opAppOptedIn(cx *EvalContext) {
+=======
+		return
+	}
+	out = x[start:end]
+	return
+}
+
+func opExtract(cx *evalContext) {
+	last := len(cx.stack) - 1
+	startIdx := cx.program[cx.pc+1]
+	lengthIdx := cx.program[cx.pc+2]
+	// Shortcut: if length is 0, take bytes from start index to the end
+	length := int(lengthIdx)
+	if length == 0 {
+		length = len(cx.stack[last].Bytes) - int(startIdx)
+	}
+	cx.stack[last].Bytes, cx.err = opExtractImpl(cx.stack[last].Bytes, int(startIdx), length)
+}
+
+func opExtract3(cx *evalContext) {
+	last := len(cx.stack) - 1 // length
+	prev := last - 1          // start
+	byteArrayIdx := prev - 1  // bytes
+	startIdx := cx.stack[prev].Uint
+	lengthIdx := cx.stack[last].Uint
+	if startIdx > math.MaxInt32 || lengthIdx > math.MaxInt32 {
+		cx.err = errors.New("extract range beyond length of string")
+		return
+	}
+	cx.stack[byteArrayIdx].Bytes, cx.err = opExtractImpl(cx.stack[byteArrayIdx].Bytes, int(startIdx), int(lengthIdx))
+	cx.stack = cx.stack[:prev]
+}
+
+// We convert the bytes manually here because we need to accept "short" byte arrays.
+// A single byte is a legal uint64 decoded this way.
+func convertBytesToInt(x []byte) (out uint64) {
+	out = uint64(0)
+	for _, b := range x {
+		out = out << 8
+		out = out | (uint64(b) & 0x0ff)
+	}
+	return
+}
+
+func opExtractNBits(cx *evalContext, n int) {
+	last := len(cx.stack) - 1 // start
+	prev := last - 1          // bytes
+	startIdx := cx.stack[last].Uint
+	cx.stack[prev].Bytes, cx.err = opExtractImpl(cx.stack[prev].Bytes, int(startIdx), n) // extract n bits
+
+	cx.stack[prev].Uint = convertBytesToInt(cx.stack[prev].Bytes)
+	cx.stack[prev].Bytes = nil
+	cx.stack = cx.stack[:last]
+}
+
+func opExtract16Bits(cx *evalContext) {
+	opExtractNBits(cx, 2) // extract 16 bits
+}
+
+func opExtract32Bits(cx *evalContext) {
+	opExtractNBits(cx, 4) // extract 32 bits
+}
+
+func opExtract64Bits(cx *evalContext) {
+	opExtractNBits(cx, 8) // extract 64 bits
+}
+
+func accountReference(cx *evalContext, account stackValue) (basics.Address, uint64, error) {
+	if account.argType() == StackUint64 {
+		addr, err := cx.Txn.Txn.AddressByIndex(account.Uint, cx.Txn.Txn.Sender)
+		return addr, account.Uint, err
+	}
+	addr := basics.Address{}
+	copy(addr[:], account.Bytes)
+	idx, err := cx.Txn.Txn.IndexByAddress(addr, cx.Txn.Txn.Sender)
+	return addr, idx, err
+}
+
+type opQuery func(basics.Address, *config.ConsensusParams) (basics.MicroAlgos, error)
+
+func opBalanceQuery(cx *evalContext, query opQuery, item string) error {
+	last := len(cx.stack) - 1 // account (index or actual address)
+
+	addr, _, err := accountReference(cx, cx.stack[last])
+	if err != nil {
+		return err
+	}
+
+	microAlgos, err := query(addr, cx.Proto)
+	if err != nil {
+		return fmt.Errorf("failed to fetch %s of %v: %w", item, addr, err)
+	}
+
+	cx.stack[last].Bytes = nil
+	cx.stack[last].Uint = microAlgos.Raw
+	return nil
+}
+func opBalance(cx *evalContext) {
+	if cx.Ledger == nil {
+		cx.err = fmt.Errorf("ledger not available")
+		return
+	}
+
+	balanceQuery := func(addr basics.Address, _ *config.ConsensusParams) (basics.MicroAlgos, error) {
+		return cx.Ledger.Balance(addr)
+	}
+	err := opBalanceQuery(cx, balanceQuery, "balance")
+	if err != nil {
+		cx.err = err
+	}
+}
+func opMinBalance(cx *evalContext) {
+	if cx.Ledger == nil {
+		cx.err = fmt.Errorf("ledger not available")
+		return
+	}
+
+	err := opBalanceQuery(cx, cx.Ledger.MinBalance, "minimum balance")
+	if err != nil {
+		cx.err = err
+	}
+}
+
+func opAppOptedIn(cx *evalContext) {
+>>>>>>> teal4-bench
 	last := len(cx.stack) - 1 // app
 	prev := last - 1          // account
 
@@ -2809,7 +3082,11 @@ func opAppOptedIn(cx *EvalContext) {
 		return
 	}
 
+<<<<<<< HEAD
 	addr, _, err := cx.accountReference(cx.stack[prev])
+=======
+	addr, _, err := accountReference(cx, cx.stack[prev])
+>>>>>>> teal4-bench
 	if err != nil {
 		cx.err = err
 		return
@@ -2837,7 +3114,11 @@ func opAppOptedIn(cx *EvalContext) {
 	cx.stack = cx.stack[:last]
 }
 
+<<<<<<< HEAD
 func opAppLocalGet(cx *EvalContext) {
+=======
+func opAppLocalGet(cx *evalContext) {
+>>>>>>> teal4-bench
 	last := len(cx.stack) - 1 // state key
 	prev := last - 1          // account
 
@@ -2853,7 +3134,11 @@ func opAppLocalGet(cx *EvalContext) {
 	cx.stack = cx.stack[:last]
 }
 
+<<<<<<< HEAD
 func opAppLocalGetEx(cx *EvalContext) {
+=======
+func opAppLocalGetEx(cx *evalContext) {
+>>>>>>> teal4-bench
 	last := len(cx.stack) - 1 // state key
 	prev := last - 1          // app id
 	pprev := prev - 1         // account
@@ -2877,13 +3162,21 @@ func opAppLocalGetEx(cx *EvalContext) {
 	cx.stack = cx.stack[:last]
 }
 
+<<<<<<< HEAD
 func opAppLocalGetImpl(cx *EvalContext, appID uint64, key []byte, acct stackValue) (result stackValue, ok bool, err error) {
+=======
+func opAppLocalGetImpl(cx *evalContext, appID uint64, key []byte, acct stackValue) (result stackValue, ok bool, err error) {
+>>>>>>> teal4-bench
 	if cx.Ledger == nil {
 		err = fmt.Errorf("ledger not available")
 		return
 	}
 
+<<<<<<< HEAD
 	addr, accountIdx, err := cx.accountReference(acct)
+=======
+	addr, accountIdx, err := accountReference(cx, acct)
+>>>>>>> teal4-bench
 	if err != nil {
 		return
 	}
@@ -2927,7 +3220,11 @@ func opAppGetGlobalStateImpl(cx *EvalContext, appIndex uint64, key []byte) (resu
 	return
 }
 
+<<<<<<< HEAD
 func opAppGlobalGet(cx *EvalContext) {
+=======
+func opAppGlobalGet(cx *evalContext) {
+>>>>>>> teal4-bench
 	last := len(cx.stack) - 1 // state key
 
 	key := cx.stack[last].Bytes
@@ -2941,7 +3238,11 @@ func opAppGlobalGet(cx *EvalContext) {
 	cx.stack[last] = result
 }
 
+<<<<<<< HEAD
 func opAppGlobalGetEx(cx *EvalContext) {
+=======
+func opAppGlobalGetEx(cx *evalContext) {
+>>>>>>> teal4-bench
 	last := len(cx.stack) - 1 // state key
 	prev := last - 1          // app
 
@@ -2962,7 +3263,11 @@ func opAppGlobalGetEx(cx *EvalContext) {
 	cx.stack[last] = isOk
 }
 
+<<<<<<< HEAD
 func opAppLocalPut(cx *EvalContext) {
+=======
+func opAppLocalPut(cx *evalContext) {
+>>>>>>> teal4-bench
 	last := len(cx.stack) - 1 // value
 	prev := last - 1          // state key
 	pprev := prev - 1         // account
@@ -2975,7 +3280,11 @@ func opAppLocalPut(cx *EvalContext) {
 		return
 	}
 
+<<<<<<< HEAD
 	addr, accountIdx, err := cx.accountReference(cx.stack[pprev])
+=======
+	addr, accountIdx, err := accountReference(cx, cx.stack[pprev])
+>>>>>>> teal4-bench
 	if err == nil {
 		err = cx.Ledger.SetLocal(addr, key, sv.toTealValue(), accountIdx)
 	}
@@ -2988,7 +3297,11 @@ func opAppLocalPut(cx *EvalContext) {
 	cx.stack = cx.stack[:pprev]
 }
 
+<<<<<<< HEAD
 func opAppGlobalPut(cx *EvalContext) {
+=======
+func opAppGlobalPut(cx *evalContext) {
+>>>>>>> teal4-bench
 	last := len(cx.stack) - 1 // value
 	prev := last - 1          // state key
 
@@ -3009,7 +3322,11 @@ func opAppGlobalPut(cx *EvalContext) {
 	cx.stack = cx.stack[:prev]
 }
 
+<<<<<<< HEAD
 func opAppLocalDel(cx *EvalContext) {
+=======
+func opAppLocalDel(cx *evalContext) {
+>>>>>>> teal4-bench
 	last := len(cx.stack) - 1 // key
 	prev := last - 1          // account
 
@@ -3020,7 +3337,11 @@ func opAppLocalDel(cx *EvalContext) {
 		return
 	}
 
+<<<<<<< HEAD
 	addr, accountIdx, err := cx.accountReference(cx.stack[prev])
+=======
+	addr, accountIdx, err := accountReference(cx, cx.stack[prev])
+>>>>>>> teal4-bench
 	if err == nil {
 		err = cx.Ledger.DelLocal(addr, key, accountIdx)
 	}
@@ -3032,7 +3353,11 @@ func opAppLocalDel(cx *EvalContext) {
 	cx.stack = cx.stack[:prev]
 }
 
+<<<<<<< HEAD
 func opAppGlobalDel(cx *EvalContext) {
+=======
+func opAppGlobalDel(cx *evalContext) {
+>>>>>>> teal4-bench
 	last := len(cx.stack) - 1 // key
 
 	key := string(cx.stack[last].Bytes)
@@ -3057,7 +3382,11 @@ func opAppGlobalDel(cx *EvalContext) {
 // often called an "index".  But it was not a basics.AssetIndex or
 // basics.ApplicationIndex.
 
+<<<<<<< HEAD
 func appReference(cx *EvalContext, ref uint64, foreign bool) (basics.AppIndex, error) {
+=======
+func appReference(cx *evalContext, ref uint64, foreign bool) (basics.AppIndex, error) {
+>>>>>>> teal4-bench
 	if cx.version >= directRefEnabledVersion {
 		if ref == 0 {
 			return cx.Ledger.ApplicationID(), nil
@@ -3097,7 +3426,11 @@ func appReference(cx *EvalContext, ref uint64, foreign bool) (basics.AppIndex, e
 	return basics.AppIndex(0), fmt.Errorf("invalid App reference %d", ref)
 }
 
+<<<<<<< HEAD
 func asaReference(cx *EvalContext, ref uint64, foreign bool) (basics.AssetIndex, error) {
+=======
+func asaReference(cx *evalContext, ref uint64, foreign bool) (basics.AssetIndex, error) {
+>>>>>>> teal4-bench
 	if cx.version >= directRefEnabledVersion {
 		// In recent versions, accept either kind of ASA reference
 		if ref < uint64(len(cx.Txn.Txn.ForeignAssets)) {
@@ -3124,7 +3457,11 @@ func asaReference(cx *EvalContext, ref uint64, foreign bool) (basics.AssetIndex,
 
 }
 
+<<<<<<< HEAD
 func opAssetHoldingGet(cx *EvalContext) {
+=======
+func opAssetHoldingGet(cx *evalContext) {
+>>>>>>> teal4-bench
 	last := len(cx.stack) - 1 // asset
 	prev := last - 1          // account
 
@@ -3133,6 +3470,7 @@ func opAssetHoldingGet(cx *EvalContext) {
 		return
 	}
 
+<<<<<<< HEAD
 	holdingField := AssetHoldingField(cx.program[cx.pc+1])
 	fs, ok := assetHoldingFieldSpecByField[holdingField]
 	if !ok || fs.version > cx.version {
@@ -3141,6 +3479,11 @@ func opAssetHoldingGet(cx *EvalContext) {
 	}
 
 	addr, _, err := cx.accountReference(cx.stack[prev])
+=======
+	fieldIdx := uint64(cx.program[cx.pc+1])
+
+	addr, _, err := accountReference(cx, cx.stack[prev])
+>>>>>>> teal4-bench
 	if err != nil {
 		cx.err = err
 		return
@@ -3168,7 +3511,11 @@ func opAssetHoldingGet(cx *EvalContext) {
 	cx.stack[last].Uint = exist
 }
 
+<<<<<<< HEAD
 func opAssetParamsGet(cx *EvalContext) {
+=======
+func opAssetParamsGet(cx *evalContext) {
+>>>>>>> teal4-bench
 	last := len(cx.stack) - 1 // asset
 
 	if cx.Ledger == nil {
@@ -3176,12 +3523,16 @@ func opAssetParamsGet(cx *EvalContext) {
 		return
 	}
 
+<<<<<<< HEAD
 	paramField := AssetParamsField(cx.program[cx.pc+1])
 	fs, ok := assetParamsFieldSpecByField[paramField]
 	if !ok || fs.version > cx.version {
 		cx.err = fmt.Errorf("invalid asset_params_get field %d", paramField)
 		return
 	}
+=======
+	paramIdx := uint64(cx.program[cx.pc+1])
+>>>>>>> teal4-bench
 
 	asset, err := asaReference(cx, cx.stack[last].Uint, true)
 	if err != nil {
@@ -3194,7 +3545,43 @@ func opAssetParamsGet(cx *EvalContext) {
 	if params, creator, err := cx.Ledger.AssetParams(asset); err == nil {
 		// params exist, read the value
 		exist = 1
+<<<<<<< HEAD
 		value, err = cx.assetParamsToValue(&params, creator, fs)
+=======
+		value, err = cx.assetParamsEnumToValue(&params, creator, paramIdx)
+		if err != nil {
+			cx.err = err
+			return
+		}
+	}
+
+	cx.stack[last] = value
+	cx.stack = append(cx.stack, stackValue{Uint: exist})
+}
+
+func opAppParamsGet(cx *evalContext) {
+	last := len(cx.stack) - 1 // app
+
+	if cx.Ledger == nil {
+		cx.err = fmt.Errorf("ledger not available")
+		return
+	}
+
+	paramIdx := uint64(cx.program[cx.pc+1])
+
+	app, err := appReference(cx, cx.stack[last].Uint, true)
+	if err != nil {
+		cx.err = err
+		return
+	}
+
+	var exist uint64 = 0
+	var value stackValue
+	if params, creator, err := cx.Ledger.AppParams(app); err == nil {
+		// params exist, read the value
+		exist = 1
+		value, err = cx.appParamsEnumToValue(&params, creator, paramIdx)
+>>>>>>> teal4-bench
 		if err != nil {
 			cx.err = err
 			return
