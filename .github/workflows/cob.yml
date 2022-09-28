@@ -1,0 +1,27 @@
+name: Bench
+on:
+  # Push and update benchmarks when a commit is merged into master.
+  push:
+    branches:
+      - cob-benchmarking
+  # Trigger benchmark test on this PR's commit against master.
+  pull_request:
+    branches:
+      - cob-benchmarking
+jobs:
+  test:
+    name: Bench
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions/setup-go@v3
+        with:
+          go-version-file: 'go.mod'
+      - run: go version
+      - name: Build go-algorand
+        run: scripts/travis/build.sh
+      - name: Install cob
+        run: curl -sfL https://raw.githubusercontent.com/knqyf263/cob/master/install.sh | sudo sh -s -- -b /usr/local/bin
+
+      - name: Run Benchmark
+        run: cob -bench-args "test ./data/transactions/logic -bench BenchmarkUintMath" --base master
