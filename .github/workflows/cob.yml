@@ -23,8 +23,8 @@ jobs:
       
       - run: git branch
       - run: git status
-      # - name: Build go-algorand
-      #   run: scripts/travis/build.sh
+      - name: Build go-algorand
+        run: scripts/travis/build.sh
       - name: Install cob
         run: curl -sfL https://raw.githubusercontent.com/knqyf263/cob/master/install.sh | sudo sh -s -- -b /usr/local/bin
 
