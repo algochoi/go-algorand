@@ -24,4 +24,4 @@ jobs:
         run: curl -sfL https://raw.githubusercontent.com/knqyf263/cob/master/install.sh | sudo sh -s -- -b /usr/local/bin
 
       - name: Run Benchmark
-        run: cob -bench-args "test ./data/transactions/logic -bench BenchmarkUintMath"
+        run: cob --base origin/master -bench-args "test ./data/transactions/logic -bench BenchmarkUintMath"
