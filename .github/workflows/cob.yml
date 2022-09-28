@@ -13,20 +13,13 @@ jobs:
     name: Bench
     runs-on: ubuntu-latest
     steps:
-      # - uses: actions/checkout@v3
-      #   with:
-      #     go-version-file: 'go.mod'
-      # - run: go version
-      # - name: Build go-algorand
-      #   run: scripts/travis/build.sh
-      # - name: Checkout go-algorand
-      #   run: git clone https://github.com/algochoi/go-algorand.git
-      # - name: Build go-algorand
-      #   run: cd go-algorand
       - uses: actions/checkout@v3
       - uses: actions/setup-go@v3
         with:
           go-version-file: 'go.mod'
+      - run: go version
+      - name: Build go-algorand
+        run: scripts/travis/build.sh
       - name: Install cob
         run: curl -sfL https://raw.githubusercontent.com/knqyf263/cob/master/install.sh | sudo sh -s -- -b /usr/local/bin
 
