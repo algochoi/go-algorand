@@ -18,6 +18,7 @@ jobs:
         with:
           go-version-file: 'go.mod'
       - run: go version
+      - run: git fetch --all
       - run: git branch
       - run: git status
       # - name: Build go-algorand
