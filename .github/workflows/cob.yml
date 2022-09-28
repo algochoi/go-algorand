@@ -18,8 +18,10 @@ jobs:
         with:
           go-version-file: 'go.mod'
       - run: go version
-      - name: Build go-algorand
-        run: scripts/travis/build.sh
+      - run: git branch
+      - run: git status
+      # - name: Build go-algorand
+      #   run: scripts/travis/build.sh
       - name: Install cob
         run: curl -sfL https://raw.githubusercontent.com/knqyf263/cob/master/install.sh | sudo sh -s -- -b /usr/local/bin
 
