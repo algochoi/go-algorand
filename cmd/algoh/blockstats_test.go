@@ -124,7 +124,7 @@ func TestAgreementTime(t *testing.T) {
 		end := time.Now()
 
 		require.Equal(t, 1, len(sender.events))
-		details := sender.events[0].details //.(telemetryspec.BlockStatsEventDetails)
+		details := sender.events[0].details
 
 		// Test to see that the wait duration is at least the amount of time we slept
 		require.True(t, int(details.AgreementDurationMs) >= int(sleepTime)/int(time.Millisecond))
