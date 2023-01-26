@@ -967,12 +967,13 @@ func (v2 *Handlers) SimulateTransaction(ctx echo.Context) error {
 	res.MissingSignatures = missingSignatures
 
 	// Return msgpack response
-	msgpack, err := encode(protocol.CodecHandle, &res)
+	jsonResponse, err := encode(protocol.JSONHandle, &res)
+	// msgpack, err := encode(protocol.CodecHandle, &res)
 	if err != nil {
 		return internalError(ctx, err, errFailedToEncodeResponse, v2.Log)
 	}
-
-	return ctx.Blob(http.StatusOK, "application/msgpack", msgpack)
+	return ctx.JSON(http.StatusOK, jsonResponse)
+	// return ctx.Blob(http.StatusOK, "application/msgpack", msgpack)
 }
 
 // TealDryrun takes transactions and additional simulated ledger state and returns debugging information.
