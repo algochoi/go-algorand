@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"strings"
 
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
@@ -84,6 +85,15 @@ func NewRouter(logger logging.Logger, node *node.AlgorandFullNode, shutdown <-ch
 	e.Use(
 		middlewares.MakeLogger(logger),
 		middlewares.MakeCORS(TokenHeader))
+
+	// Enables JSON compression for responses.
+	e.Use(middleware.GzipWithConfig(middleware.GzipConfig{
+		// we currently support compressed result only for GET simulate API
+		Skipper: func(c echo.Context) bool {
+			return !strings.Contains(c.Path(), "simulate")
+		},
+		Level: -1,
+	}))
 
 	// Request Context
 	ctx := lib.ReqContext{Node: node, Log: logger, Shutdown: shutdown}
