@@ -98,7 +98,7 @@ type NodeInterface interface {
 	GenesisID() string
 	GenesisHash() crypto.Digest
 	BroadcastSignedTxGroup(txgroup []transactions.SignedTxn) error
-	Simulate(txgroup []transactions.SignedTxn) (vb *ledgercore.ValidatedBlock, missingSignatures bool, err error)
+	Simulate(txgroup []transactions.SignedTxn) (result simulation.Result, err error)
 	GetPendingTransaction(txID transactions.Txid) (res node.TxnWithStatus, found bool)
 	GetPendingTxnsFromPool() ([]transactions.SignedTxn, error)
 	SuggestedFee() basics.MicroAlgos
@@ -924,6 +924,26 @@ func (v2 *Handlers) RawTransaction(ctx echo.Context) error {
 	return ctx.JSON(http.StatusOK, model.PostTransactionsResponse{TxId: txid.String()})
 }
 
+// encodedTxnResult mirrors simulation.TxnResult
+type encodedTxnResult struct {
+	Txn              PreEncodedTxInfo
+	MissingSignature *bool `codec:"nosig,omitempty"`
+}
+
+// encodedTxnGroupResult mirrors simulation.TxnGroupResult
+type encodedTxnGroupResult struct {
+	Txns           []encodedTxnResult
+	FailureMessage *string   `codec:"failmsg,omitempty"`
+	FailedAt       *[]uint64 `codec:"failedat,omitempty"`
+}
+
+// EncodedSimulationResult mirrors simulation.Result
+type EncodedSimulationResult struct {
+	Version      uint64                   `codec:"v"`
+	TxnGroups    *[]encodedTxnGroupResult `codec:"txns,omitempty"`
+	WouldSucceed *bool                    `codec:"s,omitempty"`
+}
+
 // SimulateTransaction simulates broadcasting a raw transaction to the network, returning relevant simulation results.
 // (POST /v2/transactions/simulate)
 func (v2 *Handlers) SimulateTransaction(ctx echo.Context) error {
@@ -948,23 +968,20 @@ func (v2 *Handlers) SimulateTransaction(ctx echo.Context) error {
 		return badRequest(ctx, err, err.Error(), v2.Log)
 	}
 
-	var res model.SimulationResponse
-
 	// Simulate transaction
-	_, missingSignatures, err := v2.Node.Simulate(txgroup)
+	simulationResult, err := v2.Node.Simulate(txgroup)
 	if err != nil {
 		var invalidTxErr *simulation.InvalidTxGroupError
-		var evalErr *simulation.EvalFailureError
 		switch {
 		case errors.As(err, &invalidTxErr):
 			return badRequest(ctx, invalidTxErr, invalidTxErr.Error(), v2.Log)
-		case errors.As(err, &evalErr):
-			res.FailureMessage = evalErr.Error()
 		default:
 			return internalError(ctx, err, err.Error(), v2.Log)
 		}
 	}
-	res.MissingSignatures = missingSignatures
+
+	// Encode simulation result
+	response := convertSimulationResult(simulationResult)
 
 	// Return msgpack response
 	// jsonResponse, err := encode(protocol.JSONHandle, &res)
@@ -972,7 +989,7 @@ func (v2 *Handlers) SimulateTransaction(ctx echo.Context) error {
 	if err != nil {
 		return internalError(ctx, err, errFailedToEncodeResponse, v2.Log)
 	}
-	return ctx.JSON(http.StatusOK, res)
+	return ctx.JSON(http.StatusOK, response)
 	// return ctx.Blob(http.StatusOK, "application/msgpack", msgpack)
 }
 

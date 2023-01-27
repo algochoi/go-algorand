@@ -331,6 +331,10 @@ type EvalParams struct {
 	caller *EvalContext
 }
 
+func (ep *EvalParams) GetCaller() *EvalContext {
+	return ep.caller
+}
+
 func copyWithClearAD(txgroup []transactions.SignedTxnWithAD) []transactions.SignedTxnWithAD {
 	copy := make([]transactions.SignedTxnWithAD, len(txgroup))
 	for i := range txgroup {
@@ -594,6 +598,11 @@ type EvalContext struct {
 	instructionStarts []bool
 
 	programHashCached crypto.Digest
+}
+
+// GroupIndex returns the group index of the transaction being evaluated
+func (cx *EvalContext) GroupIndex() int {
+	return cx.groupIndex
 }
 
 // RunMode returns the evaluation context's mode (signature or application)
@@ -1010,6 +1019,10 @@ func boolToSV(x bool) stackValue {
 // Cost return cost incurred so far
 func (cx *EvalContext) Cost() int {
 	return cx.cost
+}
+
+func (cx *EvalContext) AppID() basics.AppIndex {
+	return cx.appID
 }
 
 func (cx *EvalContext) remainingBudget() int {
