@@ -967,12 +967,12 @@ func (v2 *Handlers) SimulateTransaction(ctx echo.Context) error {
 	res.MissingSignatures = missingSignatures
 
 	// Return msgpack response
-	jsonResponse, err := encode(protocol.JSONHandle, &res)
+	// jsonResponse, err := encode(protocol.JSONHandle, &res)
 	// msgpack, err := encode(protocol.CodecHandle, &res)
 	if err != nil {
 		return internalError(ctx, err, errFailedToEncodeResponse, v2.Log)
 	}
-	return ctx.JSON(http.StatusOK, jsonResponse)
+	return ctx.JSON(http.StatusOK, res)
 	// return ctx.Blob(http.StatusOK, "application/msgpack", msgpack)
 }
 
