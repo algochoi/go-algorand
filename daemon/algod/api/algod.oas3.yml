@@ -5854,6 +5854,20 @@
     "/v2/transactions/simulate": {
       "post": {
         "operationId": "SimulateTransaction",
+        "parameters": [
+          {
+            "description": "Configures whether the response object is JSON or MessagePack encoded.",
+            "in": "query",
+            "name": "format",
+            "schema": {
+              "enum": [
+                "json",
+                "msgpack"
+              ],
+              "type": "string"
+            }
+          }
+        ],
         "requestBody": {
           "content": {
             "application/x-binary": {

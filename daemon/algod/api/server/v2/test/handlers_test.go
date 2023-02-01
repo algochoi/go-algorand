@@ -684,7 +684,7 @@ func TestPostTransaction(t *testing.T) {
 func simulateTransactionTest(t *testing.T, txnToUse, expectedCode int, enableTransactionSimulator bool) {
 	handler, c, rec, releasefunc := prepareTransactionTest(t, txnToUse, expectedCode, enableTransactionSimulator)
 	defer releasefunc()
-	err := handler.SimulateTransaction(c)
+	err := handler.SimulateTransaction(c, model.SimulateTransactionParams{})
 	require.NoError(t, err)
 	require.Equal(t, expectedCode, rec.Code)
 }
@@ -839,7 +839,7 @@ func TestSimulateTransaction(t *testing.T) {
 			c := e.NewContext(req, rec)
 
 			// simulate transaction
-			err := handler.SimulateTransaction(c)
+			err := handler.SimulateTransaction(c, model.SimulateTransactionParams{})
 
 			// common checks
 			require.NoError(t, err)

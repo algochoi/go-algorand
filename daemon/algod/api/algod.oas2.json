@@ -1232,6 +1232,9 @@
               "type": "string",
               "format": "binary"
             }
+          },
+          {
+            "$ref": "#/parameters/format"
           }
         ],
         "responses": {

@@ -208,15 +208,15 @@ func computeAppIndexFromTxn(tx node.TxnWithStatus, l LedgerForAPI) *uint64 {
 
 // getCodecHandle converts a format string into the encoder + content type
 func getCodecHandle(formatPtr *model.Format) (codec.Handle, string, error) {
-	format := model.Json
+	format := model.PendingTransactionInformationParamsFormatJson
 	if formatPtr != nil {
 		format = model.PendingTransactionInformationParamsFormat(strings.ToLower(string(*formatPtr)))
 	}
 
 	switch format {
-	case model.Json:
+	case model.PendingTransactionInformationParamsFormatJson:
 		return protocol.JSONStrictHandle, "application/json", nil
-	case model.Msgpack:
+	case model.PendingTransactionInformationParamsFormatMsgpack:
 		fallthrough
 	case "msgp":
 		return protocol.CodecHandle, "application/msgpack", nil

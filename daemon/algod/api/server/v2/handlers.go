@@ -946,11 +946,16 @@ type EncodedSimulationResult struct {
 
 // SimulateTransaction simulates broadcasting a raw transaction to the network, returning relevant simulation results.
 // (POST /v2/transactions/simulate)
-func (v2 *Handlers) SimulateTransaction(ctx echo.Context) error {
+func (v2 *Handlers) SimulateTransaction(ctx echo.Context, params model.SimulateTransactionParams) error {
 	if !v2.Node.Config().EnableExperimentalAPI {
 		// Right now this is a redundant/useless check at runtime, since experimental APIs are not registered when EnableExperimentalAPI=false.
 		// However, this endpoint won't always be experimental, so I've left this here as a reminder to have some other flag guarding its usage.
 		return ctx.String(http.StatusNotFound, fmt.Sprintf("%s was not enabled in the configuration file by setting EnableExperimentalAPI to true", ctx.Request().URL.Path))
+	}
+
+	handle, _, err := getCodecHandle((*model.Format)(params.Format))
+	if err != nil {
+		return badRequest(ctx, err, errFailedParsingFormatOption, v2.Log)
 	}
 
 	stat, err := v2.Node.Status()
@@ -984,6 +989,13 @@ func (v2 *Handlers) SimulateTransaction(ctx echo.Context) error {
 	response := convertSimulationResult(simulationResult)
 
 	// Return msgpack response
+	if handle == protocol.CodecHandle {
+		msgpack, err := encode(protocol.CodecHandle, &response)
+		if err != nil {
+			return internalError(ctx, err, errFailedToEncodeResponse, v2.Log)
+		}
+		return ctx.Blob(http.StatusOK, "application/msgpack", msgpack)
+	}
 	// jsonResponse, err := encode(protocol.JSONHandle, &res)
 	// msgpack, err := encode(protocol.CodecHandle, &res)
 	if err != nil {
