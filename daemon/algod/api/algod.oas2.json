@@ -1208,8 +1208,7 @@
     "/v2/transactions/simulate": {
       "post": {
         "tags": [
-          "public",
-          "experimental"
+          "public"
         ],
         "consumes": [
           "application/x-binary"
