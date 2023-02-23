@@ -4013,9 +4013,6 @@
     },
     "SimulateResponse": {
       "description": "Result of a transaction group simulation.",
-      "tags": [
-        "experimental"
-      ],
       "schema": {
         "type": "object",
         "required": [
