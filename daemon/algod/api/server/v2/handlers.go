@@ -831,9 +831,15 @@ func (v2 *Handlers) GetStatus(ctx echo.Context) error {
 // WaitForBlock returns the node status after waiting for the given round.
 // (GET /v2/status/wait-for-block-after/{round}/)
 func (v2 *Handlers) WaitForBlock(ctx echo.Context, round uint64) error {
+	tStart := time.Now()
+	v2.Log.Info("WaitForBlock called")
 	ledger := v2.Node.LedgerForAPI()
 
+	v2.Log.Infof("WaitForBlock: waiting for ledger %v\n", time.Since(tStart))
+	tStart = time.Now()
+
 	stat, err := v2.Node.Status()
+	v2.Log.Infof("WaitForBlock: get status %v\n", time.Since(tStart))
 	if err != nil {
 		return internalError(ctx, err, errFailedRetrievingNodeStatus, v2.Log)
 	}
@@ -845,7 +851,11 @@ func (v2 *Handlers) WaitForBlock(ctx echo.Context, round uint64) error {
 		return serviceUnavailable(ctx, fmt.Errorf("WaitForBlock failed as the node was catchpoint catchuping"), errOperationNotAvailableDuringCatchup, v2.Log)
 	}
 
+	tStart = time.Now()
+
 	latestBlkHdr, err := ledger.BlockHdr(ledger.Latest())
+	v2.Log.Infof("WaitForBlock: get status %v\n", time.Since(tStart))
+	tStart = time.Now()
 	if err != nil {
 		return internalError(ctx, err, errFailedRetrievingLatestBlockHeaderStatus, v2.Log)
 	}
@@ -866,6 +876,8 @@ func (v2 *Handlers) WaitForBlock(ctx echo.Context, round uint64) error {
 	case <-time.After(1 * time.Minute):
 	case <-ledger.Wait(basics.Round(round + 1)):
 	}
+
+	v2.Log.Infof("WaitForBlock: get status %v\n", time.Since(tStart))
 
 	// Return status after the wait
 	return v2.GetStatus(ctx)
