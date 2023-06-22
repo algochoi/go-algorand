@@ -114,6 +114,7 @@ func NewRouter(logger logging.Logger, node APINodeInterface, shutdown <-chan str
 	registerHandlers(e, apiV1Tag, routes.V1Routes, ctx, apiAuthenticator)
 
 	// Registering v2 routes
+	logger.Warn("ACK Registering v2 routes")
 	v2Handler := v2.Handlers{
 		Node:     node,
 		Log:      logger,
