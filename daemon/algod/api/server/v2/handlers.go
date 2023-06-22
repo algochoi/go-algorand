@@ -773,6 +773,7 @@ func (v2 *Handlers) GetSupply(ctx echo.Context) error {
 // GetStatus gets the current node status.
 // (GET /v2/status)
 func (v2 *Handlers) GetStatus(ctx echo.Context) error {
+	v2.Log.Warn("GetStatus called")
 	stat, err := v2.Node.Status()
 	if err != nil {
 		return internalError(ctx, err, errFailedRetrievingNodeStatus, v2.Log)
