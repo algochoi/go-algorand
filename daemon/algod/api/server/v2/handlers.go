@@ -833,7 +833,7 @@ func (v2 *Handlers) GetStatus(ctx echo.Context) error {
 // (GET /v2/status/wait-for-block-after/{round}/)
 func (v2 *Handlers) WaitForBlock(ctx echo.Context, round uint64) error {
 	tStart := time.Now()
-	v2.Log.Warn("WaitForBlock called")
+	v2.Log.Warnf("WaitForBlock%v\n", round)
 	ledger := v2.Node.LedgerForAPI()
 
 	v2.Log.Warnf("WaitForBlock: waiting for ledger %v\n", time.Since(tStart))
