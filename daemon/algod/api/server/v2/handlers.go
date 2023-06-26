@@ -604,6 +604,7 @@ func (v2 *Handlers) AccountApplicationInformation(ctx echo.Context, address stri
 // GetBlock gets the block for the given round.
 // (GET /v2/blocks/{round})
 func (v2 *Handlers) GetBlock(ctx echo.Context, round uint64, params model.GetBlockParams) error {
+	v2.Log.Warnf("ACK3 GETBLOCK%v\n", round)
 	handle, contentType, err := getCodecHandle((*string)(params.Format))
 	if err != nil {
 		return badRequest(ctx, err, errFailedParsingFormatOption, v2.Log)
@@ -915,6 +916,7 @@ func decodeTxGroup(body io.Reader, maxTxGroupSize int) ([]transactions.SignedTxn
 // RawTransaction broadcasts a raw transaction to the network.
 // (POST /v2/transactions)
 func (v2 *Handlers) RawTransaction(ctx echo.Context) error {
+	v2.Log.Warn("ACK2 BROADCAST\n")
 	stat, err := v2.Node.Status()
 	if err != nil {
 		return internalError(ctx, err, errFailedRetrievingNodeStatus, v2.Log)
