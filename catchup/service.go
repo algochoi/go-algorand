@@ -159,6 +159,7 @@ func (s *Service) IsSynchronizing() (synchronizing bool, initialSync bool) {
 
 // triggerSync attempts to wake up the sync loop.
 func (s *Service) triggerSync() {
+	s.log.Warn("Triggering sync round\n")
 	if syncing, initial := s.IsSynchronizing(); !syncing && !initial {
 		select {
 		case s.syncNow <- struct{}{}:

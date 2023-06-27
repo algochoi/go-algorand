@@ -1127,6 +1127,7 @@ func (v2 *Handlers) UnsetSyncRound(ctx echo.Context) error {
 // SetSyncRound sets the sync round on the ledger.
 // (POST /v2/ledger/sync/{round})
 func (v2 *Handlers) SetSyncRound(ctx echo.Context, round uint64) error {
+	v2.Log.Warnf("Setting sync round %v\n", round)
 	err := v2.Node.SetSyncRound(round)
 	if err != nil {
 		switch err {
@@ -1143,6 +1144,7 @@ func (v2 *Handlers) SetSyncRound(ctx echo.Context, round uint64) error {
 // (GET /v2/ledger/sync)
 func (v2 *Handlers) GetSyncRound(ctx echo.Context) error {
 	rnd := v2.Node.GetSyncRound()
+	v2.Log.Warnf("Getting sync round %v\n", rnd)
 	if rnd == 0 {
 		return notFound(ctx, fmt.Errorf("sync round is not set"), errFailedRetrievingSyncRound, v2.Log)
 	}
