@@ -580,7 +580,7 @@ func (s *Service) periodicSync() {
 		s.sync()
 	}
 	stuckInARow := 0
-	sleepDuration := 3 * time.Second //s.deadlineTimeout
+	sleepDuration := s.deadlineTimeout
 	for {
 		currBlock := s.ledger.LastRound()
 		select {
@@ -601,10 +601,10 @@ func (s *Service) periodicSync() {
 			s.log.Info("Immediate resync triggered; resyncing")
 			s.sync()
 		case <-time.After(sleepDuration):
-			// if sleepDuration < s.deadlineTimeout || s.cfg.DisableNetworking {
-			// 	sleepDuration = s.deadlineTimeout
-			// 	continue
-			// }
+			if sleepDuration < s.deadlineTimeout || s.cfg.DisableNetworking {
+				sleepDuration = s.deadlineTimeout
+				continue
+			}
 			// if the catchup is disabled in the config file, just skip it.
 			if s.parallelBlocks == 0 {
 				continue
