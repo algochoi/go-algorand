@@ -579,7 +579,7 @@ func (s *Service) periodicSync() {
 		s.sync()
 	}
 	stuckInARow := 0
-	sleepDuration := s.deadlineTimeout
+	sleepDuration := 3 * time.Second //s.deadlineTimeout
 	for {
 		currBlock := s.ledger.LastRound()
 		select {
@@ -593,6 +593,7 @@ func (s *Service) periodicSync() {
 			sleepDuration = time.Duration(crypto.RandUint63()) % s.deadlineTimeout
 			continue
 		case <-s.syncNow:
+			s.log.Warn("Now sync round\n")
 			if s.parallelBlocks == 0 || s.ledger.IsWritingCatchpointDataFile() {
 				continue
 			}
@@ -600,6 +601,7 @@ func (s *Service) periodicSync() {
 			s.log.Info("Immediate resync triggered; resyncing")
 			s.sync()
 		case <-time.After(sleepDuration):
+			s.log.Warn("Time out sync round\n")
 			if sleepDuration < s.deadlineTimeout || s.cfg.DisableNetworking {
 				sleepDuration = s.deadlineTimeout
 				continue
