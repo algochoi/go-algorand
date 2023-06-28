@@ -125,7 +125,7 @@ func MakeService(log logging.Logger, config config.Local, net network.GossipNode
 	s.parallelBlocks = config.CatchupParallelBlocks
 	s.deadlineTimeout = agreement.DeadlineTimeout()
 	s.blockValidationPool = blockValidationPool
-	s.syncNow = make(chan struct{})
+	s.syncNow = make(chan struct{}, 1)
 
 	return s
 }
@@ -160,13 +160,13 @@ func (s *Service) IsSynchronizing() (synchronizing bool, initialSync bool) {
 // triggerSync attempts to wake up the sync loop.
 func (s *Service) triggerSync() {
 	s.log.Warn("Triggering sync round\n")
-	if syncing, initial := s.IsSynchronizing(); !syncing && !initial {
-		s.log.Warn("Pushing sync round\n")
-		select {
-		case s.syncNow <- struct{}{}:
-		default:
-		}
+	// if syncing, initial := s.IsSynchronizing(); !syncing && !initial {
+	// s.log.Warn("Pushing sync round\n")
+	select {
+	case s.syncNow <- struct{}{}:
+	default:
 	}
+	// }
 }
 
 // SetDisableSyncRound attempts to set the first round we _do_not_ want to fetch from the network
@@ -594,7 +594,6 @@ func (s *Service) periodicSync() {
 			sleepDuration = time.Duration(crypto.RandUint63()) % s.deadlineTimeout
 			continue
 		case <-s.syncNow:
-			s.log.Warn("Now sync round\n")
 			if s.parallelBlocks == 0 || s.ledger.IsWritingCatchpointDataFile() {
 				continue
 			}
@@ -602,7 +601,6 @@ func (s *Service) periodicSync() {
 			s.log.Info("Immediate resync triggered; resyncing")
 			s.sync()
 		case <-time.After(sleepDuration):
-			s.log.Warn("Time out sync round\n")
 			// if sleepDuration < s.deadlineTimeout || s.cfg.DisableNetworking {
 			// 	sleepDuration = s.deadlineTimeout
 			// 	continue
