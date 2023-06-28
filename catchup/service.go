@@ -161,6 +161,7 @@ func (s *Service) IsSynchronizing() (synchronizing bool, initialSync bool) {
 func (s *Service) triggerSync() {
 	s.log.Warn("Triggering sync round\n")
 	if syncing, initial := s.IsSynchronizing(); !syncing && !initial {
+		s.log.Warn("Pushing sync round\n")
 		select {
 		case s.syncNow <- struct{}{}:
 		default:
@@ -602,10 +603,10 @@ func (s *Service) periodicSync() {
 			s.sync()
 		case <-time.After(sleepDuration):
 			s.log.Warn("Time out sync round\n")
-			if sleepDuration < s.deadlineTimeout || s.cfg.DisableNetworking {
-				sleepDuration = s.deadlineTimeout
-				continue
-			}
+			// if sleepDuration < s.deadlineTimeout || s.cfg.DisableNetworking {
+			// 	sleepDuration = s.deadlineTimeout
+			// 	continue
+			// }
 			// if the catchup is disabled in the config file, just skip it.
 			if s.parallelBlocks == 0 {
 				continue
